@@ -10,6 +10,13 @@ Thumbs.db
 .idea/
 *.swp
 
+# 敏感配置（含 API key，切勿提交）
+.env
+.env.*
+*.local
+secrets.json
+config.local.*
+
 # Unity（如后续接入）
 [Ll]ibrary/
 [Tt]emp/
