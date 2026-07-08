@@ -1,6 +1,6 @@
 -- ============================================================
 -- 本地数据库 schema(F4)
--- SQLite 方言。db.gd 在 open() 时按 ";" 拆分并执行, 幂等(CREATE TABLE IF NOT EXISTS)。
+-- SQLite 方言。db.gd 在 open() 时按分号拆分并执行, 幂等(CREATE TABLE IF NOT EXISTS)。
 -- 加密: 启用 SQLCipher 的 godot-sqlite 构建下, 打开时设置 encryption_key 静态加密。
 --
 -- 表: animals(动物元数据) / player_progress(玩家进度)

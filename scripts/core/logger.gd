@@ -2,10 +2,11 @@ extends Node
 
 ## Logger — 分级日志 + 崩溃上报骨架(F5)
 ## 级别: DEBUG < INFO < WARN < ERROR。每条日志同时写入:
-##   1) 内存环形缓冲(最近 RING_MAX 条, 崩溃时落盘)
-##   2) 本地文件 user://logs/app.log
-## 崩溃捕获: 监听退出(NOTIFICATION_WM_CLOSE_REQUEST / PREDELETE), 将最后日志落盘到
-##   user://logs/crash_last.log。后续接 Bugly/自建时, 在 flush_crash() 内上报 _ring。
+##   1) 内存环形缓冲(最近 RING_MAX 条, report_crash() 时落盘)
+##   2) 本地文件 user://logs/app.log(实时追加, 硬崩溃前已落盘)
+## 崩溃落盘: 正常退出仅 flush 文件缓冲; report_crash() 显式触发时将环形缓冲写入
+##   user://logs/crash_last.log。硬崩溃(段错误/kill)GDScript 无法捕获, 后续接
+##   Bugly/自建时在 flush_crash() 内上报 _ring(F5"后续接 Bugly/自建")。
 ## 参考: 九-风险(崩溃率<0.5% 验收, 需日志支撑)。
 ##
 ## 使用: Logger.debug("msg", "Category") / Logger.info(...) / Logger.warn(...) / Logger.error(...)
@@ -35,7 +36,10 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
-		flush_crash("app_exit")
+		# 正常退出仅刷新文件缓冲; crash_last.log 由 report_crash() 显式触发,
+		# 避免每次退出覆盖真实崩溃快照。硬崩溃(段错误/kill)GDScript 无法捕获,
+		# 需后续接 OS 级信号处理器(F5"后续接 Bugly/自建"), flush_crash() 已预留入口。
+		flush()
 
 
 func _apply_level(s: String) -> void:
@@ -72,19 +76,24 @@ func _log(level: int, category: String, msg: String) -> void:
 
 func _format(level: int, category: String, msg: String) -> String:
 	var ts := Time.get_datetime_string_from_system(true)
-	var lvl := Level.keys()[level]
+	var lvl: String = Level.keys()[level]
 	if category != "":
 		return "%s [%s] [%s] %s" % [ts, lvl, category, msg]
 	return "%s [%s] %s" % [ts, lvl, msg]
 
 
 func _ensure_dir(path: String) -> void:
-	if not DirAccess.dir_exists(path):
-		DirAccess.make_dir_recursive(path)
+	if not DirAccess.dir_exists_absolute(path):
+		DirAccess.make_dir_recursive_absolute(path)
 
 
 func _open_file() -> void:
-	_file = FileAccess.open(LOG_FILE, FileAccess.READ_WRITE)
+	# Godot 4.7: WRITE_READ 不再创建新文件, 故按存在性选择模式。
+	# 已存在 → READ_WRITE(不截断, 配合 seek_end 追加); 不存在 → WRITE(创建)。
+	if FileAccess.file_exists(LOG_FILE):
+		_file = FileAccess.open(LOG_FILE, FileAccess.READ_WRITE)
+	else:
+		_file = FileAccess.open(LOG_FILE, FileAccess.WRITE)
 	if _file == null:
 		push_warning("[Logger] 无法打开日志文件 %s" % FileAccess.get_open_error())
 		return

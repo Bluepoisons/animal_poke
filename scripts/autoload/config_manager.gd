@@ -60,8 +60,8 @@ func get_device_token() -> String:
 
 func set_device_token(token: String) -> void:
 	var dir := DEVICE_TOKEN_PATH.get_base_dir()
-	if not DirAccess.dir_exists(dir):
-		DirAccess.make_dir_recursive(dir)
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir)
 	var f := FileAccess.open(DEVICE_TOKEN_PATH, FileAccess.WRITE)
 	if f == null:
 		push_error("[ConfigManager] 无法写入设备 Token: %s" % FileAccess.get_open_error())

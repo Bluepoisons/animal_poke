@@ -35,6 +35,21 @@ make run            # 或: go run ./cmd
 
 健康检查: `curl http://127.0.0.1:8080/health` 应返回 `{"status":"ok",...}`。
 
+## 测试
+
+测试框架: [`testify`](https://github.com/stretchr/testify) + 标准库 `testing` + `net/http/httptest`。
+
+```bash
+make test              # 单元测试(无需 MySQL)
+make test-cover        # 单元测试 + 覆盖率报告
+make db-up             # 先起 MySQL(集成测试需要)
+make test-integration  # 集成测试(需 MySQL, 连不上自动 t.Skip)
+```
+
+- 单元测试覆盖: `config`(DSN/Load/SetupLogger)、`handlers/health`、`middleware`(CORS/Logger/Recovery)、`routes`、`services`。
+- 集成测试(`//go:build integration`): `repo.InitDB` 连真实 MySQL + 连接池配置,默认 `go test ./...` 不跑。
+- `cmd/main.go` 入口函数未做单元化重构,暂以集成冒烟形式覆盖(可选)。
+
 ## 配置字段(见 .env.example)
 
 - 服务: `SERVER_ADDR`、`LOG_LEVEL`

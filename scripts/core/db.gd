@@ -25,7 +25,12 @@ func open(filename: String = "animal_poke.db") -> bool:
 		return false
 	_db = ClassDB.instantiate("SQLite")
 	_db.path = "user://" + filename
-	_db.encryption_key = _load_or_create_key()
+	# encryption_key 仅在 SQLCipher 构建中存在; 标准发布版(godot-sqlite bin.zip)无此属性,
+	# 跳过加密(降级为未加密本地库)。需加密时改用 SQLCipher 构建的 godot-sqlite。
+	if _has_property("encryption_key"):
+		_db.encryption_key = _load_or_create_key()
+	else:
+		push_warning("[LocalDB] 当前 godot-sqlite 构建无 encryption_key 属性(SQLCipher 未启用), 本地库将以未加密形式存储。")
 	if not _db.open_db():
 		push_error("[LocalDB] 打开数据库失败: %s" % _db.path)
 		return false
@@ -65,28 +70,28 @@ func upsert_animal(data: Dictionary) -> bool:
 	if not _ensure():
 		return false
 	var uuid := _sql_escape(str(data.get("uuid", "")))
-	if _db.select_rows("animals", "uuid = '%s'" % uuid, []).size() > 0:
-		return _db.update_rows("animals", data, "uuid = '%s'" % uuid, [])
-	return _db.insert_rows("animals", data)
+	if _db.select_rows("animals", "uuid = '%s'" % uuid, ["*"]).size() > 0:
+		return _db.update_rows("animals", "uuid = '%s'" % uuid, data)
+	return _db.insert_row("animals", data)
 
 
 func get_animal(uuid: String) -> Dictionary:
 	if not _ensure():
 		return {}
-	var res := _db.select_rows("animals", "uuid = '%s'" % _sql_escape(uuid), [])
+	var res: Array = _db.select_rows("animals", "uuid = '%s'" % _sql_escape(uuid), ["*"])
 	return res[0] if res.size() > 0 else {}
 
 
 func get_all_animals() -> Array:
 	if not _ensure():
 		return []
-	return _db.select_rows("animals", "", [])
+	return _db.select_rows("animals", "", ["*"])
 
 
 func delete_animal(uuid: String) -> bool:
 	if not _ensure():
 		return false
-	return _db.delete_rows("animals", "uuid = '%s'" % _sql_escape(uuid), [])
+	return _db.delete_rows("animals", "uuid = '%s'" % _sql_escape(uuid))
 
 
 # ---------- 玩家进度 CRUD(单行, id=1) ----------
@@ -94,17 +99,17 @@ func delete_animal(uuid: String) -> bool:
 func upsert_progress(data: Dictionary) -> bool:
 	if not _ensure():
 		return false
-	if _db.select_rows("player_progress", "id = 1", []).size() > 0:
-		return _db.update_rows("player_progress", data, "id = 1", [])
+	if _db.select_rows("player_progress", "id = 1", ["*"]).size() > 0:
+		return _db.update_rows("player_progress", "id = 1", data)
 	var row := data.duplicate()
 	row["id"] = 1
-	return _db.insert_rows("player_progress", row)
+	return _db.insert_row("player_progress", row)
 
 
 func get_progress() -> Dictionary:
 	if not _ensure():
 		return {}
-	var res := _db.select_rows("player_progress", "id = 1", [])
+	var res: Array = _db.select_rows("player_progress", "id = 1", ["*"])
 	return res[0] if res.size() > 0 else {}
 
 
@@ -114,15 +119,15 @@ func set_inventory(item_type: String, item_id: String, quantity: int) -> bool:
 	if not _ensure():
 		return false
 	var cond := "item_type = '%s' AND item_id = '%s'" % [_sql_escape(item_type), _sql_escape(item_id)]
-	if _db.select_rows("inventory", cond, []).size() > 0:
-		return _db.update_rows("inventory", {"quantity": quantity}, cond, [])
-	return _db.insert_rows("inventory", {"item_type": item_type, "item_id": item_id, "quantity": quantity})
+	if _db.select_rows("inventory", cond, ["*"]).size() > 0:
+		return _db.update_rows("inventory", cond, {"quantity": quantity})
+	return _db.insert_row("inventory", {"item_type": item_type, "item_id": item_id, "quantity": quantity})
 
 
 func get_inventory() -> Array:
 	if not _ensure():
 		return []
-	return _db.select_rows("inventory", "", [])
+	return _db.select_rows("inventory", "", ["*"])
 
 
 # ---------- 签到 CRUD ----------
@@ -130,13 +135,13 @@ func get_inventory() -> Array:
 func add_checkin(data: Dictionary) -> bool:
 	if not _ensure():
 		return false
-	return _db.insert_rows("checkin", data)
+	return _db.insert_row("checkin", data)
 
 
 func get_checkins() -> Array:
 	if not _ensure():
 		return []
-	return _db.select_rows("checkin", "", [])
+	return _db.select_rows("checkin", "", ["*"])
 
 
 # ---------- 内部工具 ----------
@@ -145,6 +150,15 @@ func _ensure() -> bool:
 	if not _opened:
 		push_error("[LocalDB] 数据库未打开, 请先调用 open()。")
 	return _opened
+
+
+func _has_property(prop_name: String) -> bool:
+	if _db == null:
+		return false
+	for p in _db.get_property_list():
+		if p.get("name", "") == prop_name:
+			return true
+	return false
 
 
 func _read_file(path: String) -> String:

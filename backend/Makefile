@@ -1,4 +1,4 @@
-.PHONY: run build tidy db-up db-down db-logs
+.PHONY: run build tidy db-up db-down db-logs test test-integration test-cover
 
 # 本地启动后端(需先起 MySQL)
 run:
@@ -23,3 +23,16 @@ db-down:
 # 查看 MySQL 日志
 db-logs:
 	docker compose logs -f mysql
+
+# 单元测试(不含集成,无需 MySQL)
+test:
+	go test ./...
+
+# 集成测试(需先 make db-up 起 MySQL)
+test-integration:
+	go test -tags=integration ./...
+
+# 覆盖率报告
+test-cover:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
