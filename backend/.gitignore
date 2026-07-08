@@ -1,0 +1,13 @@
+# Go 构建产物
+/bin/
+*.exe
+*.out
+
+# 敏感配置(含第三方 Key, 切勿提交)
+.env
+.env.*
+!.env.example
+
+# 本地数据
+*.db
+*.log

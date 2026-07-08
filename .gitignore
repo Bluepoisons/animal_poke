@@ -15,6 +15,8 @@ Thumbs.db
 # 敏感配置（含 API key，切勿提交）
 .env
 .env.*
+# 保留示例文件(不含真实值), 供团队参考字段
+!.env.example
 *.local
 secrets.json
 config.local.*

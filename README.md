@@ -60,8 +60,9 @@ animal_poke/
 
 | 单例 | 脚本 | 职责 | 初始化顺序 | 对应任务 |
 |------|------|------|-----------|---------|
-| `ConfigManager` | `scripts/autoload/config_manager.gd` | 配置/.env 读取（API key/endpoint） | 1 | F1 骨架 / F3 完善 |
-| `NetworkManager` | `scripts/autoload/network_manager.gd` | 网络在线状态（ONLINE/WEAK/OFFLINE） | 2 | F1 骨架 / M5 完善 |
+| `ConfigManager` | `scripts/autoload/config_manager.gd` | 客户端配置读取(BACKEND_BASE_URL + 设备 Token);不含第三方 Key | 1 | F1 骨架 / F3 完善 |
+| `Logger` | `scripts/core/logger.gd` | 分级日志(DEBUG/INFO/WARN/ERROR) + 崩溃落盘 | 2 | F5 |
+| `NetworkManager` | `scripts/autoload/network_manager.gd` | 网络在线状态（ONLINE/WEAK/OFFLINE） | 3 | F1 骨架 / M5 完善 |
 | `SaveManager` | `scripts/autoload/save_manager.gd` | 本地存档读写 | 3 | F1 骨架 / F4 接 SQLite |
 | `AudioManager` | `scripts/autoload/audio_manager.gd` | 音效/BGM 播放与总线音量 | 4 | F1 骨架 / F2 补资源 |
 | `SceneManager` | `scripts/autoload/scene_manager.gd` | 场景切换栈（push/pop/replace） | 5 | F1 骨架 / M13 用 |
@@ -96,11 +97,12 @@ animal_poke/
 - **任务推进更新 `项目开发任务清单.md`** 状态（`[ ]` → `[x]`）。
 - 这两个文件是唯一事实来源，其余文档随对应任务产生。
 
-### API Key 管理
-- 所有 key（腾讯地图/彩云天气/云端 AI 等）统一存 `.env`。
-- `.env` 已加入 `.gitignore`，**切勿硬编码进代码或提交 git**。
-- 代码通过 `ConfigManager.get_value(KEY, default)` 读取，优先级：OS 环境变量 > `.env` > 默认值。
-- 提供 `.env.example`（不含真实 key）供参考（F3 落地）。
+### API Key 管理（客户端零第三方 Key）
+- **第三方 Key（腾讯地图/彩云天气/云端 VLM/LLM）只在 Go 后端 `.env`（见 `backend/.env.example`），客户端永不含第三方 Key。**
+- 客户端 `.env`（根目录 `.env.example`）**只存非敏感配置**：`BACKEND_BASE_URL` / `LOG_LEVEL` / `DB_FILENAME`。
+- 客户端登录后保存后端下发的**设备 Token**，存于 `user://auth/device_token.dat`（不进 `.env`）。
+- 所有 `.env` 均已加入 `.gitignore`，**切勿硬编码进代码或提交 git**。
+- 客户端配置读取：`ConfigManager.get_backend_base_url()` 等，底层走 `ConfigLoader`（优先级：OS 环境变量 > `res://.env` > 默认值）。
 
 ### Git 规范
 - 用 **rebase** 保持线性历史：`git pull --rebase`。
@@ -123,9 +125,20 @@ animal_poke/
 
 ## 运行项目
 
+### 客户端（Godot）
 1. 安装 Godot 4.7。
 2. 用 Godot 项目管理器导入本目录。
-3. 首次打开会自动导入资源并编译脚本。
-4. 运行项目（F5）。**注意**：MVP 主场景待 Task M13 落地，当前运行会提示"未设置主场景"——这是预期行为，非报错。Autoload 单例会在启动时打印初始化日志，可在 Output 面板确认。
+3. 安装 **godot-sqlite 插件**（`addons/godot-sqlite`），并在「项目 → 项目设置 → 插件」中启用（F4 本地数据库依赖，未安装时 `LocalDB.open()` 会报错降级）。
+4. 复制 `.env.example` 为 `.env` 填入 `BACKEND_BASE_URL`。
+5. 运行项目（F5）。**注意**：MVP 主场景待 Task M13 落地，当前运行会提示"未设置主场景"——这是预期行为，非报错。Autoload 单例（含新增 `Logger`）会在启动时打印初始化日志，可在 Output 面板确认。
 
-> Foundation 阶段（F1-F5）目标：搭好工程地基，项目可启动、单例可访问、配置/存档/日志骨架就位，为 MVP 业务模块铺路。
+### 后端（Go，见 `backend/`）
+```bash
+cd backend
+make db-up     # 本地 Docker 起 MySQL 开发服务器
+cp .env.example .env   # 填入第三方 Key
+make run       # 启动服务, /health 返回 200
+```
+详见 [`backend/README.md`](backend/README.md)。
+
+> Foundation 阶段（F1-F6）目标：搭好工程地基。客户端配置/数据库/日志骨架就位；Go 后端作为联网服务总枢纽，承载全部第三方 Key 与 `/health`、中间件链，为 MVP（M1-M14、MB1-MB5）铺路。

@@ -1,67 +1,75 @@
 extends Node
 
-## ConfigManager — 配置读取(单例)
-## 统一读取 .env 配置(API key / endpoint 等)。完整实现见 F3。
-## 参考: 游戏开发计划.md 4.6 API Key 管理规范、项目约定(.env 已 gitignore)。
+## ConfigManager — 客户端配置读取(单例, 初始化顺序第 1)
+## F3 完善: 委托 ConfigLoader 读取非敏感客户端配置; 管理后端下发的设备 Token。
+## 参考: 4.6.1 Key 管理规范、4.6.2 后端端点。
 ##
-## 读取优先级: OS 环境变量 > .env 文件缓存 > 默认值
-## 重要: 所有 API key 必须经此单例读取, 禁止硬编码进代码或提交 git。
+## 关键约束: 客户端 .env 只含 BACKEND_BASE_URL 等非敏感字段,
+## 任何第三方 Key(腾讯地图/彩云/VLM/LLM)均在 Go 后端 .env, 客户端永不含。
+##
+## 历史: F1 阶段曾把第三方 Key 常量放此处; F3 起全部移除(F6 移到后端)。
 
-const ENV_PATH := "res://.env"
+const DEVICE_TOKEN_PATH := "user://auth/device_token.txt"
 
-# 已知配置键(F3 会补充完整字段表, 见 .env.example)
-const KEY_TENCENT_MAP := "TENCENT_MAP_KEY"
-const KEY_CAIYUN_WEATHER := "CAIYUN_WEATHER_KEY"
-const KEY_VLM_ENDPOINT := "VLM_ENDPOINT"
-const KEY_VLM_KEY := "VLM_KEY"
-const KEY_LLM_ENDPOINT := "LLM_ENDPOINT"
-const KEY_LLM_KEY := "LLM_KEY"
-
-var _cache: Dictionary = {}
+var _loader: ConfigLoader
 
 
 func _ready() -> void:
-	_load_env_file()
-	print("[ConfigManager] 初始化完成 (骨架, 完整实现见 F3)")
+	_loader = ConfigLoader.new()
+	var has_url := _loader.has("BACKEND_BASE_URL")
+	print("[ConfigManager] 初始化完成. BACKEND_BASE_URL=%s" % get_backend_base_url())
+	if not has_url:
+		push_warning("[ConfigManager] 未配置 BACKEND_BASE_URL, 使用默认值; 生产环境请在 .env 设置。")
 
 
-## 读取配置值。优先 OS 环境变量, 其次 .env 缓存, 最后 default。
-func get_value(key: String, default: Variant = null) -> Variant:
-	var os_val := OS.get_environment(key)
-	if os_val != "":
-		return os_val
-	if _cache.has(key):
-		return _cache[key]
-	return default
+## Go 后端基础地址(客户端唯一需直连的外部地址)。
+func get_backend_base_url() -> String:
+	return _loader.get_string("BACKEND_BASE_URL", "http://127.0.0.1:8080")
 
 
-## 是否已配置某 key(非空)
-func has_key(key: String) -> bool:
-	var v: Variant = get_value(key, "")
-	return v is String and v != ""
+## 端点拼接: get_endpoint("/auth/device") -> http://host:port/auth/device
+func get_endpoint(path: String) -> String:
+	var base := get_backend_base_url().strip_edges().trim_suffix("/")
+	if not path.begins_with("/"):
+		path = "/" + path
+	return base + path
 
 
-## 解析 .env 文件到缓存。F3 会替换为更健壮的实现(支持注释/引号/多行/类型转换)。
-func _load_env_file() -> void:
-	if not FileAccess.file_exists(ENV_PATH):
-		# .env 不存在属正常(开发期/CI), 配置可从 OS 环境变量读取
-		return
-	var f := FileAccess.open(ENV_PATH, FileAccess.READ)
+## 日志级别(供 Logger 读取)
+func get_log_level() -> String:
+	return _loader.get_string("LOG_LEVEL", "INFO")
+
+
+## 本地数据库文件名(相对 user://)
+func get_db_filename() -> String:
+	return _loader.get_string("DB_FILENAME", "animal_poke.db")
+
+
+# ---- 设备 Token 管理(登录后由后端下发, 持久化于 user://, 不进 .env) ----
+
+func get_device_token() -> String:
+	if not FileAccess.file_exists(DEVICE_TOKEN_PATH):
+		return ""
+	var f := FileAccess.open(DEVICE_TOKEN_PATH, FileAccess.READ)
 	if f == null:
-		push_warning("[ConfigManager] 无法打开 .env: %s" % FileAccess.get_open_error())
-		return
-	while not f.eof_reached():
-		var line := f.get_line().strip_edges()
-		if line == "" or line.begins_with("#"):
-			continue
-		var eq := line.find("=")
-		if eq < 0:
-			continue
-		var k := line.substr(0, eq).strip_edges()
-		var v := line.substr(eq + 1).strip_edges()
-		# 去掉首尾配对引号
-		if v.length() >= 2:
-			if (v.begins_with("\"") and v.ends_with("\"")) or (v.begins_with("'") and v.ends_with("'")):
-				v = v.substr(1, v.length() - 2)
-		_cache[k] = v
+		return ""
+	var t := f.get_line().strip_edges()
 	f.close()
+	return t
+
+
+func set_device_token(token: String) -> void:
+	var dir := DEVICE_TOKEN_PATH.get_base_dir()
+	if not DirAccess.dir_exists(dir):
+		DirAccess.make_dir_recursive(dir)
+	var f := FileAccess.open(DEVICE_TOKEN_PATH, FileAccess.WRITE)
+	if f == null:
+		push_error("[ConfigManager] 无法写入设备 Token: %s" % FileAccess.get_open_error())
+		return
+	f.store_string(token)
+	f.close()
+
+
+func clear_device_token() -> void:
+	if FileAccess.file_exists(DEVICE_TOKEN_PATH):
+		DirAccess.remove_absolute(DEVICE_TOKEN_PATH)
