@@ -6,6 +6,7 @@ import { ShopProvider } from './shop/ShopContext'
 import { LbsProvider } from './lbs/LbsContext'
 import { useLbs } from './lbs/useLbs'
 import { BattleProvider } from './battle/BattleContext'
+import { WeatherProvider } from './weather/WeatherContext'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
@@ -108,13 +109,15 @@ const AppInner: React.FC = () => {
 const App: React.FC = () => {
   return (
     <StaminaProvider>
-      <ShopProvider>
-        <LbsProvider>
-          <BattleProvider>
-            <AppInner />
-          </BattleProvider>
-        </LbsProvider>
-      </ShopProvider>
+      <LbsProvider>
+        <WeatherProvider>
+          <ShopProvider>
+            <BattleProvider>
+              <AppInner />
+            </BattleProvider>
+          </ShopProvider>
+        </WeatherProvider>
+      </LbsProvider>
     </StaminaProvider>
   )
 }
