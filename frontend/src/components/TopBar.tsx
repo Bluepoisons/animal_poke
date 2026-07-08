@@ -2,6 +2,7 @@ import React from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useLbs } from '../lbs/useLbs'
 import { useWeather } from '../weather/useWeather'
+import { useEconomy } from '../economy/useEconomy'
 
 interface TopBarProps {
   location?: string
@@ -28,6 +29,14 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
   } catch {
     // WeatherProvider 未挂载时忽略
   }
+  let todayNetFlow = 0
+  try {
+    const economy = useEconomy()
+    const stats = economy.getStats(staminaState.state.gold)
+    todayNetFlow = stats.todayNetFlow
+  } catch {
+    // EconomyProvider 未挂载时忽略
+  }
 
   const level = props.level ?? staminaState.state.level
   const currentStamina = props.stamina ?? staminaState.state.currentStamina
@@ -50,7 +59,17 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
         <div style={styles.avatar}>🐱</div>
         <span className="pill">Lv.{level}</span>
         <span className="pill">⚡ {currentStamina}/{maxStamina}</span>
-        <span className="pill">🪙 {gold}</span>
+        <span className="pill" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
+          <span>🪙 {gold}</span>
+          {todayNetFlow !== 0 && (
+            <span style={{
+              fontSize: 9,
+              color: todayNetFlow > 0 ? 'var(--success)' : 'var(--warn)',
+            }}>
+              {todayNetFlow > 0 ? '+' : ''}{todayNetFlow} 今日
+            </span>
+          )}
+        </span>
       </div>
       <span className="pill">{displayWeather}</span>
     </div>

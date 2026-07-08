@@ -1,5 +1,6 @@
 import React, { createContext, useReducer, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useStamina } from '../stamina/useStamina'
+import { useEconomy } from '../economy/useEconomy'
 import {
   ITEM_DEFS,
   SHOP_STORAGE_KEY,
@@ -150,6 +151,7 @@ export const ShopContext = createContext<ShopContextValue | null>(null)
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const stamina = useStamina()
+  const economy = useEconomy()
   const [state, dispatch] = useReducer(shopReducer, undefined, loadInitialState)
 
   // 玩具球激活状态（useRef 管理，不持久化，刷新后失效）
@@ -176,6 +178,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (result.success) {
         // 购买成功，加到背包（虽然效果是即时的，但保留记录用于背包展示）
         dispatch({ type: 'BUY_ITEM', itemId })
+        // 追踪体力药剂消耗
+        economy.trackSpend(def.price, 'stamina_potion', '购买体力药剂')
         return {
           success: true,
           remainingGold: stamina.state.gold - def.price,
@@ -203,10 +207,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       stamina.addGold(-def.price)
       // 加道具到背包 + 记录限购
       dispatch({ type: 'BUY_ITEM', itemId })
+      // 追踪商店购买消耗
+      economy.trackSpend(def.price, 'shop_buy', `购买: ${def.name}`)
     }
 
     return result
-  }, [stamina, state.dailyPurchases])
+  }, [stamina, state.dailyPurchases, economy])
 
   const useItem = useCallback((itemId: ItemId): UseItemResult => {
     const count = state.inventory[itemId] ?? 0
@@ -238,6 +244,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success) {
       // 发放金币奖励
       stamina.addGold(result.reward)
+      // 追踪签到产出
+      economy.trackEarn(result.reward, 'checkin', `签到第${result.newStreak}天`)
       // 更新签到状态（含第 7 天额外道具）
       dispatch({
         type: 'CHECK_IN',
@@ -248,7 +256,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return result
-  }, [stamina, state.checkIn])
+  }, [stamina, state.checkIn, economy])
 
   const getItemCount = useCallback((itemId: ItemId): number => {
     return state.inventory[itemId] ?? 0

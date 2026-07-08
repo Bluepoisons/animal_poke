@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
+import { useEconomy } from '../economy/useEconomy'
 import { ITEM_DEFS, ITEM_IDS, CHECK_IN_REWARDS, CHECK_IN_CYCLE_DAYS } from '../shop/constants'
 import type { ItemId } from '../shop/constants'
 import { getTodayString } from '../shop/logic'
@@ -9,6 +10,7 @@ import { getTodayString } from '../shop/logic'
 const StoreScreen: React.FC = () => {
   const stamina = useStamina()
   const shop = useShop()
+  const economy = useEconomy()
   const [tab, setTab] = useState<'shop' | 'inventory'>('shop')
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'fail' } | null>(null)
 
@@ -68,8 +70,35 @@ const StoreScreen: React.FC = () => {
     return ITEM_IDS.filter(id => (shop.state.inventory[id] ?? 0) > 0)
   }, [shop.state.inventory])
 
+  // 经济统计
+  const economyStats = economy.getStats(gold)
+  const balance = economy.getBalanceCheck()
+
   return (
     <div style={styles.container}>
+      {/* 经济看板 */}
+      <div style={styles.economyDashboard}>
+        <div style={styles.dashboardRow}>
+          <div style={styles.dashboardCard}>
+            <span style={styles.cardLabel}>💰 当前金币</span>
+            <span style={styles.cardValue}>{economyStats.currentGold}</span>
+          </div>
+          <div style={styles.dashboardCard}>
+            <span style={styles.cardLabel}>📈 今日产出</span>
+            <span style={{ ...styles.cardValue, color: 'var(--success)' }}>+{economyStats.todayEarned}</span>
+          </div>
+          <div style={styles.dashboardCard}>
+            <span style={styles.cardLabel}>📉 今日消耗</span>
+            <span style={{ ...styles.cardValue, color: 'var(--warn)' }}>-{economyStats.todaySpent}</span>
+          </div>
+        </div>
+        <div style={styles.balanceBar}>
+          <span style={{ color: balance.isHealthy ? 'var(--success)' : 'var(--warn)' }}>
+            {balance.status === 'healthy' ? '✅' : '⚠️'} {balance.suggestion}
+          </span>
+        </div>
+      </div>
+
       {/* 签到面板 */}
       <div style={styles.checkInPanel}>
         <div style={styles.checkInTitle}>📅 每日签到</div>
@@ -239,6 +268,44 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 12,
     paddingBottom: 20,
     position: 'relative',
+  },
+  // 经济看板
+  economyDashboard: {
+    background: 'var(--white)',
+    borderRadius: 'var(--radius-lg)',
+    padding: 12,
+    marginBottom: 12,
+    boxShadow: 'var(--shadow-card)',
+  },
+  dashboardRow: {
+    display: 'flex',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dashboardCard: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+    background: 'var(--cream-dark)',
+    borderRadius: 'var(--radius-md)',
+    padding: '8px 4px',
+  },
+  cardLabel: {
+    fontSize: 10,
+    color: 'var(--ink-3)',
+    fontWeight: 600,
+  },
+  cardValue: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: 'var(--ink)',
+  },
+  balanceBar: {
+    fontSize: 11,
+    textAlign: 'center',
+    padding: '4px 0',
   },
   // 签到面板
   checkInPanel: {
