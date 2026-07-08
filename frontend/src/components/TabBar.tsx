@@ -7,6 +7,7 @@ const TABS: { key: MainTab; icon: string; label: string }[] = [
   { key: 'camera', icon: '📷', label: 'Camera' },
   { key: 'fight', icon: '🥊', label: 'Fight' },
   { key: 'dispatch', icon: '🗺️', label: 'Dispatch' },
+  { key: 'achievement', icon: '🏆', label: 'Achv' },
   { key: 'store', icon: '🏪', label: 'Store' },
 ]
 

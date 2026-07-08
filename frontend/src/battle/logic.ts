@@ -26,6 +26,7 @@ import {
   ULTIMATE_MULTIPLIER,
   MAX_ROUNDS,
 } from './constants'
+import { getBattleXp } from '../stamina/logic'
 
 // ===== 确定性伪随机 =====
 
@@ -342,14 +343,15 @@ export function generateEnemy(playerLevel: number): BattlePet {
 export function computeRewards(result: BattleResult, enemyRarity: RarityTier, difficultyMultiplier: number): BattleRewards {
   if (result === 'win') {
     const gold = Math.round(BATTLE_GOLD_REWARDS[enemyRarity] * difficultyMultiplier)
+    const exp = getBattleXp('win', enemyRarity)
     const droppedItem = rollItemDrop()
-    return { gold, exp: 0, droppedItem }
+    return { gold, exp, droppedItem }
   }
   if (result === 'draw') {
-    return { gold: BATTLE_DRAW_GOLD, exp: 0 }
+    return { gold: BATTLE_DRAW_GOLD, exp: getBattleXp('draw', enemyRarity) }
   }
   // 失败
-  return { gold: BATTLE_LOSE_GOLD, exp: 0 }
+  return { gold: BATTLE_LOSE_GOLD, exp: getBattleXp('lose', enemyRarity) }
 }
 
 /** 道具掉落判定（15% 概率） */

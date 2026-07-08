@@ -321,6 +321,10 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
   const finishBattle = useCallback(() => {
     if (state.rewards) {
       stamina.addGold(state.rewards.gold)
+      // 发放战斗经验
+      if (state.rewards.exp > 0) {
+        stamina.addExp(state.rewards.exp)
+      }
       // 追踪战斗产出
       const source = state.result === 'win' ? 'battle_win'
         : state.result === 'draw' ? 'battle_draw'
@@ -330,6 +334,11 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
       if (state.rewards.droppedItem) {
         shop.addItem(state.rewards.droppedItem as any)
       }
+    }
+
+    // 记录战斗结果（更新战斗统计：胜场、总场次、连胜）
+    if (state.result) {
+      stamina.recordBattle(state.result)
     }
 
     // 感冒判定：雨雪天出战宠物有概率感冒（需在 RESET 前读取 playerPet.id）

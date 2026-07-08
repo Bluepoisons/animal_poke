@@ -42,6 +42,7 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
   const currentStamina = props.stamina ?? staminaState.state.currentStamina
   const maxStamina = props.maxStamina ?? staminaState.maxStamina
   const gold = props.gold ?? staminaState.state.gold
+  const expProgress = staminaState.expProgress
 
   // 城市名：优先从 props，其次从 LbsContext，最后默认"未知"
   const displayLocation = location ?? (lbsState?.cityName || '未知')
@@ -57,7 +58,12 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
     <div style={styles.container}>
       <div style={styles.left}>
         <div style={styles.avatar}>🐱</div>
-        <span className="pill">Lv.{level}</span>
+        <div style={styles.levelBlock}>
+          <span className="pill">Lv.{level}</span>
+          <div style={styles.expBarOuter}>
+            <div style={{ ...styles.expBarInner, width: `${expProgress}%` }} />
+          </div>
+        </div>
         <span className="pill">⚡ {currentStamina}/{maxStamina}</span>
         <span className="pill" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
           <span>🪙 {gold}</span>
@@ -93,6 +99,25 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
+  },
+  levelBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  expBarOuter: {
+    width: 60,
+    height: 4,
+    borderRadius: 2,
+    background: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+  },
+  expBarInner: {
+    height: '100%',
+    borderRadius: 2,
+    background: 'var(--white)',
+    transition: 'width 0.3s ease',
   },
   avatar: {
     width: 32,
