@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import type { CardEntry, RarityTier } from '../types'
 import { useStamina } from '../stamina/useStamina'
+import { useShop } from '../shop/useShop'
 
 // 投掷力度相关常量
 const CHARGE_RATE = 2       // 每 tick 增加 2%
@@ -67,6 +68,7 @@ function generateCardEntry(): CardEntry {
 
 const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptureFail }) => {
   const stamina = useStamina()
+  const shop = useShop()
   const [throwState, setThrowState] = useState<ThrowState>('idle')
   const [charge, setCharge] = useState(0)
   const chargeRef = useRef(0)
@@ -74,6 +76,9 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canThrow = stamina.state.currentStamina >= 20
+  const boostPercent = shop.getCaptureBoost()
+  const baseRatePercent = Math.round(BASE_SUCCESS_RATE * 100)
+  const boostedRatePercent = Math.min(baseRatePercent + boostPercent, 100)
 
   // 清理定时器
   const clearTimers = useCallback(() => {
@@ -114,7 +119,15 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
 
     const finalCharge = chargeRef.current
     const successRate = calcSuccessRate(finalCharge)
-    const isSuccess = Math.random() < successRate
+    // 应用玩具球捕获增益
+    const currentBoost = shop.getCaptureBoost()
+    const boostedRate = Math.min(successRate + currentBoost / 100, 1)
+    const isSuccess = Math.random() < boostedRate
+
+    // 消耗捕获增益（投掷后即消耗）
+    if (currentBoost > 0) {
+      shop.consumeCaptureBoost()
+    }
 
     setThrowState('throwing')
 
@@ -128,7 +141,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
         onCaptureFail?.()
       }
     }, 600)
-  }, [throwState, clearTimers, stamina, onCaptureSuccess, onCaptureFail])
+  }, [throwState, clearTimers, stamina, shop, onCaptureSuccess, onCaptureFail])
 
   // 回到待机状态
   const resetToIdle = useCallback(() => {
@@ -227,9 +240,20 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
       {/* Top info pills */}
       <div style={styles.topInfo}>
         <span className="pill" style={styles.pill}>🎯 警惕值 中</span>
-        <span className="pill" style={{ ...styles.pill, background: 'var(--success)' }}>
-          基础 {Math.round(BASE_SUCCESS_RATE * 100)}%
-        </span>
+        {boostPercent > 0 ? (
+          <>
+            <span className="pill" style={{ ...styles.pill, background: 'var(--orange)' }}>
+              🎾 +{boostPercent}%
+            </span>
+            <span className="pill" style={{ ...styles.pill, background: 'var(--success)' }}>
+              {baseRatePercent}% → {boostedRatePercent}%
+            </span>
+          </>
+        ) : (
+          <span className="pill" style={{ ...styles.pill, background: 'var(--success)' }}>
+            基础 {baseRatePercent}%
+          </span>
+        )}
         <span className="pill" style={styles.pill}>🥫 ×8</span>
       </div>
 

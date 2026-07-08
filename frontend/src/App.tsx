@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import type { MainTab, CardEntry } from './types'
 import { StaminaProvider } from './stamina/StaminaContext'
 import { useStamina } from './stamina/useStamina'
+import { ShopProvider } from './shop/ShopContext'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
@@ -9,6 +10,7 @@ import CollectScreen from './components/CollectScreen'
 import MapScreen from './components/MapScreen'
 import DiscoverScreen from './components/DiscoverScreen'
 import CaptureScreen from './components/CaptureScreen'
+import StoreScreen from './components/StoreScreen'
 import PlaceholderScreen from './components/PlaceholderScreen'
 
 /** App 内部组件：需在 StaminaProvider 内使用 hooks */
@@ -75,7 +77,7 @@ const AppInner: React.FC = () => {
           />
         )
       case 'store':
-        return <PlaceholderScreen icon="🏪" title="Store" subtitle="道具商店 · 开发中" />
+        return <StoreScreen />
     }
   }
 
@@ -98,7 +100,9 @@ const AppInner: React.FC = () => {
 const App: React.FC = () => {
   return (
     <StaminaProvider>
-      <AppInner />
+      <ShopProvider>
+        <AppInner />
+      </ShopProvider>
     </StaminaProvider>
   )
 }
