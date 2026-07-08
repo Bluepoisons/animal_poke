@@ -20,6 +20,24 @@ vi.mock('../stamina/useStamina', () => ({
   }),
 }))
 
+// Mock useShop（捕获增益相关）
+const mockGetCaptureBoost = vi.fn(() => 0)
+const mockConsumeCaptureBoost = vi.fn()
+
+vi.mock('../shop/useShop', () => ({
+  useShop: () => ({
+    state: { inventory: {}, checkIn: { streak: 0, lastCheckInDate: '' }, dailyPurchases: {}, dailyPurchaseDate: '' },
+    getCaptureBoost: mockGetCaptureBoost,
+    consumeCaptureBoost: mockConsumeCaptureBoost,
+    isCaptureBoostActive: vi.fn(() => false),
+    buyItem: vi.fn(),
+    useItem: vi.fn(),
+    checkIn: vi.fn(),
+    getItemCount: vi.fn(() => 0),
+    getDailyPurchaseCount: vi.fn(() => 0),
+  }),
+}))
+
 const TICK_MS = 50
 
 describe('CaptureScreen', () => {
@@ -27,6 +45,9 @@ describe('CaptureScreen', () => {
     vi.useFakeTimers()
     mockStamina = 120
     mockConsumeStamina.mockClear()
+    mockGetCaptureBoost.mockClear()
+    mockGetCaptureBoost.mockReturnValue(0)
+    mockConsumeCaptureBoost.mockClear()
     mockConsumeStamina.mockImplementation((amount: number) => {
       if (mockStamina >= amount) {
         return true
