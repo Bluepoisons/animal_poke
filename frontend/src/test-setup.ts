@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto'
 import '@testing-library/jest-dom'
 
 // jsdom 环境下补全 matchMedia（部分组件可能用到）
