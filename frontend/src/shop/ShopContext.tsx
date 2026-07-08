@@ -6,7 +6,6 @@ import {
   SHOP_STORAGE_KEY,
   POTION_RECOVERY,
 } from './constants'
-import { CHECK_IN_XP } from '../stamina/constants'
 import type { ItemId } from './constants'
 import type {
   ShopState,
@@ -15,11 +14,14 @@ import type {
   BuyResult,
   UseItemResult,
   CheckInResult,
+  CheckInState,
+  CheckInStatus,
 } from './types'
 import {
   buyItem as calculateBuy,
-  getCheckInReward,
+  calculateReward,
   calculateCaptureBoost,
+  getStreakInfo,
   getTodayString,
   shouldResetDailyPurchases,
 } from './logic'
@@ -30,9 +32,32 @@ const initialState: ShopState = {
   checkIn: {
     streak: 0,
     lastCheckInDate: '',
+    totalCheckIns: 0,
+    maxStreak: 0,
+    lastBreakDate: '',
   },
   dailyPurchases: {},
   dailyPurchaseDate: getTodayString(),
+}
+
+/** 旧存档签到状态迁移（补全缺失字段） */
+function migrateCheckInState(raw: unknown): CheckInState {
+  const fallback: CheckInState = {
+    streak: 0,
+    lastCheckInDate: '',
+    totalCheckIns: 0,
+    maxStreak: 0,
+    lastBreakDate: '',
+  }
+  if (typeof raw !== 'object' || raw === null) return fallback
+  const obj = raw as Partial<CheckInState>
+  return {
+    streak: typeof obj.streak === 'number' ? obj.streak : 0,
+    lastCheckInDate: typeof obj.lastCheckInDate === 'string' ? obj.lastCheckInDate : '',
+    totalCheckIns: typeof obj.totalCheckIns === 'number' ? obj.totalCheckIns : 0,
+    maxStreak: typeof obj.maxStreak === 'number' ? obj.maxStreak : 0,
+    lastBreakDate: typeof obj.lastBreakDate === 'string' ? obj.lastBreakDate : '',
+  }
 }
 
 /** 从 localStorage 加载状态 */
@@ -50,6 +75,8 @@ function loadInitialState(): ShopState {
       ) {
         throw new Error('商店存档字段校验失败')
       }
+      // 迁移签到状态（旧存档可能缺字段）
+      parsed.checkIn = migrateCheckInState(parsed.checkIn)
       // 加载时检查每日限购是否需要重置
       if (shouldResetDailyPurchases(parsed.dailyPurchaseDate)) {
         parsed.dailyPurchases = {}
@@ -115,11 +142,22 @@ function shopReducer(state: ShopState, action: ShopAction): ShopState {
     }
 
     case 'CHECK_IN': {
+      const newStreak = action.newStreak
+      const newMaxStreak = Math.max(state.checkIn.maxStreak, newStreak)
+
+      // 断签时记录断签日期
+      const newLastBreakDate = action.wasReset
+        ? getTodayString()
+        : state.checkIn.lastBreakDate
+
       return {
         ...state,
         checkIn: {
-          streak: action.newStreak,
+          streak: newStreak,
           lastCheckInDate: getTodayString(),
+          totalCheckIns: state.checkIn.totalCheckIns + 1,
+          maxStreak: newMaxStreak,
+          lastBreakDate: newLastBreakDate,
         },
         // 第 7 天额外送道具
         inventory: action.rewardItem
@@ -237,7 +275,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [state.inventory, stamina])
 
   const checkIn = useCallback((): CheckInResult => {
-    const result = getCheckInReward(
+    const result = calculateReward(
       state.checkIn.streak,
       state.checkIn.lastCheckInDate
     )
@@ -245,21 +283,27 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success) {
       // 发放金币奖励
       stamina.addGold(result.reward)
-      // 发放签到经验
-      stamina.addExp(CHECK_IN_XP)
+      // 发放经验值奖励
+      stamina.addExp(result.rewardExp)
       // 追踪签到产出
       economy.trackEarn(result.reward, 'checkin', `签到第${result.newStreak}天`)
       // 更新签到状态（含第 7 天额外道具）
       dispatch({
         type: 'CHECK_IN',
         reward: result.reward,
+        rewardExp: result.rewardExp,
         newStreak: result.newStreak,
+        wasReset: result.wasReset,
         rewardItem: result.rewardItem,
       })
     }
 
     return result
   }, [stamina, state.checkIn, economy])
+
+  const getCheckInStatus = useCallback((): CheckInStatus => {
+    return getStreakInfo(state.checkIn)
+  }, [state.checkIn])
 
   const getItemCount = useCallback((itemId: ItemId): number => {
     return state.inventory[itemId] ?? 0
@@ -290,13 +334,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     buyItem,
     useItem,
     checkIn,
+    getCheckInStatus,
     getItemCount,
     getDailyPurchaseCount,
     getCaptureBoost,
     consumeCaptureBoost,
     isCaptureBoostActive,
     addItem,
-  }), [state, buyItem, useItem, checkIn, getItemCount, getDailyPurchaseCount, getCaptureBoost, consumeCaptureBoost, isCaptureBoostActive, addItem])
+  }), [state, buyItem, useItem, checkIn, getCheckInStatus, getItemCount, getDailyPurchaseCount, getCaptureBoost, consumeCaptureBoost, isCaptureBoostActive, addItem])
 
   return (
     <ShopContext.Provider value={value}>

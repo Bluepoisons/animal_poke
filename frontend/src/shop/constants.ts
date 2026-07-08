@@ -109,14 +109,27 @@ export const ITEM_DEFS: Record<ItemId, ItemDef> = {
 /** 道具 ID 列表（用于遍历） */
 export const ITEM_IDS = Object.keys(ITEM_DEFS) as ItemId[]
 
-/** 签到奖励表（7 天递增，第 7 天满签额外送玩具球） */
-export const CHECK_IN_REWARDS: number[] = [10, 20, 30, 50, 80, 120, 200]
+/**
+ * 签到奖励表（7 天递增，第 7 天满签额外送玩具球）
+ * 对齐设计文档 6.4 每日签到表
+ * Day 1~7：金币递增，第 7 天满签额外送道具
+ */
+export const CHECK_IN_REWARDS: number[] = [20, 30, 40, 50, 60, 80, 150]
+
+/** 签到经验值奖励（每日固定 15，第 7 天满签 30） */
+export const CHECK_IN_EXP_REWARDS: number[] = [15, 15, 15, 15, 15, 15, 30]
 
 /** 签到满签（第 7 天）额外赠送的道具 */
 export const CHECK_IN_DAY7_BONUS_ITEM: ItemId = 'toy_ball'
 
 /** 签到周期天数 */
 export const CHECK_IN_CYCLE_DAYS = 7
+
+/** 每日签到基础经验值 */
+export const CHECK_IN_BASE_EXP = 15
+
+/** 满签日额外经验值 */
+export const CHECK_IN_MILESTONE_EXP = 30
 
 /** 体力药剂恢复量 */
 export const POTION_RECOVERY = 3

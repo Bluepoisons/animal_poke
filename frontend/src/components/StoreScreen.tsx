@@ -2,9 +2,10 @@ import React, { useState, useCallback, useMemo } from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
 import { useEconomy } from '../economy/useEconomy'
-import { ITEM_DEFS, ITEM_IDS, CHECK_IN_REWARDS, CHECK_IN_CYCLE_DAYS } from '../shop/constants'
+import { ITEM_DEFS, ITEM_IDS } from '../shop/constants'
 import type { ItemId } from '../shop/constants'
 import { getTodayString } from '../shop/logic'
+import CheckInModal from './CheckInModal'
 
 /** 商店主界面 */
 const StoreScreen: React.FC = () => {
@@ -13,6 +14,7 @@ const StoreScreen: React.FC = () => {
   const economy = useEconomy()
   const [tab, setTab] = useState<'shop' | 'inventory'>('shop')
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'fail' } | null>(null)
+  const [checkInModalOpen, setCheckInModalOpen] = useState(false)
 
   const showToast = useCallback((msg: string, type: 'success' | 'fail' = 'success') => {
     setToast({ msg, type })
@@ -41,29 +43,12 @@ const StoreScreen: React.FC = () => {
     }
   }, [shop, showToast])
 
-  const handleCheckIn = useCallback(() => {
-    const result = shop.checkIn()
-    if (result.success) {
-      let msg = `签到成功！获得 ${result.reward} 🪙`
-      if (result.rewardItem) {
-        msg += ` + ${ITEM_DEFS[result.rewardItem].name} ×1`
-      }
-      showToast(msg, 'success')
-    } else {
-      showToast('今日已签到', 'fail')
-    }
-  }, [shop, showToast])
-
   const gold = stamina.state.gold
   const currentStamina = stamina.state.currentStamina
   const maxStamina = stamina.maxStamina
 
   // 签到状态
-  const checkInState = shop.state.checkIn
-  const today = getTodayString()
-  const hasCheckedInToday = checkInState.lastCheckInDate === today
-  // 当前周期天数（用于显示 7 天格子）
-  const cycleDay = checkInState.streak > 0 ? Math.min(checkInState.streak, CHECK_IN_CYCLE_DAYS) : 0
+  const hasCheckedInToday = shop.state.checkIn.lastCheckInDate === getTodayString()
 
   // 有道具的背包列表
   const inventoryItems = useMemo(() => {
@@ -99,32 +84,13 @@ const StoreScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 签到面板 */}
+      {/* 签到入口 */}
       <div style={styles.checkInPanel}>
-        <div style={styles.checkInTitle}>📅 每日签到</div>
-        <div style={styles.checkInGrid}>
-          {CHECK_IN_REWARDS.map((reward, i) => {
-            const day = i + 1
-            const isDone = day <= cycleDay
-            const isToday = day === cycleDay + 1 && !hasCheckedInToday
-            const isDay7 = day === CHECK_IN_CYCLE_DAYS
-            return (
-              <div
-                key={day}
-                style={{
-                  ...styles.checkInCell,
-                  ...(isDone ? styles.checkInCellDone : {}),
-                  ...(isToday ? styles.checkInCellToday : {}),
-                  ...(isDay7 ? styles.checkInCellDay7 : {}),
-                }}
-              >
-                <span style={styles.checkInDay}>D{day}</span>
-                <span style={styles.checkInReward}>{reward}🪙</span>
-                {isDay7 && <span style={styles.checkInBonus}>🎁</span>}
-                {isDone && <span style={styles.checkInCheck}>✓</span>}
-              </div>
-            )
-          })}
+        <div style={styles.checkInEntry}>
+          <span style={styles.checkInTitle}>📅 每日签到</span>
+          <span style={styles.streakText}>
+            连续 {shop.state.checkIn.streak} 天
+          </span>
         </div>
         <button
           className="btn btn-primary"
@@ -133,14 +99,16 @@ const StoreScreen: React.FC = () => {
             ...(hasCheckedInToday ? styles.disabledBtn : {}),
           }}
           disabled={hasCheckedInToday}
-          onClick={handleCheckIn}
+          onClick={() => setCheckInModalOpen(true)}
         >
-          {hasCheckedInToday ? '✓ 今日已签到' : '📅 签到'}
+          {hasCheckedInToday ? '✓ 已签到' : '去签到'}
         </button>
-        <div style={styles.streakText}>
-          连续签到 {checkInState.streak} 天
-        </div>
       </div>
+
+      {/* 签到弹窗 */}
+      {checkInModalOpen && (
+        <CheckInModal onClose={() => setCheckInModalOpen(false)} />
+      )}
 
       {/* Tab 切换 */}
       <div style={styles.tabBar}>
@@ -319,8 +287,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     fontWeight: 700,
     color: 'var(--ink)',
+  },
+  checkInEntry: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
-    textAlign: 'center',
   },
   checkInGrid: {
     display: 'grid',
