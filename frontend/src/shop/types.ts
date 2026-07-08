@@ -86,4 +86,6 @@ export interface ShopContextValue {
   consumeCaptureBoost: () => void
   /** 玩具球是否已激活 */
   isCaptureBoostActive: () => boolean
+  /** 添加道具到背包（战斗掉落等） */
+  addItem: (itemId: ItemId) => void
 }

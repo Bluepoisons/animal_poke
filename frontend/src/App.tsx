@@ -5,6 +5,7 @@ import { useStamina } from './stamina/useStamina'
 import { ShopProvider } from './shop/ShopContext'
 import { LbsProvider } from './lbs/LbsContext'
 import { useLbs } from './lbs/useLbs'
+import { BattleProvider } from './battle/BattleContext'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
@@ -12,6 +13,7 @@ import CollectScreen from './components/CollectScreen'
 import MapScreen from './components/MapScreen'
 import DiscoverScreen from './components/DiscoverScreen'
 import CaptureScreen from './components/CaptureScreen'
+import BattleScreen from './components/BattleScreen'
 import StoreScreen from './components/StoreScreen'
 import PlaceholderScreen from './components/PlaceholderScreen'
 
@@ -75,13 +77,16 @@ const AppInner: React.FC = () => {
       case 'camera':
         return <DiscoverScreen onConfirm={handlePhotoConfirm} />
       case 'fight':
-        return (
-          <CaptureScreen
-            targetSpecies={pendingSpecies}
-            onCaptureSuccess={handleCaptureSuccess}
-            onCaptureFail={handleCaptureFail}
-          />
-        )
+        if (pendingPhoto) {
+          return (
+            <CaptureScreen
+              targetSpecies={pendingSpecies}
+              onCaptureSuccess={handleCaptureSuccess}
+              onCaptureFail={handleCaptureFail}
+            />
+          )
+        }
+        return <BattleScreen />
       case 'store':
         return <StoreScreen />
     }
@@ -105,7 +110,9 @@ const App: React.FC = () => {
     <StaminaProvider>
       <ShopProvider>
         <LbsProvider>
-          <AppInner />
+          <BattleProvider>
+            <AppInner />
+          </BattleProvider>
         </LbsProvider>
       </ShopProvider>
     </StaminaProvider>
