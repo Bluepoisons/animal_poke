@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-07-08" name="report_15" tests="14" failures="1" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="animal_repository_test" package="tests/unit" timestamp="2026-07-08T10:38:49" hostname="localhost" tests="14" failures="1" errors="0" skipped="0" flaky="0" time="0.371">
+		<testcase name="test_uuid_format" classname="animal_repository.test" time="0.011">
+		</testcase>
+		<testcase name="test_uuid_generation_uniqueness" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_validation_rejects_empty_species" classname="animal_repository.test" time="0.015">
+		</testcase>
+		<testcase name="test_validation_rejects_missing_species" classname="animal_repository.test" time="0.014">
+		</testcase>
+		<testcase name="test_validation_rejects_bad_rarity" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_validation_rejects_attr_out_of_range" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_validation_accepts_valid_animal" classname="animal_repository.test" time="0.015">
+		</testcase>
+		<testcase name="test_photo_keys_stripped" classname="animal_repository.test" time="0.015">
+		</testcase>
+		<testcase name="test_save_captured_fills_timestamps" classname="animal_repository.test" time="0.014">
+		</testcase>
+		<testcase name="test_get_getall_delete" classname="animal_repository.test" time="0.022">
+		</testcase>
+		<testcase name="test_upsert_same_uuid_updates" classname="animal_repository.test" time="0.022">
+			<failure message="FAILED: res://tests/unit/animal_repository.test.gd:184" type="FAILURE">
+<![CDATA[
+Expecting:
+ '2b7bf64b-4c5e-4ac1-a430-9510df7d186d'
+ but was
+ '2b7bf64b-4c5e-4ac1-a430-9510df7d186d'
+]]>
+			</failure>
+			<failure message="FAILED: res://tests/unit/animal_repository.test.gd:187" type="FAILURE">
+<![CDATA[
+Expecting:
+ '4'
+ but was
+ '1'
+]]>
+			</failure>
+			<failure message="FAILED: res://tests/unit/animal_repository.test.gd:188" type="FAILURE">
+<![CDATA[
+Expecting:
+ '300'
+ but was
+ '0'
+]]>
+			</failure>
+		</testcase>
+	</testsuite>
+</testsuites>

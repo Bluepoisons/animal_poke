@@ -10,6 +10,7 @@ tests/
     rarity.test.gd
     config_loader.test.gd
     db_logic.test.gd
+    animal_repository.test.gd
     network_manager.test.gd
     game_manager.test.gd
     config_manager.test.gd
@@ -22,10 +23,11 @@ tests/
       loading_indicator.test.gd
       toast.test.gd
       base_button.test.gd
-  integration/    # 集成测试(autoload 联动/DB CRUD/日志落盘)
+  integration/    # 集成测试(autoload 联动/DB CRUD/日志落盘/持久化)
     autoload_boot.test.gd
     config_logger_integration.test.gd
     save_db_integration.test.gd
+    animal_persistence.test.gd
 ```
 
 ## Godot 测试
@@ -62,5 +64,5 @@ GdUnit4 v5.0.4 官方仅支持到 Godot 4.6,在 Godot 4.7 上有两处硬解析�
 
 ## 测试结果
 
-- Godot: **83 用例, 0 失败**(17 个测试套件)。
+- Godot: **102 用例, 0 失败**(19 个测试套件)。
 - Go: 单元测试全通过;集成测试在 `make db-up` 起 MySQL 后通过。

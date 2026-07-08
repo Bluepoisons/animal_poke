@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-07-08" name="report_17" tests="15" failures="0" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="animal_repository_test" package="tests/unit" timestamp="2026-07-08T10:40:57" hostname="localhost" tests="15" failures="0" errors="0" skipped="0" flaky="0" time="0.516">
+		<testcase name="test_uuid_format" classname="animal_repository.test" time="0.012">
+		</testcase>
+		<testcase name="test_uuid_generation_uniqueness" classname="animal_repository.test" time="0.015">
+		</testcase>
+		<testcase name="test_validation_rejects_empty_species" classname="animal_repository.test" time="0.019">
+		</testcase>
+		<testcase name="test_validation_rejects_missing_species" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_validation_rejects_bad_rarity" classname="animal_repository.test" time="0.022">
+		</testcase>
+		<testcase name="test_validation_rejects_attr_out_of_range" classname="animal_repository.test" time="0.022">
+		</testcase>
+		<testcase name="test_validation_accepts_zero_as_pending" classname="animal_repository.test" time="0.020">
+		</testcase>
+		<testcase name="test_validation_accepts_valid_animal" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_photo_keys_stripped" classname="animal_repository.test" time="0.020">
+		</testcase>
+		<testcase name="test_save_captured_fills_timestamps" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_get_getall_delete" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_upsert_same_uuid_updates" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_guard_when_db_null" classname="animal_repository.test" time="0.020">
+		</testcase>
+		<testcase name="test_strip_photo_keys_returns_clean_copy" classname="animal_repository.test" time="0.021">
+		</testcase>
+		<testcase name="test_strip_photo_keys_does_not_mutate_input" classname="animal_repository.test" time="0.014">
+		</testcase>
+	</testsuite>
+</testsuites>

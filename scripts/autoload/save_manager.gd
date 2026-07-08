@@ -29,6 +29,12 @@ func is_ready() -> bool:
 	return _db != null and _db.is_open()
 
 
+## 暴露内部 LocalDB 实例(可能为 null), 供业务模块(M8 AnimalRepository 等)做复杂查询/批量操作。
+## 简单 CRUD 仍建议走 save_animal/load_animals 等高层方法。
+func get_db() -> LocalDB:
+	return _db
+
+
 ## 保存单只动物元数据(捕获后调用)。字段见 schema.sql(animals)。
 func save_animal(data: Dictionary) -> bool:
 	return _db.upsert_animal(data)
