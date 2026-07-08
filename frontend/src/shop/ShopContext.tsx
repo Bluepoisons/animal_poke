@@ -270,6 +270,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return activeCaptureBoostRef.current !== null
   }, [])
 
+  const addItem = useCallback((itemId: ItemId): void => {
+    dispatch({ type: 'ADD_ITEM', itemId, count: 1 })
+  }, [])
+
   const value = useMemo<ShopContextValue>(() => ({
     state,
     buyItem,
@@ -280,7 +284,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getCaptureBoost,
     consumeCaptureBoost,
     isCaptureBoostActive,
-  }), [state, buyItem, useItem, checkIn, getItemCount, getDailyPurchaseCount, getCaptureBoost, consumeCaptureBoost, isCaptureBoostActive])
+    addItem,
+  }), [state, buyItem, useItem, checkIn, getItemCount, getDailyPurchaseCount, getCaptureBoost, consumeCaptureBoost, isCaptureBoostActive, addItem])
 
   return (
     <ShopContext.Provider value={value}>
