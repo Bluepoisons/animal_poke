@@ -277,3 +277,108 @@ describe('CaptureScreen', () => {
     vi.spyOn(Math, 'random').mockRestore()
   })
 })
+
+// ===== 多物种测试（Issue #35） =====
+
+describe('CaptureScreen — 多物种支持', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockStamina = 120
+    mockConsumeStamina.mockClear()
+    mockGetCaptureBoost.mockClear()
+    mockGetCaptureBoost.mockReturnValue(0)
+    mockConsumeCaptureBoost.mockClear()
+    mockConsumeStamina.mockImplementation((amount: number) => {
+      if (mockStamina >= amount) {
+        return true
+      }
+      return false
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('cat 物种渲染 🐱 + 🥫', () => {
+    render(<CaptureScreen targetSpecies="cat" />)
+    expect(screen.getByText('🐱')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /投掷/ })).toHaveTextContent('🥫')
+  })
+
+  it('goose 物种渲染 🪿 + 🍞', () => {
+    render(<CaptureScreen targetSpecies="goose" />)
+    expect(screen.getByText('🪿')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /投掷/ })).toHaveTextContent('🍞')
+  })
+
+  it('dog 物种渲染 🐶 + 🦴', () => {
+    render(<CaptureScreen targetSpecies="dog" />)
+    expect(screen.getByText('🐶')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /投掷/ })).toHaveTextContent('🦴')
+  })
+
+  it('捕获成功后 entry.species === targetSpecies', () => {
+    const onSuccess = vi.fn()
+    // mock 命中成功
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+
+    render(<CaptureScreen targetSpecies="dog" onCaptureSuccess={onSuccess} />)
+
+    const btn = screen.getByRole('button', { name: /投掷/ })
+    fireEvent.pointerDown(btn)
+    act(() => {
+      vi.advanceTimersByTime(1250) // dog chargeRate 1.5: 25 ticks * 1.5 = 37.5%
+    })
+    fireEvent.pointerUp(btn)
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+
+    expect(onSuccess).toHaveBeenCalledOnce()
+    const entryArg = onSuccess.mock.calls[0][0]
+    expect(entryArg.species).toBe('dog')
+
+    vi.spyOn(Math, 'random').mockRestore()
+  })
+
+  it('不同物种充能速率不同：goose (2.5) 快于 dog (1.5)', () => {
+    const onFail = vi.fn()
+    vi.spyOn(Math, 'random').mockReturnValue(0.9)
+
+    const { rerender } = render(<CaptureScreen targetSpecies="goose" onCaptureFail={onFail} />)
+
+    const gooseBtn = screen.getByRole('button', { name: /投掷/ })
+    fireEvent.pointerDown(gooseBtn)
+    // 推进 1000ms = 20 ticks: goose chargeRate 2.5 → 50%
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    const gooseCharge = screen.getByText(/力度 \d+%/).textContent
+    fireEvent.pointerUp(gooseBtn)
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    // 回到 idle
+    const retryBtn = screen.getByRole('button', { name: '再试一次' })
+    fireEvent.click(retryBtn)
+
+    // 重新渲染为 dog
+    onFail.mockClear()
+    rerender(<CaptureScreen targetSpecies="dog" onCaptureFail={onFail} />)
+
+    const dogBtn = screen.getByRole('button', { name: /投掷/ })
+    fireEvent.pointerDown(dogBtn)
+    // 相同时间：dog chargeRate 1.5 → 30%
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    const dogCharge = screen.getByText(/力度 \d+%/).textContent
+
+    // goose 充能更快
+    expect(gooseCharge).toBe('力度 50%')
+    expect(dogCharge).toBe('力度 30%')
+
+    vi.spyOn(Math, 'random').mockRestore()
+  })
+})

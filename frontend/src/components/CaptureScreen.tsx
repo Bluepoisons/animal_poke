@@ -1,61 +1,42 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import type { CardEntry, RarityTier } from '../types'
+import type { CardEntry, RarityTier, SpeciesType } from '../types'
+import { SPECIES_DEFS, SPECIES_RARITY_WEIGHTS } from '../types'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
 
 // 投掷力度相关常量
-const CHARGE_RATE = 2       // 每 tick 增加 2%
 const TICK_MS = 50          // 充能刷新间隔 50ms
-const OPTIMAL_MIN = 40      // 最佳力度区间下限
-const OPTIMAL_MAX = 80      // 最佳力度区间上限
 const BASE_SUCCESS_RATE = 0.70  // 基础命中率
-
-// 稀有度权重（用于随机生成）
-const RARITY_WEIGHTS: { tier: RarityTier; weight: number }[] = [
-  { tier: 'common', weight: 60 },
-  { tier: 'uncommon', weight: 30 },
-  { tier: 'rare', weight: 15 },
-  { tier: 'epic', weight: 5 },
-  { tier: 'legendary', weight: 2 },
-]
 
 /** 投掷状态机 */
 type ThrowState = 'idle' | 'charging' | 'throwing' | 'success' | 'fail'
 
 export interface CaptureScreenProps {
+  /** 当前目标物种 */
+  targetSpecies?: SpeciesType
   onCaptureSuccess?: (entry: CardEntry) => void
   onCaptureFail?: () => void
 }
 
-/** 根据权重随机稀有度 */
-function randomRarity(): RarityTier {
-  const total = RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0)
+/** 根据物种权重随机稀有度 */
+function randomRarity(weights: { tier: RarityTier; weight: number }[]): RarityTier {
+  const total = weights.reduce((s, r) => s + r.weight, 0)
   let roll = Math.random() * total
-  for (const { tier, weight } of RARITY_WEIGHTS) {
+  for (const { tier, weight } of weights) {
     roll -= weight
     if (roll <= 0) return tier
   }
   return 'common'
 }
 
-/** 根据充能百分比计算命中率 */
-function calcSuccessRate(charge: number): number {
-  if (charge >= OPTIMAL_MIN && charge <= OPTIMAL_MAX) {
-    return BASE_SUCCESS_RATE
-  }
-  if (charge < OPTIMAL_MIN) {
-    return BASE_SUCCESS_RATE * (charge / OPTIMAL_MIN)
-  }
-  // charge > OPTIMAL_MAX
-  return BASE_SUCCESS_RATE * ((100 - charge) / (100 - OPTIMAL_MAX))
-}
-
-/** 生成随机 CardEntry */
-function generateCardEntry(): CardEntry {
+/** 生成随机 CardEntry（含物种） */
+function generateCardEntry(species: SpeciesType): CardEntry {
+  const weights = SPECIES_RARITY_WEIGHTS[species]
   return {
     id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     no: `#${String(Math.floor(Math.random() * 60 + 1)).padStart(6, '0')}`,
-    rarity: randomRarity(),
+    rarity: randomRarity(weights),
+    species,
     unlocked: true,
     captureDate: new Date().toISOString().split('T')[0],
     location: '宁波·未知区域',
@@ -66,9 +47,19 @@ function generateCardEntry(): CardEntry {
   }
 }
 
-const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptureFail }) => {
+const CaptureScreen: React.FC<CaptureScreenProps> = ({
+  targetSpecies = 'cat',
+  onCaptureSuccess,
+  onCaptureFail,
+}) => {
   const stamina = useStamina()
   const shop = useShop()
+
+  // 从 SPECIES_DEFS 读取当前物种参数
+  const def = SPECIES_DEFS[targetSpecies]
+  const chargeRate = def.chargeRate
+  const [optimalMin, optimalMax] = def.optimalRange
+
   const [throwState, setThrowState] = useState<ThrowState>('idle')
   const [charge, setCharge] = useState(0)
   const chargeRef = useRef(0)
@@ -97,6 +88,18 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
     return () => clearTimers()
   }, [clearTimers])
 
+  // 根据充能百分比计算命中率
+  const calcSuccessRate = useCallback((charge: number): number => {
+    if (charge >= optimalMin && charge <= optimalMax) {
+      return BASE_SUCCESS_RATE
+    }
+    if (charge < optimalMin) {
+      return BASE_SUCCESS_RATE * (charge / optimalMin)
+    }
+    // charge > optimalMax
+    return BASE_SUCCESS_RATE * ((100 - charge) / (100 - optimalMax))
+  }, [optimalMin, optimalMax])
+
   // 开始充能（按住按钮）
   const startCharging = useCallback(() => {
     if (!canThrow || throwState !== 'idle') return
@@ -104,10 +107,10 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
     chargeRef.current = 0
     setCharge(0)
     intervalRef.current = setInterval(() => {
-      chargeRef.current = Math.min(chargeRef.current + CHARGE_RATE, 100)
+      chargeRef.current = Math.min(chargeRef.current + chargeRate, 100)
       setCharge(chargeRef.current)
     }, TICK_MS)
-  }, [canThrow, throwState])
+  }, [canThrow, throwState, chargeRate])
 
   // 投掷（松手）
   const throwBall = useCallback(() => {
@@ -134,14 +137,14 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
     timerRef.current = setTimeout(() => {
       if (isSuccess) {
         setThrowState('success')
-        const entry = generateCardEntry()
+        const entry = generateCardEntry(targetSpecies)
         onCaptureSuccess?.(entry)
       } else {
         setThrowState('fail')
         onCaptureFail?.()
       }
     }, 600)
-  }, [throwState, clearTimers, stamina, shop, onCaptureSuccess, onCaptureFail])
+  }, [throwState, clearTimers, stamina, shop, calcSuccessRate, onCaptureSuccess, onCaptureFail, targetSpecies])
 
   // 回到待机状态
   const resetToIdle = useCallback(() => {
@@ -164,7 +167,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
   // 力度条颜色（最佳区间为绿色）
   const getPowerBarColor = () => {
     if (throwState === 'charging') {
-      if (charge >= OPTIMAL_MIN && charge <= OPTIMAL_MAX) return 'var(--success)'
+      if (charge >= optimalMin && charge <= optimalMax) return 'var(--success)'
       if (charge < 20) return 'var(--warn)'
       return 'var(--orange)'
     }
@@ -177,9 +180,9 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
       <div style={styles.container}>
         <div style={styles.sky} />
         <div style={styles.ground} />
-        <div style={styles.target}>🐱</div>
+        <div style={styles.target}>{def.emoji}</div>
         <div style={styles.throwAnim}>
-          🥫
+          {def.throwItemEmoji}
         </div>
         <div style={styles.centerMessage}>投掷中…</div>
       </div>
@@ -192,7 +195,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
       <div style={styles.container}>
         <div style={styles.sky} />
         <div style={styles.ground} />
-        <div style={styles.target}>🐱</div>
+        <div style={styles.target}>{def.emoji}</div>
         <div style={styles.centerMessage}>
           <span style={{ fontSize: 48, display: 'block', marginBottom: 8 }}>🎉</span>
           捕获成功！
@@ -214,7 +217,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
       <div style={styles.container}>
         <div style={styles.sky} />
         <div style={styles.ground} />
-        <div style={styles.target}>🐱</div>
+        <div style={styles.target}>{def.emoji}</div>
         <div style={styles.centerMessage}>
           <span style={{ fontSize: 48, display: 'block', marginBottom: 8 }}>😿</span>
           差一点！
@@ -254,16 +257,16 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
             基础 {baseRatePercent}%
           </span>
         )}
-        <span className="pill" style={styles.pill}>🥫 ×8</span>
+        <span className="pill" style={styles.pill}>{def.throwItemEmoji} ×8</span>
       </div>
 
       {/* Instruction */}
       <span style={styles.instruction}>
-        {throwState === 'idle' ? '按住投掷 · 松手命中' : '力度条充能中…'}
+        {throwState === 'idle' ? `按住投掷 · 松手命中 (${def.captureMechanics})` : '力度条充能中…'}
       </span>
 
       {/* Target animal emoji */}
-      <div style={styles.target}>🐱</div>
+      <div style={styles.target}>{def.emoji}</div>
 
       {/* Arc line (decorative) */}
       <svg style={styles.svgOverlay} viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -287,8 +290,8 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
         </div>
         {/* 最佳区间标记 */}
         <div style={styles.optimalMarkers}>
-          <div style={{ ...styles.optimalMarker, left: `${OPTIMAL_MIN}%` }} />
-          <div style={{ ...styles.optimalMarker, left: `${OPTIMAL_MAX}%` }} />
+          <div style={{ ...styles.optimalMarker, left: `${optimalMin}%` }} />
+          <div style={{ ...styles.optimalMarker, left: `${optimalMax}%` }} />
         </div>
       </div>
 
@@ -304,7 +307,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptu
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
-          🥫 投掷
+          {def.throwItemEmoji} 投掷
         </button>
       ) : (
         <div style={{ ...styles.throwBtn, ...styles.disabledBtn, cursor: 'not-allowed' }}>
