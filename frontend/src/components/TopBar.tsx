@@ -131,4 +131,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default TopBar
+export default React.memo(TopBar)

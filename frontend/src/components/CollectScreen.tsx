@@ -12,6 +12,21 @@ interface CollectScreenProps {
   onMapOpen: (entries: CardEntry[], focus?: CardEntry) => void
 }
 
+/** Module-level constants to avoid re-creation on every render */
+const TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'today', label: '今日' },
+  { key: 'week', label: '本周' },
+  { key: 'nearby', label: '附近' },
+]
+
+const SPECIES_TABS: { key: SpeciesFilter; label: string; emoji: string }[] = [
+  { key: 'all', label: '全部', emoji: '📖' },
+  { key: 'cat', label: '猫', emoji: '🐱' },
+  { key: 'goose', label: '鹅', emoji: '🪿' },
+  { key: 'dog', label: '狗', emoji: '🐶' },
+]
+
 const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
   const { animals, loading } = useAnimalStore()
   const [filter, setFilter] = useState<FilterTab>('all')
@@ -67,21 +82,10 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
     return result
   }, [filtered])
 
-  const unlockedCount = animals.filter(e => e.unlocked).length
-  const tabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'today', label: '今日' },
-    { key: 'week', label: '本周' },
-    { key: 'nearby', label: '附近' },
-  ]
-
-  // 物种筛选 tab
-  const speciesTabs: { key: SpeciesFilter; label: string; emoji: string }[] = [
-    { key: 'all', label: '全部', emoji: '📖' },
-    { key: 'cat', label: '猫', emoji: '🐱' },
-    { key: 'goose', label: '鹅', emoji: '🪿' },
-    { key: 'dog', label: '狗', emoji: '🐶' },
-  ]
+  const unlockedCount = useMemo(
+    () => animals.filter(e => e.unlocked).length,
+    [animals]
+  )
 
   return (
     <div style={styles.container}>
@@ -100,7 +104,7 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
 
           {/* 物种计数 */}
           <div style={styles.speciesCounts}>
-            {speciesTabs.filter(t => t.key !== 'all').map(t => (
+            {SPECIES_TABS.filter(t => t.key !== 'all').map(t => (
               <span key={t.key} style={styles.speciesCount}>
                 {t.emoji} {speciesCounts[t.key] || 0}
               </span>
@@ -117,7 +121,7 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
 
           {/* Filter tabs */}
           <div style={styles.filterTabs}>
-            {tabs.map(t => (
+            {TABS.map(t => (
               <button
                 key={t.key}
                 style={{
@@ -133,7 +137,7 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
 
           {/* 物种筛选 tab */}
           <div style={styles.filterTabs}>
-            {speciesTabs.map(t => (
+            {SPECIES_TABS.map(t => (
               <button
                 key={t.key}
                 style={{
@@ -366,4 +370,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default CollectScreen
+export default React.memo(CollectScreen)

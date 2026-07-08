@@ -96,4 +96,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default TabBar
+export default React.memo(TabBar)

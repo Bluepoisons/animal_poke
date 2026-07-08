@@ -102,4 +102,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default LevelUpToast
+export default React.memo(LevelUpToast)

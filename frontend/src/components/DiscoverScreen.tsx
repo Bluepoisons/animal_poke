@@ -101,7 +101,7 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
     const ctx = canvas.getContext('2d')
     if (ctx) {
       ctx.drawImage(video, 0, 0, vw, vh)
-      const data = canvas.toDataURL('image/jpeg', 0.9)
+      const data = canvas.toDataURL('image/jpeg', 0.7)
       setPhotoData(data)
       setState('captured')
       stopCamera()
@@ -167,6 +167,21 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
     startCamera()
     return () => stopCamera()
   }, [startCamera, stopCamera])
+
+  // 页面不可见时暂停视频流以省电，可见时恢复
+  useEffect(() => {
+    const handleVisibility = () => {
+      const video = videoRef.current
+      if (!video) return
+      if (document.hidden) {
+        video.pause()
+      } else if (state === 'ready') {
+        video.play().catch(() => {/* autoplay may be blocked */})
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [state])
 
   // ---- 状态：加载中 ----
   if (state === 'loading') {
@@ -670,4 +685,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default DiscoverScreen
+export default React.memo(DiscoverScreen)

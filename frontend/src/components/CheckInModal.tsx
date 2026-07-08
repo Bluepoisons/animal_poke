@@ -311,4 +311,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default CheckInModal
+export default React.memo(CheckInModal)

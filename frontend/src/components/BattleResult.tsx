@@ -87,4 +87,4 @@ const BattleResult: React.FC = () => {
   )
 }
 
-export default BattleResult
+export default React.memo(BattleResult)

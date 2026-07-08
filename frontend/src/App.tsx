@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import type { MainTab, CardEntry, SpeciesType, RarityTier } from './types'
 import { LbsProvider } from './lbs/LbsContext'
 import { StaminaProvider } from './stamina/StaminaContext'
@@ -19,16 +19,20 @@ import type { AchievementStats } from './achievement/types'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
-import CollectScreen from './components/CollectScreen'
-import MapScreen from './components/MapScreen'
-import DiscoverScreen from './components/DiscoverScreen'
-import CaptureScreen from './components/CaptureScreen'
-import BattleScreen from './components/BattleScreen'
-import StoreScreen from './components/StoreScreen'
-import DispatchScreen from './components/DispatchScreen'
-import AchievementScreen from './components/AchievementScreen'
 import LevelUpToast from './components/LevelUpToast'
 import PlaceholderScreen from './components/PlaceholderScreen'
+import LoadingScreen from './components/LoadingScreen'
+
+// Lazy-load screen components for code splitting
+const CollectScreen = lazy(() => import('./components/CollectScreen'))
+const MapScreen = lazy(() => import('./components/MapScreen'))
+const DiscoverScreen = lazy(() => import('./components/DiscoverScreen'))
+const CaptureScreen = lazy(() => import('./components/CaptureScreen'))
+const BattleScreen = lazy(() => import('./components/BattleScreen'))
+const StoreScreen = lazy(() => import('./components/StoreScreen'))
+const DispatchScreen = lazy(() => import('./components/DispatchScreen'))
+const AchievementScreen = lazy(() => import('./components/AchievementScreen'))
+
 import type { LevelUpResult } from './stamina/types'
 import type { WeatherType } from './weather/types'
 
@@ -163,7 +167,9 @@ const AppInner: React.FC = () => {
     <div className="phone-frame">
       <TopBar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        {renderContent()}
+        <Suspense fallback={<LoadingScreen />}>
+          {renderContent()}
+        </Suspense>
         {levelUpResult && levelUpResult.leveledUp && (
           <LevelUpToast
             result={levelUpResult}

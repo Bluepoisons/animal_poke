@@ -159,4 +159,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default DiscoveryCard
+export default React.memo(DiscoveryCard)

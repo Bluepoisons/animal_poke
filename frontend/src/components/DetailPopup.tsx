@@ -264,4 +264,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default DetailPopup
+export default React.memo(DetailPopup)

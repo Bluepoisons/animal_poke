@@ -174,4 +174,4 @@ const BattlePetSelect: React.FC = () => {
   )
 }
 
-export default BattlePetSelect
+export default React.memo(BattlePetSelect)

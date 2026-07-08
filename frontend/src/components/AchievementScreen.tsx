@@ -330,4 +330,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default AchievementScreen
+export default React.memo(AchievementScreen)

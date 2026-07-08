@@ -594,4 +594,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default MapScreen
+export default React.memo(MapScreen)

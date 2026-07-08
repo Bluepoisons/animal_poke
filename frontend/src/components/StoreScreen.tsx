@@ -487,4 +487,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default StoreScreen
+export default React.memo(StoreScreen)
