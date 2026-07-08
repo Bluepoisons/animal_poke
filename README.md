@@ -76,7 +76,7 @@ animal_poke/
 
 ## UI 主题与基础组件（F2）
 
-- **全局 Theme**：`themes/default_theme.tres`，已通过 `project.godot [gui] theme/custom` 全局应用。定义按钮/面板/Label 默认样式（深色面板 + 蓝绿强调色 #2EA88A）。外部改 `project.godot` 后需在编辑器「项目 → 重新加载当前项目」生效。
+- **全局 Theme**：`themes/default_theme.tres`，已通过 `project.godot [gui] theme/custom` 全局应用。定义按钮/面板/Label 默认样式（**暖色橙色调卡通风**：主色 `#FF8C42` / 奶油背景 `#FFF8F0` / 深棕文字 `#4A2C1A`，按钮带 4px 实色下沿模拟立体按压感）。外部改 `project.godot` 后需在编辑器「项目 → 重新加载当前项目」生效。
 - **稀有度颜色**：`scripts/ui/rarity.gd`（`class_name Rarity`），边框色与 5.1 表一致——灰/绿/蓝/紫/金，传说级带粒子特效位。用 `Rarity.color_of(Rarity.Tier.RARE)` 取色。
 - **基础 UI 组件**（`scripts/ui/components/`，均纯代码构建，无 `.tscn` 依赖）：
 
@@ -125,6 +125,55 @@ animal_poke/
 
 ## 运行项目
 
+### 环境要求
+
+- **Godot 4.7**（与 `project.godot` `config/features` 一致，低版本不兼容）
+- 安装方式：
+  - **macOS**：`brew install --cask godot`（装好后命令为 `godot`，App 在 `/Applications/Godot.app`）
+  - **Windows / Linux**：从 [godotengine.org](https://godotengine.org/download) 下载 4.7 稳定版，建议把可执行文件加入 `PATH`
+
+### 方式一：编辑器运行（推荐开发调试）
+
+1. 打开 Godot 4.7。
+2. 项目管理器 → **导入** → 选择本目录下的 `project.godot`。
+3. 首次打开会自动导入资源并编译脚本（状态栏可见进度）。
+4. 按 **F5** 运行项目。主场景已设为 `res://scenes/main.tscn`，启动后进入主界面（顶部状态栏 + 底部三 Tab：发现 / 图鉴 / 我的），可在三屏间切换。
+5. Autoload 单例会在启动时打印初始化日志，可在 **Output** 面板确认（ConfigManager / NetworkManager / SaveManager / AudioManager / GameManager 依次初始化）。
+
+### 方式二：命令行运行
+
+```bash
+# 替换 <项目路径> 为本目录的绝对路径
+godot --path <项目路径>
+```
+
+### 运行测试（headless，无需 GUI）
+
+项目在 `tests/` 下提供 GDScript 测试套件（`extends SceneTree`，用 `godot --headless -s` 运行）。当前覆盖三个 M1 模块：
+
+```bash
+# 体力系统（M10，80 项断言）
+godot --headless --path <项目路径> -s tests/test_stamina.gd
+
+# 基础 UI 三屏（M13，41 项断言）
+godot --headless --path <项目路径> -s tests/test_ui.gd
+
+# 金币 + 道具商店（M11，107 项断言）
+godot --headless --path <项目路径> -s tests/test_economy.gd
+```
+
+退出码 `0` = 全部通过，非 `0` = 有失败。输出末尾会打印 `通过: N  失败: M` 汇总。
+
+> **测试编写约定**：纯数值逻辑抽成 `RefCounted` 类（如 `StaminaModel` / `WalletModel`），Node 层只管 IO/信号/持久化，便于 headless 单测不依赖场景树。测试脚本里引用新 `class_name` 时，若 headless `-s` 报 "Identifier not declared"（全局 class 缓存未刷新），改用 `const X = preload("...")` 直接拿脚本资源绕开。
+
+### 当前可运行内容
+
+- **主场景** `scenes/main.tscn`：三屏（发现 / 捕获 / 图鉴）+ 顶部状态栏 + 底部 Tab 切换，暖色橙卡通主题。
+- **发现屏**：取景框占位 + 检测框 + 城市天气提示 + 扫描按钮（真实相机/VLM 待 M3）。
+- **捕获屏**：投掷场景占位 + 力度条 + 抛物线预览 + 投掷按钮（真实 3D 物理投掷待 M6）。
+- **图鉴屏**：卡片网格 + 物种筛选 Tab + 详情弹窗（六维属性占位）。
+- **体力 / 经济模块**：纯逻辑已实现并通过测试，尚未挂载到场景（集成时由主场景 `add_child` 或 GameManager 持有）。状态栏体力/金币数据当前为 mock，待接入真实 manager。
+- **后端**：Go 后端脚手架待 F6，联网功能（发现/捕获/同步）未接通，当前为离线可运行的客户端骨架。
 ### 客户端（Godot）
 1. 安装 Godot 4.7。
 2. 用 Godot 项目管理器导入本目录。

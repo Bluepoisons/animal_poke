@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动物图鉴 · 照片网格 + 地图定位 · UI 设计稿</title>
+<style>
+:root{
+  --orange:#FF8C42;
+  --orange-dark:#E67300;
+  --orange-100:#FFE4CC;
+  --orange-50:#FFF0E5;
+  --cream:#FFF8F0;
+  --cream-dark:#F5E6D3;
+  --ink:#4A2C1A;
+  --ink-2:#7A5A45;
+  --ink-3:#A89480;
+  --white:#FFFFFF;
+  --rarity-common:#8C8C8C;
+  --rarity-uncommon:#4DCC4D;
+  --rarity-rare:#4D8CFF;
+  --rarity-epic:#A65CF2;
+  --rarity-legendary:#FFCC33;
+  --shadow:0 6px 0 rgba(230,115,0,0.12),0 2px 8px rgba(74,44,26,0.08);
+}
+* { box-sizing:border-box; }
+body{
+  margin:0;
+  padding:40px 24px;
+  font-family: "Baloo 2", "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:#F7F2EC;
+  color:var(--ink);
+  line-height:1.6;
+}
+h1,h2,h3{margin:0 0 12px;}
+p{margin:0 0 12px;}
+
+.phone-wrap{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap:32px;
+  margin-bottom:40px;
+}
+.phone{
+  width:360px;
+  height:720px;
+  margin:0 auto;
+  background:var(--cream);
+  border-radius:36px;
+  box-shadow:0 18px 40px rgba(74,44,26,0.18);
+  overflow:hidden;
+  position:relative;
+  border:8px solid var(--white);
+}
+.phone::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    radial-gradient(circle at 20% 12%, rgba(255,140,66,0.04) 0, transparent 40px),
+    radial-gradient(circle at 80% 40%, rgba(255,140,66,0.04) 0, transparent 50px),
+    radial-gradient(circle at 60% 85%, rgba(255,140,66,0.04) 0, transparent 60px);
+}
+
+/* 顶部状态栏 */
+.topbar{
+  height:64px;
+  background:var(--orange-dark);
+  border-radius:0 0 16px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 14px;
+  color:var(--white);
+  position:relative;
+  z-index:2;
+}
+.pill{
+  background:rgba(255,255,255,0.22);
+  border-radius:20px;
+  padding:4px 10px;
+  font-size:12px;
+  display:flex;align-items:center;gap:4px;
+}
+.avatar{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--white);color:var(--orange-dark);
+  display:grid;place-items:center;font-size:18px;
+}
+
+/* 内容区 */
+.screen-content{
+  height:calc(100% - 64px - 68px);
+  overflow-y:auto;
+  padding:14px 12px;
+  position:relative;
+}
+
+/* 图鉴头部 */
+.dex-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;
+}
+.dex-title{
+  font-size:20px;font-weight:700;color:var(--orange-dark);
+  display:flex;align-items:center;gap:6px;
+}
+.count-pill{
+  background:var(--orange-50);color:var(--ink-2);
+  border:2px solid var(--orange-100);border-radius:14px;
+  padding:3px 10px;font-size:12px;font-weight:600;
+}
+
+/* 搜索 + 操作行 */
+.action-row{
+  display:flex;gap:8px;margin-bottom:12px;
+}
+.search-box{
+  flex:1;
+  height:38px;
+  border-radius:12px;
+  border:2px solid var(--orange-100);
+  background:var(--white);
+  padding:0 12px;
+  font-size:13px;
+  color:var(--ink-2);
+  display:flex;align-items:center;
+}
+.map-btn{
+  width:42px;height:38px;
+  border-radius:12px;
+  background:var(--orange);color:var(--white);
+  border:none;box-shadow:0 4px 0 var(--orange-dark);
+  font-size:18px;display:grid;place-items:center;
+  cursor:pointer;
+}
+
+/* 筛选 Tab */
+.filter-tabs{
+  display:flex;gap:8px;margin-bottom:14px;
+}
+.tab{
+  padding:5px 12px;border-radius:14px;
+  font-size:12px;font-weight:600;
+  background:var(--white);color:var(--ink-3);
+  border:2px solid var(--orange-100);cursor:pointer;
+}
+.tab.active{
+  background:var(--orange);color:var(--white);border-color:var(--orange);
+}
+
+/* 照片网格 */
+.photo-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:10px;
+}
+.card{
+  aspect-ratio:1 / 1.22;
+  background:var(--white);
+  border-radius:16px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  position:relative;
+  display:flex;flex-direction:column;
+  border:3px solid var(--rarity-common);
+}
+.card.new::after{
+  content:"NEW";
+  position:absolute;top:6px;left:6px;
+  background:var(--orange);color:var(--white);
+  font-size:9px;font-weight:700;
+  padding:2px 5px;border-radius:6px;
+  letter-spacing:0.5px;
+}
+.card-photo{
+  flex:1;
+  background:linear-gradient(135deg, var(--orange-50), var(--cream));
+  display:grid;place-items:center;
+  overflow:hidden;
+}
+.card-photo img{
+  width:100%;height:100%;object-fit:cover;
+}
+.card-meta{
+  padding:6px 8px 8px;
+  font-size:10px;
+  color:var(--ink-2);
+  display:flex;flex-direction:column;gap:2px;
+}
+.card-meta .no{font-weight:700;color:var(--orange-dark);font-size:11px;}
+.card-meta .loc{display:flex;align-items:center;gap:3px;}
+
+/* 地图屏 */
+.map-screen{
+  position:absolute;inset:0;
+  background:var(--cream);
+  z-index:10;
+  display:flex;flex-direction:column;
+}
+.map-header{
+  height:56px;background:var(--orange-dark);color:var(--white);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+  border-radius:0 0 16px 16px;
+}
+.map-back{
+  width:32px;height:32px;border-radius:10px;
+  background:rgba(255,255,255,0.2);display:grid;place-items:center;
+}
+.map-title{font-size:18px;font-weight:700;}
+.map-canvas-wrap{
+  flex:1;position:relative;overflow:hidden;
+}
+.map-canvas{
+  position:absolute;inset:-20px;
+  background:
+    linear-gradient(180deg,#E6F0E0 0%,#F2E9C9 55%,#D8E8F0 100%);
+  border-radius:20px;
+  overflow:hidden;
+}
+/* 手绘地图装饰 */
+.map-region{
+  position:absolute;
+  font-family: 'Comic Sans MS', 'Bradley Hand', cursive;
+  font-size:13px;color:var(--ink-2);font-weight:600;
+  text-shadow:0 1px 0 rgba(255,255,255,0.6);
+}
+.river{
+  position:absolute;
+  width:260px;height:22px;
+  background:linear-gradient(90deg,transparent,#7FB6D9,#A8D8EA,transparent);
+  border-radius:12px;
+  transform:rotate(-18deg);
+  top:40%;left:10%;
+  opacity:.75;
+}
+.river::after{
+  content:"";position:absolute;inset:0;
+  border:2px dashed rgba(255,255,255,0.6);border-radius:12px;
+}
+.forest{
+  position:absolute;width:110px;height:90px;
+  background:radial-gradient(circle at 30% 40%, #7DBB74 0, transparent 40%),
+             radial-gradient(circle at 70% 60%, #6DAF64 0, transparent 40%);
+  border-radius:40% 60% 50% 50%;
+  top:12%;left:8%;
+  opacity:.6;
+}
+.mountain{
+  position:absolute;width:0;height:0;
+  border-left:55px solid transparent;border-right:55px solid transparent;
+  border-bottom:90px solid #C9B89B;
+  bottom:28%;left:55%;
+  filter:drop-shadow(0 4px 0 rgba(0,0,0,0.05));
+}
+/* 标记点 */
+.marker{
+  position:absolute;
+  width:36px;height:36px;
+  transform:translate(-50%,-100%);
+  cursor:pointer;
+  z-index:3;
+}
+.marker-pin{
+  width:32px;height:32px;border-radius:50% 50% 50% 0;
+  background:var(--orange);transform:rotate(-45deg);
+  box-shadow:0 3px 0 rgba(230,115,0,0.3);
+  display:grid;place-items:center;
+}
+.marker-pin span{
+  transform:rotate(45deg);font-size:16px;
+}
+.marker-photo{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:22px;height:22px;border-radius:50%;
+  border:2px solid var(--white);overflow:hidden;
+  background:var(--cream);
+}
+.marker-photo img{width:100%;height:100%;object-fit:cover;}
+.path-line{
+  position:absolute;
+  width:180px;height:0;
+  border-top:3px dashed var(--orange);
+  top:58%;left:35%;
+  transform:rotate(12deg);
+  opacity:.55;
+}
+/* 照片浮卡 */
+.map-popup{
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  width:280px;background:var(--white);border-radius:18px;
+  box-shadow:var(--shadow);padding:12px;
+  display:flex;gap:10px;align-items:center;
+}
+.popup-photo{
+  width:72px;height:72px;border-radius:14px;overflow:hidden;
+  background:var(--orange-50);flex-shrink:0;
+}
+.popup-photo img{width:100%;height:100%;object-fit:cover;}
+.popup-info{flex:1;}
+.popup-info .no{font-size:14px;font-weight:700;color:var(--orange-dark);}
+.popup-info .loc{font-size:12px;color:var(--ink-2);margin-top:2px;}
+.popup-info .date{font-size:11px;color:var(--ink-3);margin-top:2px;}
+
+/* 底部 Tab */
+.tabbar{
+  height:68px;background:var(--white);
+  border-top:2px solid var(--orange-50);
+  display:flex;justify-content:space-around;align-items:center;
+  padding-bottom:6px;
+  position:relative;z-index:2;
+}
+.tab-item{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;color:var(--ink-3);font-weight:600;
+}
+.tab-item.active{color:var(--orange-dark);}
+.tab-icon{font-size:20px;}
+.tab-camera{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--orange);color:var(--white);
+  display:grid;place-items:center;
+  box-shadow:0 5px 0 var(--orange-dark);
+  margin-top:-18px;font-size:24px;
+}
+
+/* 说明区 */
+section{margin:28px 0;}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+.spec-card{background:var(--white);border-radius:14px;padding:14px;box-shadow:var(--shadow);}
+.spec-card h3{font-size:15px;color:var(--orange-dark);margin-bottom:6px;}
+.spec-card p{font-size:13px;color:var(--ink-2);margin:0;}
+.color-chip{display:inline-block;width:20px;height:20px;border-radius:6px;vertical-align:middle;margin-right:6px;border:1px solid rgba(0,0,0,0.08);}
+
+@media (max-width:420px){
+  .phone{width:100%;height:680px;}
+  body{padding:16px;}
+}
+</style>
+</head>
+<body>
+
+<h1>动物图鉴 · 照片网格 + 地图定位</h1>
+<p>设计方向：奶油暖色底 + 手绘地图 + 照片优先识别。卡片<strong>不展示动物种类名</strong>，仅保留编号、拍摄日期、捕捉地点；用户通过照片本身识别和浏览。</p>
+
+<div class="phone-wrap">
+  <!-- 图鉴屏 -->
+  <div class="phone">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="avatar">🐱</div>
+        <div class="pill">Lv.2</div>
+        <div class="pill">⚡ 70/120</div>
+        <div class="pill">🪙 320</div>
+      </div>
+      <div class="pill">☀️ 宁波·晴</div>
+    </div>
+
+    <div class="screen-content">
+      <div class="dex-header">
+        <div class="dex-title">📖 Collection</div>
+        <div class="count-pill">23 / 50</div>
+      </div>
+
+      <div class="action-row">
+        <div class="search-box">🔍 搜索地点 / 日期…</div>
+        <button class="map-btn">🗺️</button>
+      </div>
+
+      <div class="filter-tabs">
+        <div class="tab active">全部</div>
+        <div class="tab">今日</div>
+        <div class="tab">本周</div>
+        <div class="tab">附近</div>
+      </div>
+
+      <div class="photo-grid">
+        <div class="card new" style="border-color:var(--rarity-common)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1574158622682-e40e69881006?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000059</div>
+            <div class="loc">📍 海曙区·月湖</div>
+            <div>07.08</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-uncommon)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000058</div>
+            <div class="loc">📍 鄞州区·公园</div>
+            <div>07.07</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-rare)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000057</div>
+            <div class="loc">📍 江北区·滨江</div>
+            <div>07.06</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-common)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1543852676-518af3e1f0ba?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000056</div>
+            <div class="loc">📍 海曙区·老街</div>
+            <div>07.05</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-epic)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000055</div>
+            <div class="loc">📍 镇海区·山林</div>
+            <div>07.04</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-common)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1529778873920-4da4926a7071?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000054</div>
+            <div class="loc">📍 鄞州区·广场</div>
+            <div>07.03</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-legendary)">
+          <div class="card-photo"><img src="https://images.unsplash.com/photo-1513245543132-31f507417b26?w=200&h=200&fit=crop" alt=""></div>
+          <div class="card-meta">
+            <div class="no">#000014</div>
+            <div class="loc">📍 海曙区·月湖</div>
+            <div>07.01</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-common)">
+          <div class="card-photo" style="background:#E8E8E8;display:grid;place-items:center;color:var(--ink-3);font-size:24px;">🔒</div>
+          <div class="card-meta">
+            <div class="no">#???</div>
+            <div class="loc">待发现</div>
+            <div>—</div>
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--rarity-common)">
+          <div class="card-photo" style="background:#E8E8E8;display:grid;place-items:center;color:var(--ink-3);font-size:24px;">🔒</div>
+          <div class="card-meta">
+            <div class="no">#???</div>
+            <div class="loc">待发现</div>
+            <div>—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tab-item"><span class="tab-icon">👤</span>Profile</div>
+      <div class="tab-item active"><span class="tab-icon">📖</span>Collection</div>
+      <div class="tab-item"><span class="tab-camera">📷</span></div>
+      <div class="tab-item"><span class="tab-icon">🥊</span>Fight</div>
+      <div class="tab-item"><span class="tab-icon">🏪</span>Store</div>
+    </div>
+  </div>
+
+  <!-- 地图屏 -->
+  <div class="phone">
+    <div class="map-screen">
+      <div class="map-header">
+        <div class="map-back">‹</div>
+        <div class="map-title">🐾 Hunt Map</div>
+      </div>
+      <div class="map-canvas-wrap">
+        <div class="map-canvas">
+          <div class="forest"></div>
+          <div class="river"></div>
+          <div class="mountain"></div>
+          <div class="map-region" style="top:18%;left:12%;">Whisker Woods</div>
+          <div class="map-region" style="top:30%;left:65%;">Purrington Fields</div>
+          <div class="map-region" style="top:62%;left:22%;">Meowridge Hills</div>
+          <div class="map-region" style="top:78%;left:68%;">Clawport Harbor</div>
+          <div class="path-line"></div>
+          <div class="marker" style="top:24%;left:20%;">
+            <div class="marker-pin"><span>🐾</span></div>
+            <div class="marker-photo"><img src="https://images.unsplash.com/photo-1574158622682-e40e69881006?w=80&h=80&fit=crop" alt=""></div>
+          </div>
+          <div class="marker" style="top:42%;left:55%;">
+            <div class="marker-pin"><span>🐾</span></div>
+            <div class="marker-photo"><img src="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=80&h=80&fit=crop" alt=""></div>
+          </div>
+          <div class="marker" style="top:60%;left:38%;">
+            <div class="marker-pin"><span>🐾</span></div>
+            <div class="marker-photo"><img src="https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=80&h=80&fit=crop" alt=""></div>
+          </div>
+          <div class="marker" style="top:76%;left:70%;">
+            <div class="marker-pin"><span>🐾</span></div>
+            <div class="marker-photo"><img src="https://images.unsplash.com/photo-1513245543132-31f507417b26?w=80&h=80&fit=crop" alt=""></div>
+          </div>
+        </div>
+        <div class="map-popup">
+          <div class="popup-photo"><img src="https://images.unsplash.com/photo-1574158622682-e40e69881006?w=150&h=150&fit=crop" alt=""></div>
+          <div class="popup-info">
+            <div class="no">#000059</div>
+            <div class="loc">📍 海曙区·月湖公园</div>
+            <div class="date">🗓 2026.07.08 · 14:32</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <h2>设计系统</h2>
+  <div class="spec-grid">
+    <div class="spec-card">
+      <h3>🎨 配色</h3>
+      <p><span class="color-chip" style="background:#FF8C42"></span>主色 #FF8C42（按钮/高亮）</p>
+      <p><span class="color-chip" style="background:#E67300"></span>深橙 #E67300（阴影/标题）</p>
+      <p><span class="color-chip" style="background:#FFF8F0"></span>奶油底 #FFF8F0</p>
+      <p><span class="color-chip" style="background:#4A2C1A"></span>文字 #4A2C1A</p>
+    </div>
+    <div class="spec-card">
+      <h3>🃏 卡片</h3>
+      <p>圆角 16px、3px 稀有度边框、4px 实色下沿阴影。卡片内仅展示：动物照片、编号、地点、日期。<strong>不出现「猫/狗/鹅」等物种文字。</strong></p>
+    </div>
+    <div class="spec-card">
+      <h3>🗺️ 地图</h3>
+      <p>手绘风格底图（绿/河/山区域色块），爪印/定位标记，点击标记底部弹出照片浮卡。地点通过 Go 后端调用腾讯地图 API 反查，本地存经纬度+地址。</p>
+    </div>
+    <div class="spec-card">
+      <h3>📐 布局</h3>
+      <p>图鉴 3 列网格；顶部状态栏+搜索+地图入口；底部 5 Tab（Profile/Collection/Camera/Fight/Store）。Camera 按钮外凸。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Godot 实现要点</h2>
+  <div class="spec-grid">
+    <div class="spec-card">
+      <h3>CollectScreen</h3>
+      <p>用 TextureRect 做照片卡，数据字段增加 photo_path / capture_date / location_name / lat / lng。移除 emoji 与 species name，保留 rarity 边框色。</p>
+    </div>
+    <div class="spec-card">
+      <h3>MapScreen</h3>
+      <p>TextureRect 地图底图 + Marker 自定义 Control（爪印标记+缩略图）。Marker 数据从 CollectScreen 共享。地点名称由后端 /geo/reverse 接口提供。</p>
+    </div>
+    <div class="spec-card">
+      <h3>数据流</h3>
+      <p>捕获时写入：photo_path, capture_ts, lat, lng。启动时若 location_name 为空，调后端腾讯地图逆地理编码补全地址。</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

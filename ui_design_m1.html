@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Animal Poke · M1 基础 UI 设计稿 · 暖色卡通风</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --orange:#FF8C42; --orange-dark:#E67300; --orange-light:#FFB366; --orange-50:#FFF1E6;
+    --orange-100:#FFE0C2; --orange-200:#FFCB99;
+    --cream:#FFF8F0; --cream-2:#FFF0E0;
+    --white:#FFFFFF;
+    --ink:#4A2C1A; --ink-2:#7A5C3F; --ink-3:#A88E72; --ink-4:#C9B69E;
+    --stamina:#FFD23F; --stamina-dark:#E6B800;
+    --coin:#FFB300; --coin-dark:#CC8F00;
+    --success:#6BBF59; --warn:#E55934; --info:#5BB4E5;
+    --r-common:#8C8C8C; --r-uncommon:#4DCC4D; --r-rare:#4D8CFF; --r-epic:#A659F2; --r-legendary:#FFCC33;
+    --shadow:0 4px 12px rgba(230,115,0,.12);
+    --shadow-lg:0 8px 24px rgba(230,115,0,.18);
+    --radius:16px; --radius-sm:10px; --radius-lg:24px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Nunito','PingFang SC','Microsoft YaHei',sans-serif;background:var(--cream);color:var(--ink);line-height:1.6}
+  .wrap{max-width:1240px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-family:'Baloo 2';font-size:32px;font-weight:800;color:var(--orange-dark)}
+  h2{font-family:'Baloo 2';font-size:22px;font-weight:700;color:var(--ink);margin-top:48px;margin-bottom:16px;border-left:6px solid var(--orange);padding-left:12px}
+  h3{font-family:'Baloo 2';font-size:17px;font-weight:600;color:var(--orange-dark);margin-bottom:10px}
+  .lead{color:var(--ink-2);font-size:15px;margin-top:8px}
+  .tag{display:inline-block;background:var(--orange-100);color:var(--orange-dark);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;margin-right:6px}
+  .tag-gray{background:#F0EDE8;color:#888}
+  .ref{font-size:12px;color:var(--ink-3);margin-top:6px}
+
+  /* 配色板 */
+  .palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:16px}
+  .sw{border-radius:var(--radius);overflow:hidden;border:2px solid var(--white);box-shadow:var(--shadow)}
+  .sw .c{height:64px;display:flex;align-items:flex-end;padding:8px;color:#fff;font-size:11px;font-weight:700;font-family:monospace}
+  .sw .n{padding:8px 10px;background:#fff;font-size:12px;font-weight:700}
+  .sw .d{padding:0 10px 8px;background:#fff;font-size:11px;color:var(--ink-3)}
+
+  /* 字体层级 */
+  .type-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .type-card{background:#fff;border:2px solid var(--orange-100);border-radius:var(--radius);padding:18px}
+  .type-card .demo{color:var(--ink)}
+  .type-card .meta{font-size:12px;color:var(--ink-3);margin-top:6px;font-family:monospace}
+
+  /* 组件示例 */
+  .comp-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:12px}
+  .btn{font-family:'Baloo 2';font-weight:700;border:none;cursor:pointer;border-radius:var(--radius-sm);padding:12px 24px;font-size:15px;transition:transform .1s}
+  .btn-primary{background:var(--orange);color:#fff;box-shadow:0 4px 0 var(--orange-dark)}
+  .btn-primary:active{transform:translateY(2px);box-shadow:0 2px 0 var(--orange-dark)}
+  .btn-ghost{background:var(--orange-50);color:var(--orange-dark);border:2px solid var(--orange-200)}
+  .btn-coin{background:linear-gradient(180deg,#FFD54F,#FFB300);color:#5C3D00;box-shadow:0 4px 0 var(--coin-dark)}
+  .btn-danger{background:var(--warn);color:#fff;box-shadow:0 4px 0 #B8401F}
+
+  .card{background:#fff;border:2px solid var(--orange-100);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+
+  /* 稀有度边框演示 */
+  .rarity-demo{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .r-chip{width:72px;height:90px;border-radius:12px;background:var(--cream-2);border:3px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink-2)}
+  .r-chip .dot{width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid currentColor;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
+
+  /* 手机 mockup */
+  .phones{display:flex;flex-wrap:wrap;gap:32px;justify-content:center;margin-top:24px}
+  .phone-wrap{display:flex;flex-direction:column;align-items:center}
+  .phone{width:340px;height:700px;background:#3A2A1A;border-radius:40px;padding:10px;box-shadow:var(--shadow-lg);position:relative}
+  .phone::before{content:'';position:absolute;top:18px;left:50%;transform:translateX(-50%);width:110px;height:22px;background:#3A2A1A;border-radius:14px;z-index:50}
+  .screen{width:100%;height:100%;border-radius:32px;overflow:hidden;background:var(--cream);position:relative;display:flex;flex-direction:column}
+  .phone-label{margin-top:14px;font-family:'Baloo 2';font-weight:700;color:var(--orange-dark);font-size:15px}
+  .phone-sub{font-size:12px;color:var(--ink-3)}
+
+  /* 屏内通用 */
+  .s-statusbar{height:44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 6px;font-size:12px;font-weight:700;color:var(--ink);background:var(--orange-50)}
+  .s-statusbar .right{display:flex;gap:5px;align-items:center}
+  .s-batt{width:20px;height:10px;border:1.5px solid var(--ink);border-radius:2px;position:relative;padding:1px}
+  .s-batt::after{content:'';position:absolute;right:-3px;top:2px;width:2px;height:4px;background:var(--ink);border-radius:0 1px 1px 0}
+  .s-batt i{display:block;height:100%;width:75%;background:var(--success);border-radius:1px}
+
+  /* 顶部状态栏（游戏内） */
+  .topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(180deg,var(--orange),var(--orange-dark));color:#fff}
+  .avatar{width:36px;height:36px;border-radius:50%;background:#fff;border:2.5px solid #FFD23F;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2';font-weight:800;color:var(--orange-dark);font-size:14px;flex-shrink:0}
+  .lv-badge{background:#fff;color:var(--orange-dark);font-family:'Baloo 2';font-weight:800;font-size:11px;padding:2px 6px;border-radius:8px}
+  .stat-pill{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.25);border-radius:20px;padding:3px 9px;font-size:12px;font-weight:700}
+  .stam-bar{width:64px;height:8px;background:rgba(255,255,255,.3);border-radius:5px;overflow:hidden}
+  .stam-bar i{display:block;height:100%;background:var(--stamina);border-radius:5px}
+  .weather-chip{margin-left:auto;display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.25);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:700}
+
+  /* 底部导航 */
+  .tabbar{height:64px;display:flex;background:#fff;border-top:2px solid var(--orange-100);box-shadow:0 -2px 10px rgba(230,115,0,.08)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:11px;font-weight:700}
+  .tab.active{color:var(--orange-dark)}
+  .tab .ic{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .tab.active .ic{background:var(--orange-50);transform:translateY(-2px)}
+  .tab.active::before{content:'';position:absolute;margin-top:-30px;width:4px;height:4px;background:var(--orange);border-radius:50%}
+
+  /* 发现屏 */
+  .discover{flex:1;position:relative;background:#2C3E50;overflow:hidden}
+  .viewfinder{position:absolute;inset:0;background:linear-gradient(135deg,#7BA87B 0%,#A8C97B 40%,#C9B97B 100%)}
+  .vf-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.12) 1px,transparent 1px);background-size:40px 40px}
+  .det-box{position:absolute;border:3px solid var(--success);border-radius:6px}
+  .det-box .lbl{position:absolute;top:-22px;left:-3px;background:var(--success);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;font-family:monospace}
+  .cat-sprite{position:absolute;font-size:64px}
+  .scan-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;backdrop-filter:blur(4px)}
+  .weather-strip{position:absolute;bottom:12px;left:12px;right:12px;background:rgba(255,255,255,.92);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow)}
+  .weather-strip .w-ic{width:32px;height:32px;border-radius:50%;background:var(--orange-100);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .discover-bottom{position:absolute;bottom:64px;left:0;right:0;display:flex;justify-content:center;gap:12px;padding:0 16px}
+  .scan-btn{width:72px;height:72px;border-radius:50%;background:var(--orange);border:4px solid #fff;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:'Baloo 2';font-weight:800;font-size:11px}
+  .scan-btn .big{font-size:24px;line-height:1}
+  .cost-note{position:absolute;bottom:72px;left:50%;transform:translateX(-50%);background:rgba(74,44,26,.8);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;white-space:nowrap}
+
+  /* 捕获屏 */
+  .capture{flex:1;position:relative;background:linear-gradient(180deg,#87CEEB 0%,#98D98E 60%,#7CB85A 100%);overflow:hidden}
+  .cap-target{position:absolute;top:80px;left:50%;transform:translateX(-50%);font-size:72px}
+  .arc-preview{position:absolute;bottom:120px;left:30px;right:30px;height:120px}
+  .arc-line{fill:none;stroke:var(--orange);stroke-width:3;stroke-dasharray:6 5;stroke-linecap:round}
+  .proj{position:absolute;bottom:118px;left:40px;font-size:28px}
+  .power-bar-wrap{position:absolute;bottom:80px;left:20px;right:20px}
+  .power-label{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4);margin-bottom:4px}
+  .power-bar{height:14px;background:rgba(255,255,255,.4);border-radius:8px;overflow:hidden;border:2px solid #fff}
+  .power-fill{height:100%;background:linear-gradient(90deg,var(--success),var(--stamina),var(--orange),var(--warn));border-radius:6px;width:65%}
+  .cap-top{position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .cap-pill{background:rgba(255,255,255,.92);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:4px;box-shadow:var(--shadow)}
+  .cap-instruction{position:absolute;top:54px;left:50%;transform:translateX(-50%);background:rgba(74,44,26,.7);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px}
+  .throw-btn{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:120px;height:46px;border-radius:23px;background:var(--orange);border:3px solid #fff;box-shadow:var(--shadow-lg);color:#fff;font-family:'Baloo 2';font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;gap:6px}
+
+  /* 图鉴列表 */
+  .dex{flex:1;display:flex;flex-direction:column;background:var(--cream);overflow:hidden}
+  .dex-header{padding:10px 12px 8px;background:var(--orange-50)}
+  .dex-title{font-family:'Baloo 2';font-weight:800;color:var(--orange-dark);font-size:18px;display:flex;justify-content:space-between;align-items:center}
+  .dex-title .count{font-size:12px;color:var(--ink-3);font-weight:700}
+  .search{margin-top:8px;background:#fff;border:2px solid var(--orange-100);border-radius:20px;padding:7px 12px;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+  .species-tabs{display:flex;gap:6px;margin-top:8px}
+  .sp-tab{flex:1;text-align:center;padding:5px 0;border-radius:14px;font-size:12px;font-weight:700;background:#fff;color:var(--ink-3);border:2px solid var(--orange-100)}
+  .sp-tab.active{background:var(--orange);color:#fff;border-color:var(--orange)}
+  .dex-list{flex:1;overflow:hidden;padding:8px}
+  .dex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dex-card{background:#fff;border-radius:var(--radius-sm);border:3px solid;padding:6px;display:flex;flex-direction:column;align-items:center;position:relative}
+  .dex-card .num{position:absolute;top:2px;left:4px;font-size:9px;font-weight:800;color:var(--ink-4);font-family:monospace}
+  .dex-card .emoji{font-size:34px;line-height:1.2}
+  .dex-card .name{font-size:10px;font-weight:700;color:var(--ink);text-align:center}
+  .dex-card.locked{opacity:.35;filter:grayscale(1)}
+  .dex-card.locked .emoji{filter:blur(2px)}
+  .dex-card.locked .name{color:var(--ink-4)}
+
+  /* 图鉴详情 */
+  .detail{flex:1;overflow-y:auto;background:var(--cream)}
+  .detail-hero{background:linear-gradient(180deg,var(--orange-200),var(--orange-50));padding:16px;text-align:center;position:relative}
+  .detail-back{position:absolute;top:12px;left:12px;width:32px;height:32px;border-radius:50%;background:#fff;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:var(--orange-dark)}
+  .detail-share{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:#fff;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--orange-dark)}
+  .detail-emoji{font-size:80px;line-height:1;filter:drop-shadow(0 4px 8px rgba(0,0,0,.15))}
+  .detail-name{font-family:'Baloo 2';font-weight:800;font-size:20px;color:var(--ink);margin-top:4px}
+  .detail-rarity{display:inline-block;font-size:11px;font-weight:800;color:#fff;padding:3px 12px;border-radius:12px;margin-top:4px}
+  .detail-body{padding:12px}
+  .info-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .info-cell{background:#fff;border-radius:var(--radius-sm);padding:8px 10px;border:2px solid var(--orange-50)}
+  .info-cell .k{font-size:10px;color:var(--ink-3);font-weight:700}
+  .info-cell .v{font-size:13px;font-weight:800;color:var(--ink)}
+  .section-title{font-family:'Baloo 2';font-size:13px;font-weight:700;color:var(--orange-dark);margin:10px 0 6px;display:flex;align-items:center;gap:6px}
+  .radar-wrap{background:#fff;border-radius:var(--radius);padding:8px;border:2px solid var(--orange-50);display:flex;justify-content:center}
+  .gen-list{background:#fff;border-radius:var(--radius);padding:10px;border:2px solid var(--orange-50)}
+  .gen-item{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px dashed var(--orange-100);font-size:11px}
+  .gen-item:last-child{border-bottom:none}
+  .gen-item .k{color:var(--ink-2);font-weight:700}
+  .gen-item .v{font-weight:800;color:var(--orange-dark);font-family:monospace}
+  .quality-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .q-cell{background:var(--orange-50);border-radius:8px;padding:6px;text-align:center}
+  .q-cell .k{font-size:9px;color:var(--ink-3);font-weight:700}
+  .q-cell .v{font-size:13px;font-weight:800;color:var(--orange-dark);font-family:monospace}
+
+  /* 隐私弹窗 */
+  .privacy-overlay{position:absolute;inset:0;background:rgba(74,44,26,.7);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100}
+  .privacy-card{width:86%;background:#fff;border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-lg);border:3px solid var(--orange-100)}
+  .privacy-ic{width:56px;height:56px;border-radius:50%;background:var(--orange-50);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 10px}
+  .privacy-title{font-family:'Baloo 2';font-weight:800;font-size:17px;color:var(--ink);text-align:center;margin-bottom:8px}
+  .privacy-text{font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:6px}
+  .privacy-text b{color:var(--orange-dark)}
+  .privacy-points{background:var(--orange-50);border-radius:var(--radius-sm);padding:10px;margin:10px 0}
+  .privacy-points div{font-size:11px;color:var(--ink-2);padding:2px 0 2px 18px;position:relative}
+  .privacy-points div::before{content:'✓';position:absolute;left:2px;color:var(--success);font-weight:800}
+  .privacy-btns{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+
+  /* 流程图 */
+  .flow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .flow-node{background:#fff;border:2px solid var(--orange-200);border-radius:var(--radius);padding:12px 18px;text-align:center;min-width:120px;box-shadow:var(--shadow)}
+  .flow-node .t{font-family:'Baloo 2';font-weight:800;color:var(--orange-dark);font-size:14px}
+  .flow-node .s{font-size:11px;color:var(--ink-3);margin-top:2px}
+  .flow-arrow{color:var(--orange);font-size:24px;font-weight:800}
+
+  /* 对照表 */
+  table{width:100%;border-collapse:collapse;margin-top:16px;background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+  th,td{padding:10px 14px;text-align:left;font-size:13px;border-bottom:1px solid var(--orange-50)}
+  th{background:var(--orange-50);color:var(--orange-dark);font-weight:800;font-family:'Baloo 2')}
+  td:first-child{font-weight:700;color:var(--orange-dark)}
+  tr:last-child td{border-bottom:none}
+
+  .note{background:var(--orange-50);border-left:4px solid var(--orange);border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px;margin-top:16px;font-size:13px;color:var(--ink-2)}
+  .note b{color:var(--orange-dark)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.phones{gap:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Animal Poke · M1 基础 UI 设计稿</h1>
+  <p class="lead">
+    <span class="tag">Issue #3</span>
+    <span class="tag">M1-MVP</span>
+    <span class="tag">Task M9 / M13 / M14</span>
+    风格：暖色橙色调卡通风 · 移动端优先（iOS 14+ / Android 8+）
+  </p>
+  <p class="ref">对应任务清单：M13 三屏 UI + 主流程串联、M9 Pet-dex 图鉴 UI、M14 首次启动隐私授权弹窗。稀有度边框色严格对齐 <code>rarity.gd</code>（5.1 表）。</p>
+
+  <!-- ============ 一、设计系统 ============ -->
+  <h2>一、设计系统 · Design System</h2>
+
+  <h3>1.1 配色 · 暖色橙色调</h3>
+  <p class="lead">主色为温暖橙 <code>#FF8C42</code>，辅以奶油米色背景与深棕文字，营造亲和、温暖的卡通氛围。体力用暖黄、金币用金色，与主色形成同色系和谐。</p>
+  <div class="palette">
+    <div class="sw"><div class="c" style="background:var(--orange)">#FF8C42</div><div class="n">主色 Primary</div><div class="d">按钮/强调/导航</div></div>
+    <div class="sw"><div class="c" style="background:var(--orange-dark)">#E67300</div><div class="n">主色深</div><div class="d">按压/标题文字</div></div>
+    <div class="sw"><div class="c" style="background:var(--orange-light)">#FFB366</div><div class="n">主色浅</div><div class="d">悬停/渐变</div></div>
+    <div class="sw"><div class="c" style="background:var(--orange-50);color:var(--orange-dark)">#FFF1E6</div><div class="n">主色 50</div><div class="d">底色/标签底</div></div>
+    <div class="sw"><div class="c" style="background:var(--cream);color:var(--ink)">#FFF8F0</div><div class="n">奶油背景</div><div class="d">页面底色</div></div>
+    <div class="sw"><div class="c" style="background:var(--ink)">#4A2C1A</div><div class="n">深棕 Ink</div><div class="d">主文字</div></div>
+    <div class="sw"><div class="c" style="background:var(--ink-2)">#7A5C3F</div><div class="n">中棕</div><div class="d">次要文字</div></div>
+    <div class="sw"><div class="c" style="background:var(--stamina);color:#5C3D00">#FFD23F</div><div class="n">体力黄</div><div class="d">体力条</div></div>
+    <div class="sw"><div class="c" style="background:var(--coin);color:#5C3D00">#FFB300</div><div class="n">金币金</div><div class="d">金币图标</div></div>
+    <div class="sw"><div class="c" style="background:var(--success)">#6BBF59</div><div class="n">成功绿</div><div class="d">命中/在线</div></div>
+    <div class="sw"><div class="c" style="background:var(--warn)">#E55934</div><div class="n">警告红</div><div class="d">感冒/断网</div></div>
+  </div>
+
+  <h3 style="margin-top:24px">1.2 稀有度边框色（保留 · 对齐 rarity.gd / 5.1 表）</h3>
+  <p class="lead">稀有度边框色为设计文档硬性约定，不随主色调改变，保持稀有度的视觉辨识度。</p>
+  <div class="rarity-demo">
+    <div class="r-chip" style="border-color:var(--r-common);color:var(--r-common)"><div class="dot">●</div>普通</div>
+    <div class="r-chip" style="border-color:var(--r-uncommon);color:var(--r-uncommon)"><div class="dot">●</div>非凡</div>
+    <div class="r-chip" style="border-color:var(--r-rare);color:var(--r-rare)"><div class="dot">●</div>稀有</div>
+    <div class="r-chip" style="border-color:var(--r-epic);color:var(--r-epic)"><div class="dot">●</div>史诗</div>
+    <div class="r-chip" style="border-color:var(--r-legendary);color:var(--r-legendary)"><div class="dot">✦</div>传说</div>
+  </div>
+
+  <h3 style="margin-top:24px">1.3 字体层级</h3>
+  <div class="type-grid">
+    <div class="type-card">
+      <div class="demo" style="font-family:'Baloo 2';font-size:24px;font-weight:800;color:var(--orange-dark)">标题 Display</div>
+      <div class="meta">Baloo 2 · 800 · 24px</div>
+    </div>
+    <div class="type-card">
+      <div class="demo" style="font-family:'Baloo 2';font-size:17px;font-weight:600;color:var(--ink)">章节标题 Heading</div>
+      <div class="meta">Baloo 2 · 600 · 17px</div>
+    </div>
+    <div class="type-card">
+      <div class="demo" style="font-family:'Nunito';font-size:14px;font-weight:700;color:var(--ink)">强调文字 Bold</div>
+      <div class="meta">Nunito · 700 · 14px</div>
+    </div>
+    <div class="type-card">
+      <div class="demo" style="font-family:'Nunito';font-size:13px;font-weight:400;color:var(--ink-2)">正文内容 Body text</div>
+      <div class="meta">Nunito · 400 · 13px</div>
+    </div>
+  </div>
+  <p class="ref">圆体字体 Baloo 2 + Nunito 增强卡通亲和感；中文回退 PingFang SC / 微软雅黑。Godot 端用 Theme default_font + 圆体字体资源替代。</p>
+
+  <h3 style="margin-top:24px">1.4 基础组件</h3>
+  <div class="comp-row">
+    <button class="btn btn-primary">主要按钮</button>
+    <button class="btn btn-ghost">次要按钮</button>
+    <button class="btn btn-coin">50 金币购买</button>
+    <button class="btn btn-danger">拒绝</button>
+  </div>
+  <div class="comp-row" style="margin-top:16px">
+    <div class="card" style="width:200px">
+      <div style="font-family:'Baloo 2';font-weight:700;color:var(--orange-dark);font-size:14px">卡片标题</div>
+      <div style="font-size:12px;color:var(--ink-2);margin-top:4px">圆角 16px · 橙色描边 · 柔和阴影</div>
+    </div>
+  </div>
+  <p class="ref">圆角统一 16px（大）/ 10px（小）；阴影 rgba(230,115,0,.12) 暖色调阴影；按钮带 4px 实色下沿模拟立体按压感（卡通风格特征）。</p>
+
+  <!-- ============ 二、屏幕设计 ============ -->
+  <h2>二、屏幕设计 · 三屏 + 导航 + 弹窗</h2>
+  <p class="lead">对应 Issue #3 验收「发现 / 捕获 / 图鉴 三屏可用」。手机框架 340×700px，模拟 9:19.5 移动端屏幕。</p>
+
+  <div class="phones">
+
+    <!-- 屏幕 1：主界面/发现屏 -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="s-statusbar">
+            <span>9:41</span>
+            <div class="right"><span>5G</span><div class="s-batt"><i></i></div></div>
+          </div>
+          <!-- 顶部状态栏 -->
+          <div class="topbar">
+            <div class="avatar">喵</div>
+            <span class="lv-badge">Lv.2</span>
+            <div class="stat-pill">
+              <span style="font-size:13px">⚡</span>
+              <div class="stam-bar"><i style="width:58%"></i></div>
+              <span>70/120</span>
+            </div>
+            <div class="stat-pill"><span style="font-size:13px">🪙</span><span>320</span></div>
+            <div class="weather-chip"><span>☀️</span>宁波·晴</div>
+          </div>
+          <!-- 发现屏 -->
+          <div class="discover">
+            <div class="viewfinder">
+              <div class="vf-grid"></div>
+              <!-- 检测框 -->
+              <div class="det-box" style="top:160px;left:90px;width:130px;height:120px">
+                <div class="lbl">猫 0.97</div>
+              </div>
+              <div class="cat-sprite" style="top:175px;left:110px">🐱</div>
+              <div class="scan-hint">● 取景中 · 检测置信度 0.97</div>
+              <!-- 天气提示条 -->
+              <div class="weather-strip">
+                <div class="w-ic">☀️</div>
+                <div>
+                  <div style="font-size:12px;font-weight:800;color:var(--ink)">晴天 · 捕获 +5%</div>
+                  <div style="font-size:10px;color:var(--ink-3)">宠物心情愉悦 · 全属性 +5%</div>
+                </div>
+                <div style="margin-left:auto;font-size:10px;color:var(--success);font-weight:800">本周</div>
+              </div>
+              <div class="cost-note">下次捕获消耗 1 猫粮罐 + 20 体力</div>
+              <!-- 扫描按钮 -->
+              <div class="discover-bottom">
+                <div class="scan-btn"><span class="big">◎</span>扫描</div>
+              </div>
+            </div>
+          </div>
+          <!-- 底部导航 -->
+          <div class="tabbar">
+            <div class="tab active"><div class="ic">🔍</div>发现</div>
+            <div class="tab"><div class="ic">📖</div>图鉴</div>
+            <div class="tab"><div class="ic">🏠</div>我的</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">① 发现屏 Discover</div>
+      <div class="phone-sub">M3 · M13 · 相机取景 + 检测框 + 天气提示</div>
+    </div>
+
+    <!-- 屏幕 2：捕获屏 -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="s-statusbar">
+            <span>9:43</span>
+            <div class="right"><span>5G</span><div class="s-batt"><i></i></div></div>
+          </div>
+          <div class="capture">
+            <!-- 顶部信息 -->
+            <div class="cap-top">
+              <div class="cap-pill">🎯 警惕值 中</div>
+              <div class="cap-pill" style="background:var(--success);color:#fff">基础 70%</div>
+              <div class="cap-pill">🥫 ×8</div>
+            </div>
+            <div class="cap-instruction">滑动瞄准 · 松手投掷猫粮罐</div>
+            <!-- 目标猫 -->
+            <div class="cap-target">🐱</div>
+            <!-- 抛物线预览 -->
+            <svg class="arc-preview" viewBox="0 0 280 120">
+              <path class="arc-line" d="M20 110 Q 140 -20 260 30"/>
+              <circle cx="260" cy="30" r="6" fill="var(--orange)"/>
+              <circle cx="20" cy="110" r="5" fill="#fff" stroke="var(--orange)" stroke-width="2"/>
+            </svg>
+            <div class="proj">🥫</div>
+            <!-- 力度条 -->
+            <div class="power-bar-wrap">
+              <div class="power-label"><span>力度</span><span>65%</span></div>
+              <div class="power-bar"><div class="power-fill"></div></div>
+            </div>
+            <!-- 投掷按钮 -->
+            <button class="throw-btn">🥫 投掷</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">② 捕获屏 Capture</div>
+      <div class="phone-sub">M6 · M13 · 3D 投掷 + 力度条 + 抛物线预览</div>
+    </div>
+
+    <!-- 屏幕 3：图鉴列表 -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="s-statusbar">
+            <span>9:45</span>
+            <div class="right"><span>5G</span><div class="s-batt"><i></i></div></div>
+          </div>
+          <div class="dex">
+            <div class="dex-header">
+              <div class="dex-title">Pet-dex 图鉴 <span class="count">12 / 86</span></div>
+              <div class="search">🔍 搜索品种 / 属性…</div>
+              <div class="species-tabs">
+                <div class="sp-tab active">🐱 猫</div>
+                <div class="sp-tab">🦢 鹅</div>
+                <div class="sp-tab">🐶 狗</div>
+              </div>
+            </div>
+            <div class="dex-list">
+              <div class="dex-grid">
+                <div class="dex-card" style="border-color:var(--r-common)"><span class="num">#001</span><span class="emoji">🐈</span><span class="name">橘猫</span></div>
+                <div class="dex-card" style="border-color:var(--r-uncommon)"><span class="num">#002</span><span class="emoji">🐱</span><span class="name">英短</span></div>
+                <div class="dex-card" style="border-color:var(--r-rare)"><span class="num">#003</span><span class="emoji">😺</span><span class="name">布偶</span></div>
+                <div class="dex-card" style="border-color:var(--r-epic)"><span class="num">#004</span><span class="emoji">😸</span><span class="name">暹罗</span></div>
+                <div class="dex-card" style="border-color:var(--r-legendary)"><span class="num">#005</span><span class="emoji">🐈‍⬛</span><span class="name">黑猫</span></div>
+                <div class="dex-card locked" style="border-color:var(--r-common)"><span class="num">#006</span><span class="emoji">🐱</span><span class="name">???</span></div>
+                <div class="dex-card locked" style="border-color:var(--r-common)"><span class="num">#007</span><span class="emoji">🐱</span><span class="name">???</span></div>
+                <div class="dex-card locked" style="border-color:var(--r-common)"><span class="num">#008</span><span class="emoji">🐱</span><span class="name">???</span></div>
+                <div class="dex-card locked" style="border-color:var(--r-common)"><span class="num">#009</span><span class="emoji">🐱</span><span class="name">???</span></div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><div class="ic">🔍</div>发现</div>
+              <div class="tab active"><div class="ic">📖</div>图鉴</div>
+              <div class="tab"><div class="ic">🏠</div>我的</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">③ 图鉴列表 Dex</div>
+      <div class="phone-sub">M9 · 虚拟化列表 + 稀有度边框 + 物种筛选</div>
+    </div>
+
+    <!-- 屏幕 4：图鉴详情 -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="s-statusbar">
+            <span>9:46</span>
+            <div class="right"><span>5G</span><div class="s-batt"><i></i></div></div>
+          </div>
+          <div class="detail">
+            <div class="detail-hero">
+              <div class="detail-back">‹</div>
+              <div class="detail-share">↗</div>
+              <div class="detail-emoji">😺</div>
+              <div class="detail-name">布偶猫 · 拿破仑</div>
+              <div class="detail-rarity" style="background:var(--r-rare)">稀有 Rare</div>
+            </div>
+            <div class="detail-body">
+              <div class="info-row">
+                <div class="info-cell"><div class="k">品种</div><div class="v">布偶 Ragdoll</div></div>
+                <div class="info-cell"><div class="k">毛色</div><div class="v">海豹双色</div></div>
+                <div class="info-cell"><div class="k">定位 Class</div><div class="v">敏捷输出</div></div>
+                <div class="info-cell"><div class="k">元素</div><div class="v" style="color:var(--info)">💧 水</div></div>
+              </div>
+              <div class="section-title">📊 六维属性</div>
+              <div class="radar-wrap">
+                <svg width="180" height="160" viewBox="0 0 180 160">
+                  <g transform="translate(90,82)">
+                    <polygon points="0,-60 57,-18 35,49 -35,49 -57,-18" fill="none" stroke="var(--orange-200)" stroke-width="1"/>
+                    <polygon points="0,-40 38,-12 24,33 -24,33 -38,-12" fill="none" stroke="var(--orange-200)" stroke-width="1"/>
+                    <polygon points="0,-20 19,-6 12,16 -12,16 -19,-6" fill="none" stroke="var(--orange-200)" stroke-width="1"/>
+                    <line x1="0" y1="0" x2="0" y2="-60" stroke="var(--orange-100)" stroke-width="0.5"/>
+                    <line x1="0" y1="0" x2="57" y2="-18" stroke="var(--orange-100)" stroke-width="0.5"/>
+                    <line x1="0" y1="0" x2="35" y2="49" stroke="var(--orange-100)" stroke-width="0.5"/>
+                    <line x1="0" y1="0" x2="-35" y2="49" stroke="var(--orange-100)" stroke-width="0.5"/>
+                    <line x1="0" y1="0" x2="-57" y2="-18" stroke="var(--orange-100)" stroke-width="0.5"/>
+                    <polygon points="0,-48 46,-14 28,40 -24,33 -40,-12" fill="var(--orange)" fill-opacity="0.35" stroke="var(--orange)" stroke-width="2"/>
+                    <text x="0" y="-66" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ink-2)">HP</text>
+                    <text x="66" y="-18" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ink-2)">ATK</text>
+                    <text x="42" y="62" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ink-2)">DEF</text>
+                    <text x="-42" y="62" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ink-2)">SPD</text>
+                    <text x="-66" y="-18" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ink-2)">CLS</text>
+                  </g>
+                </svg>
+              </div>
+              <div class="info-row" style="margin-top:8px">
+                <div class="info-cell"><div class="k">生命 HP</div><div class="v">180</div></div>
+                <div class="info-cell"><div class="k">攻击 ATK</div><div class="v">78</div></div>
+                <div class="info-cell"><div class="k">防御 DEF</div><div class="v">42</div></div>
+                <div class="info-cell"><div class="k">速度 SPD</div><div class="v">88</div></div>
+              </div>
+              <div class="section-title">🔬 生成依据（透明可溯）</div>
+              <div class="gen-list">
+                <div class="gen-item"><span class="k">品种权重</span><span class="v">0.82</span></div>
+                <div class="gen-item"><span class="k">毛色权重</span><span class="v">0.70</span></div>
+                <div class="gen-item"><span class="k">拍摄质量</span><span class="v">9 / 12</span></div>
+                <div class="gen-item"><span class="k">物种权重</span><span class="v">0.65</span></div>
+                <div class="gen-item"><span class="k">基础分 → 稀有度</span><span class="v" style="color:var(--r-rare)">0.74 → Rare</span></div>
+                <div class="gen-item"><span class="k">推理请求 ID</span><span class="v" style="font-size:10px">req_8f3a…2c1</span></div>
+              </div>
+              <div class="section-title">📸 拍摄质量 6 维评分</div>
+              <div class="quality-grid">
+                <div class="q-cell"><div class="k">主体完整</div><div class="v">2</div></div>
+                <div class="q-cell"><div class="k">清晰度</div><div class="v">2</div></div>
+                <div class="q-cell"><div class="k">光线</div><div class="v">1</div></div>
+                <div class="q-cell"><div class="k">构图</div><div class="v">2</div></div>
+                <div class="q-cell"><div class="k">姿态</div><div class="v">1</div></div>
+                <div class="q-cell"><div class="k">拍摄角度</div><div class="v">1</div></div>
+              </div>
+              <div style="height:12px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">④ 图鉴详情 Detail</div>
+      <div class="phone-sub">M9 · 六维雷达 + 生成依据 + 拍摄质量明细</div>
+    </div>
+
+    <!-- 屏幕 5：隐私授权弹窗 -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="s-statusbar">
+            <span>9:00</span>
+            <div class="right"><span>5G</span><div class="s-batt"><i></i></div></div>
+          </div>
+          <!-- 背景：发现屏模糊 -->
+          <div class="discover" style="flex:1">
+            <div class="viewfinder">
+              <div class="vf-grid"></div>
+              <div class="cat-sprite" style="top:200px;left:120px;filter:blur(2px);opacity:.6">🐱</div>
+            </div>
+          </div>
+          <!-- 隐私弹窗 -->
+          <div class="privacy-overlay">
+            <div class="privacy-card">
+              <div class="privacy-ic">📷</div>
+              <div class="privacy-title">隐私授权说明</div>
+              <p class="privacy-text">为了识别动物品种与拍摄质量，照片将<b>经后端上传云端瞬时处理并立即销毁</b>，不会保存、不会用于训练。</p>
+              <div class="privacy-points">
+                <div>照片仅瞬时推理，后端不落盘存储</div>
+                <div>不用于模型训练 / 微调</div>
+                <div>推理请求 ID 可审计追溯</div>
+                <div>可随时在设置中撤回授权</div>
+              </div>
+              <p class="privacy-text" style="font-size:11px;color:var(--ink-3)">拒绝将降级为「仅浏览」模式，可查看图鉴但无法发现/捕获。</p>
+              <div class="privacy-btns">
+                <button class="btn btn-primary" style="width:100%">同意并开始</button>
+                <button class="btn btn-ghost" style="width:100%">仅浏览模式</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">⑤ 隐私授权弹窗</div>
+      <div class="phone-sub">M14 · 首次启动 · 即时销毁告知</div>
+    </div>
+
+  </div>
+
+  <!-- ============ 三、交互流程 ============ -->
+  <h2>三、主流程串联 · 发现 → 捕获 → 收藏</h2>
+  <p class="lead">对应 M13「主界面导航串联发现→捕获→收藏全流程」。验收：全流程跑通无卡死，中端机 ≥ 30fps。</p>
+  <div class="flow">
+    <div class="flow-node">
+      <div class="t">① 发现</div>
+      <div class="s">取景 → VLM 检测<br>置信度 ≥ 0.85</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="t">② 捕获</div>
+      <div class="s">投掷猫粮罐<br>消耗 1 食物 + 20 体力</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="t">③ 数值生成</div>
+      <div class="s">VLM 分析 + LLM 编排<br>稀有度 + 六维属性</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">
+      <div class="t">④ 收藏</div>
+      <div class="s">写入 SQLite + 同步后端<br>图鉴解锁</div>
+    </div>
+  </div>
+
+  <!-- ============ 四、任务对照 ============ -->
+  <h2>四、任务清单对照</h2>
+  <table>
+    <thead>
+      <tr><th>任务</th><th>验收标准</th><th>本设计稿覆盖</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>M13 三屏 UI</td>
+        <td>发现/捕获/图鉴三屏可用，全流程跑通，中端机 ≥30fps</td>
+        <td>屏幕 ①②③ + 流程图第三节</td>
+      </tr>
+      <tr>
+        <td>M9 图鉴 UI</td>
+        <td>列表虚拟化滚动 + 详情页六维属性/稀有度边框/品种/生成依据</td>
+        <td>屏幕 ③④（列表网格虚拟化 + 雷达图 + 生成依据明细）</td>
+      </tr>
+      <tr>
+        <td>M14 隐私弹窗</td>
+        <td>合规文案（上传+即时销毁告知）+ 同意/拒绝 + 可撤回</td>
+        <td>屏幕 ⑤</td>
+      </tr>
+      <tr>
+        <td>M3 相机取景</td>
+        <td>帧采样 + 检测框 + 城市天气提示</td>
+        <td>屏幕 ① 取景框 + 检测框 + 天气条</td>
+      </tr>
+      <tr>
+        <td>M6 投掷核心</td>
+        <td>滑动手势 + 力度 + 抛物线 + 食物/体力消耗</td>
+        <td>屏幕 ② 力度条 + 抛物线预览 + 消耗提示</td>
+      </tr>
+      <tr>
+        <td>F2 主题资源</td>
+        <td>Theme 全局应用 + 稀有度边框色 + 基础组件</td>
+        <td>第一节设计系统（待落地 default_theme.tres 改暖色）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>落地说明：</b>本设计稿为视觉规范，下一步需将 <code>themes/default_theme.tres</code> 由当前「深色面板+蓝绿强调色 #2EA88A」改造为「奶油背景+暖橙强调色 #FF8C42」，按钮样式改为圆体卡通风（圆角 16px + 4px 实色下沿）。稀有度边框色 <code>rarity.gd</code> 保持不变。字体建议引入圆体字体资源（如站酷快乐体 / 思源圆体）替代引擎默认字体，强化卡通亲和感。
+  </div>
+
+  <p class="ref" style="margin-top:24px;text-align:center">
+    Animal Poke · Issue #3 [M1] 基础 UI · 暖色卡通风设计稿 · 2026-07-08
+  </p>
+</div>
+</body>
+</html>
