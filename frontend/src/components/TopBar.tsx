@@ -1,21 +1,30 @@
 import React from 'react'
+import { useStamina } from '../stamina/useStamina'
 
 interface TopBarProps {
-  level: number
-  stamina: number
-  maxStamina: number
-  gold: number
   location: string
   weather: string
+  // 以下字段改为可选，优先从 Context 读取
+  level?: number
+  stamina?: number
+  maxStamina?: number
+  gold?: number
 }
 
-const TopBar: React.FC<TopBarProps> = ({ level, stamina, maxStamina, gold, location, weather }) => {
+const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
+  const staminaState = useStamina()
+
+  const level = props.level ?? staminaState.state.level
+  const currentStamina = props.stamina ?? staminaState.state.currentStamina
+  const maxStamina = props.maxStamina ?? staminaState.maxStamina
+  const gold = props.gold ?? staminaState.state.gold
+
   return (
     <div style={styles.container}>
       <div style={styles.left}>
         <div style={styles.avatar}>🐱</div>
         <span className="pill">Lv.{level}</span>
-        <span className="pill">⚡ {stamina}/{maxStamina}</span>
+        <span className="pill">⚡ {currentStamina}/{maxStamina}</span>
         <span className="pill">🪙 {gold}</span>
       </div>
       <span className="pill">{weather} {location}</span>
