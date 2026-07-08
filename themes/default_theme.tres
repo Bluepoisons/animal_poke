@@ -1,0 +1,88 @@
+[gd_resource type="Theme" load_steps=6 format=3]
+
+; default_theme.tres — 全局 UI 主题
+; 参考: 游戏开发计划.md 5.1 稀有度视觉标识、Task F2
+; 通过 project.godot [gui] theme/custom 全局应用。
+; 稀有度边框色单独由 scripts/ui/rarity.gd 管理(灰/绿/蓝/紫/金)。
+; 自定义字体待美术阶段补充, 当前用引擎默认字体。
+
+; 配色: 深色面板 + 蓝绿强调色(accent #2EA88A), 适合移动端游戏 UI。
+
+[sub_resource type="StyleBoxFlat" id="sb_button_normal"]
+bg_color = Color(0.165, 0.165, 0.208, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="sb_button_hover"]
+bg_color = Color(0.208, 0.208, 0.259, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="sb_button_pressed"]
+bg_color = Color(0.180, 0.659, 0.541, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="sb_button_disabled"]
+bg_color = Color(0.118, 0.118, 0.149, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="sb_panel"]
+bg_color = Color(0.118, 0.118, 0.141, 0.941)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.227, 0.227, 0.271, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+
+[resource]
+default_font_size = 16
+Button/colors/font_color = Color(1, 1, 1, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(0.05, 0.05, 0.05, 1)
+Button/colors/font_disabled_color = Color(0.5, 0.5, 0.55, 1)
+Button/colors/font_focus_color = Color(1, 1, 1, 1)
+Button/styles/normal = SubResource("sb_button_normal")
+Button/styles/hover = SubResource("sb_button_hover")
+Button/styles/pressed = SubResource("sb_button_pressed")
+Button/styles/disabled = SubResource("sb_button_disabled")
+Button/styles/focus = SubResource("sb_button_normal")
+Button/constants/h_separation = 8
+Panel/styles/panel = SubResource("sb_panel")
+Label/colors/font_color = Color(1, 1, 1, 1)
+Label/colors/font_outline_color = Color(0, 0, 0, 0.6)
+Label/constants/outline_size = 2
+LineEdit/colors/font_color = Color(1, 1, 1, 1)

@@ -39,12 +39,15 @@ animal_poke/
 │   ├── autoload/              # 全局 Autoload 单例（见下表）
 │   ├── core/                  # 核心层脚本（非业务模块）
 │   │   └── （config_loader / db / logger / ai / security / sync，对应 F3-F5、M1-M2）
-│   └── modules/               # 业务模块脚本（对应核心循环各阶段）
-│       └── （discover/ capture/ collect/ stamina/ economy/ progress，对应 M3-M12）
+│   ├── modules/               # 业务模块脚本（对应核心循环各阶段）
+│   │   └── （discover/ capture/ collect/ stamina/ economy/ progress，对应 M3-M12）
+│   └── ui/                    # UI 层脚本
+│       ├── rarity.gd          # 稀有度枚举 + 边框色（灰/绿/蓝/紫/金，F2）
+│       └── components/        # 基础 UI 组件（按钮/面板/稀有度边框/loading/Toast，F2）
 │
 ├── resources/                 # Godot 资源 (.tres/.json)：稀有度配置、物种属性表、道具表等
 ├── assets/                    # 原始美术/音频资源（纹理/模型/音效/字体）
-└── themes/                    # Godot Theme 资源（default_theme.tres，F2 落地）
+└── themes/                    # Godot Theme 资源（default_theme.tres，F2 全局应用）
 ```
 
 > 空目录用 `.gdkeep` 占位以纳入版本控制，业务内容随对应任务填充。
@@ -65,6 +68,24 @@ animal_poke/
 | `GameManager` | `scripts/autoload/game_manager.gd` | 游戏状态机（BOOT/MAIN_MENU/DISCOVER/CAPTURE/COLLECT/BATTLE） | 6 | F1 骨架 / 后续完善 |
 
 **依赖说明**：`GameManager._ready()` 会调用 `NetworkManager.is_offline()` 做断网拦截（在线优先架构 4.3），故 `NetworkManager` 必须先于 `GameManager` 初始化。调整 autoload 顺序时注意保持此约束。
+
+> autoload 脚本之间互引用时，用 `/root/<SingletonName>` 路径运行时查找（规避编译期符号注册时序问题，见 F1 完成记录）；普通场景脚本仍可直接用全局名。
+
+---
+
+## UI 主题与基础组件（F2）
+
+- **全局 Theme**：`themes/default_theme.tres`，已通过 `project.godot [gui] theme/custom` 全局应用。定义按钮/面板/Label 默认样式（深色面板 + 蓝绿强调色 #2EA88A）。外部改 `project.godot` 后需在编辑器「项目 → 重新加载当前项目」生效。
+- **稀有度颜色**：`scripts/ui/rarity.gd`（`class_name Rarity`），边框色与 5.1 表一致——灰/绿/蓝/紫/金，传说级带粒子特效位。用 `Rarity.color_of(Rarity.Tier.RARE)` 取色。
+- **基础 UI 组件**（`scripts/ui/components/`，均纯代码构建，无 `.tscn` 依赖）：
+
+| 组件 | class_name | 说明 |
+|------|-----------|------|
+| 稀有度边框 | `RarityBorder` | `set_rarity(tier)` 显示对应色边框，叠加在卡片上 |
+| 基础面板 | `BasePanel` | 继承 Theme 面板样式，`set_title()` 可加标题 |
+| 基础按钮 | `AppButton` | 带 0.2s 防抖 + 点击音效占位，连 `clicked` 信号 |
+| 加载提示 | `LoadingIndicator` | 旋转弧线动画 + 可选文字 |
+| Toast 提示 | `Toast` | `Toast.popup("消息")` 顶层浮层，自动淡入淡出销毁 |
 
 ---
 
