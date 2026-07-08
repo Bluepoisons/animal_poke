@@ -112,6 +112,11 @@ html, body, #root {
   color: var(--ink-3);
 }
 
+/* 旋转动画 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 手机容器（开发预览用） */
 .phone-frame {
   width: 100%;

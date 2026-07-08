@@ -1,27 +1,30 @@
 import React, { useState, useMemo } from 'react'
 import type { CardEntry, FilterTab, RarityTier } from '../types'
-import { MOCK_ENTRIES, RARITY_COLORS } from '../types'
+import { RARITY_COLORS } from '../types'
+import { useAnimalStore } from '../hooks/useAnimalStore'
 import DetailPopup from './DetailPopup'
+import LoadingScreen from './LoadingScreen'
 
 interface CollectScreenProps {
   onMapOpen: (entries: CardEntry[], focus?: CardEntry) => void
 }
 
 const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
+  const { animals, loading } = useAnimalStore()
   const [filter, setFilter] = useState<FilterTab>('all')
   const [selectedEntry, setSelectedEntry] = useState<CardEntry | null>(null)
 
   const filtered = useMemo(() => {
-    return MOCK_ENTRIES.filter(e => {
+    return animals.filter(e => {
       if (!e.unlocked && filter !== 'all') return false
       switch (filter) {
-        case 'today': return e.captureDate === '07.08'
-        case 'week': return ['07.08','07.07','07.06','07.05','07.04','07.03','07.02','07.01'].includes(e.captureDate)
+        case 'today': return e.captureDate === '2026-07-08'
+        case 'week': return e.captureDate >= '2026-07-01' && e.captureDate <= '2026-07-08'
         case 'nearby': return e.location.includes('海曙区')
         default: return true
       }
     })
-  }, [filter])
+  }, [filter, animals])
 
   // Pad to 9 cards (fill with locked placeholders)
   const shown = useMemo(() => {
@@ -32,7 +35,7 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
     return result
   }, [filtered])
 
-  const unlockedCount = MOCK_ENTRIES.filter(e => e.unlocked).length
+  const unlockedCount = animals.filter(e => e.unlocked).length
   const tabs: { key: FilterTab; label: string }[] = [
     { key: 'all', label: '全部' },
     { key: 'today', label: '今日' },
@@ -42,6 +45,10 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
 
   return (
     <div style={styles.container}>
+      {loading ? (
+        <LoadingScreen />
+      ) : (
+      <>
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerContent}>
@@ -125,6 +132,8 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
           onClose={() => setSelectedEntry(null)}
           onViewOnMap={(e) => { setSelectedEntry(null); onMapOpen(filtered, e) }}
         />
+      )}
+      </>
       )}
     </div>
   )
