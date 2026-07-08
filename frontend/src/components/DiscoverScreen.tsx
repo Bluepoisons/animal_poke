@@ -1,9 +1,13 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
+import type { SpeciesType } from '../types'
+import { SPECIES_DEFS } from '../types'
+import { mockVisionDetector, getSpeciesThreshold, type DetectionResult } from '../services/visionDetect'
 
 type CameraState = 'loading' | 'denied' | 'ready' | 'captured'
+type DetectionState = 'idle' | 'detecting' | 'detected' | 'not_found' | 'error'
 
 interface DiscoverScreenProps {
-  onConfirm?: (photoData: string) => void
+  onConfirm?: (photoData: string, species: SpeciesType) => void
 }
 
 const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
@@ -15,11 +19,17 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
   const [photoData, setPhotoData] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
 
+  // 检测相关状态
+  const [detectionState, setDetectionState] = useState<DetectionState>('idle')
+  const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null)
+
   // 打开摄像头
   const startCamera = useCallback(async () => {
     try {
       setState('loading')
       setErrorMsg('')
+      setDetectionState('idle')
+      setDetectionResult(null)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -49,7 +59,7 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
     }
   }, [])
 
-  // 拍照
+  // 拍照 → 自动调用 VLM 检测
   const capturePhoto = useCallback(() => {
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -62,28 +72,66 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
     const ctx = canvas.getContext('2d')
     if (ctx) {
       ctx.drawImage(video, 0, 0, vw, vh)
-      setPhotoData(canvas.toDataURL('image/jpeg', 0.9))
+      const data = canvas.toDataURL('image/jpeg', 0.9)
+      setPhotoData(data)
       setState('captured')
       stopCamera()
+
+      // 自动调用 VLM 检测
+      setDetectionState('detecting')
+      mockVisionDetector.detect(data)
+        .then((result) => {
+          setDetectionResult(result)
+          const threshold = getSpeciesThreshold(result.species)
+          if (result.confidence >= threshold) {
+            setDetectionState('detected')
+          } else {
+            setDetectionState('not_found')
+          }
+        })
+        .catch((err: Error) => {
+          console.warn('VLM 检测失败:', err.message)
+          setErrorMsg(err.message || '检测出错')
+          setDetectionState('error')
+        })
     }
   }, [stopCamera])
 
   // 重拍
   const retake = useCallback(() => {
     setPhotoData(null)
+    setDetectionState('idle')
+    setDetectionResult(null)
     startCamera()
   }, [startCamera])
 
-  // 确认拍照，通知外部切换至捕获屏
-  const confirmPhoto = useCallback(() => {
-    if (photoData && onConfirm) {
-      onConfirm(photoData)
-    } else {
-      // 未传入 onConfirm 时回退原有行为
-      setPhotoData(null)
-      startCamera()
+  // 确认捕获（检测成功后进入捕获屏）
+  const confirmCapture = useCallback(() => {
+    if (photoData && detectionResult && onConfirm) {
+      onConfirm(photoData, detectionResult.species)
     }
-  }, [photoData, onConfirm, startCamera])
+  }, [photoData, detectionResult, onConfirm])
+
+  // 重试检测
+  const retryDetection = useCallback(() => {
+    if (!photoData) return
+    setDetectionState('detecting')
+    mockVisionDetector.detect(photoData)
+      .then((result) => {
+        setDetectionResult(result)
+        const threshold = getSpeciesThreshold(result.species)
+        if (result.confidence >= threshold) {
+          setDetectionState('detected')
+        } else {
+          setDetectionState('not_found')
+        }
+      })
+      .catch((err: Error) => {
+        console.warn('VLM 检测失败:', err.message)
+        setErrorMsg(err.message || '检测出错')
+        setDetectionState('error')
+      })
+  }, [photoData])
 
   // 生命周期：打开时申请摄像头，离开组件时关闭
   useEffect(() => {
@@ -128,37 +176,130 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
 
   // ---- 状态：已拍照 ----
   if (state === 'captured' && photoData) {
+    // 检测中
+    if (detectionState === 'detecting') {
+      return (
+        <div style={styles.viewfinder}>
+          <img src={photoData} alt="拍摄照片" style={styles.capturedImage} />
+          <div style={styles.detectionBox}>
+            <span style={styles.detectionLabel}>🔍 扫描中…</span>
+          </div>
+          <div style={styles.scanningOverlay}>
+            <div style={{
+              ...styles.scanningPulse,
+              animation: 'pulse 1.5s ease-in-out infinite',
+            }} />
+          </div>
+          <div style={styles.captureActions}>
+            <button
+              className="btn"
+              style={styles.retakeBtn}
+              onClick={retake}
+            >
+              📷 重拍
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // 检测到动物
+    if (detectionState === 'detected' && detectionResult) {
+      const def = SPECIES_DEFS[detectionResult.species]
+      return (
+        <div style={styles.viewfinder}>
+          <img src={photoData} alt="拍摄照片" style={styles.capturedImage} />
+          <div style={styles.detectionBox}>
+            <span style={styles.detectionLabel}>检测完成</span>
+          </div>
+          <div style={styles.detectionResultCard}>
+            <span style={{ fontSize: 32 }}>{def.emoji}</span>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>
+                {def.name} · 置信度 {Math.round(detectionResult.confidence * 100)}%
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{def.captureMechanics}</div>
+            </div>
+          </div>
+          <div style={styles.captureActions}>
+            <button
+              className="btn"
+              style={styles.retakeBtn}
+              onClick={retake}
+            >
+              📷 重拍
+            </button>
+            <button
+              className="btn btn-primary"
+              style={styles.confirmBtn}
+              onClick={confirmCapture}
+            >
+              🐾 开始捕获
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // 未发现动物
+    if (detectionState === 'not_found') {
+      return (
+        <div style={styles.viewfinder}>
+          <img src={photoData} alt="拍摄照片" style={styles.capturedImage} />
+          <div style={styles.notFoundCard}>
+            <span style={{ fontSize: 36 }}>😿</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>未发现动物</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>请换个角度再试</div>
+          </div>
+          <div style={styles.captureActions}>
+            <button
+              className="btn btn-primary"
+              style={styles.confirmBtn}
+              onClick={retake}
+            >
+              📷 重拍
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // 错误
+    if (detectionState === 'error') {
+      return (
+        <div style={styles.viewfinder}>
+          <img src={photoData} alt="拍摄照片" style={styles.capturedImage} />
+          <div style={styles.notFoundCard}>
+            <span style={{ fontSize: 36 }}>⚠️</span>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>检测出错</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>{errorMsg || '请稍后重试'}</div>
+          </div>
+          <div style={styles.captureActions}>
+            <button
+              className="btn"
+              style={styles.retakeBtn}
+              onClick={retake}
+            >
+              📷 重拍
+            </button>
+            <button
+              className="btn btn-primary"
+              style={styles.confirmBtn}
+              onClick={retryDetection}
+            >
+              🔄 重试
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // idle 状态（fallback，拍照后未开始检测的极短瞬间）
     return (
       <div style={styles.viewfinder}>
         <img src={photoData} alt="拍摄照片" style={styles.capturedImage} />
-        {/* 检测框模拟 */}
         <div style={styles.detectionBox}>
-          <span style={styles.detectionLabel}>检测完成 · 置信度 0.97</span>
-        </div>
-        {/* Weather */}
-        <div style={styles.weatherStrip}>
-          <span style={{ fontSize: 18 }}>☀️</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>晴天 · 捕获 +5%</div>
-            <div style={{ fontSize: 10, color: 'var(--ink-3)' }}>宁波·晴 宠物状态愉悦</div>
-          </div>
-        </div>
-        {/* Action buttons */}
-        <div style={styles.captureActions}>
-          <button
-            className="btn"
-            style={styles.retakeBtn}
-            onClick={retake}
-          >
-            📷 重拍
-          </button>
-          <button
-            className="btn btn-primary"
-            style={styles.confirmBtn}
-            onClick={confirmPhoto}
-          >
-            🐾 开始捕获
-          </button>
+          <span style={styles.detectionLabel}>处理中…</span>
         </div>
       </div>
     )
@@ -414,6 +555,55 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 20,
     boxShadow: '0 4px 0 var(--orange-dark)',
     fontFamily: 'inherit',
+  },
+
+  // 扫描脉冲动画容器
+  scanningOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 3,
+    pointerEvents: 'none',
+  },
+  scanningPulse: {
+    width: 80,
+    height: 80,
+    borderRadius: '50%',
+    background: 'rgba(255,255,255,0.2)',
+    border: '3px solid rgba(255,255,255,0.5)',
+  },
+
+  // 检测结果卡片
+  detectionResultCard: {
+    position: 'absolute',
+    top: '55%',
+    left: '10%',
+    right: '10%',
+    background: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 16px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+    zIndex: 3,
+  },
+
+  // 未发现动物卡片
+  notFoundCard: {
+    position: 'absolute',
+    top: '40%',
+    left: '15%',
+    right: '15%',
+    background: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '20px 16px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+    zIndex: 3,
   },
 }
 

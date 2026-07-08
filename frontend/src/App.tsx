@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import type { MainTab, CardEntry } from './types'
+import type { MainTab, CardEntry, SpeciesType } from './types'
 import { StaminaProvider } from './stamina/StaminaContext'
 import { useStamina } from './stamina/useStamina'
 import { ShopProvider } from './shop/ShopContext'
@@ -22,6 +22,8 @@ const AppInner: React.FC = () => {
 
   // 待捕获照片数据（DiscoverScreen 拍摄完成后传送）
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null)
+  // 待捕获物种（DiscoverScreen 检测后传送）
+  const [pendingSpecies, setPendingSpecies] = useState<SpeciesType>('cat')
 
   const { addAnimal } = useAnimalStore()
   const { addCapture, addGold } = useStamina()
@@ -37,8 +39,9 @@ const AppInner: React.FC = () => {
   }, [])
 
   // DiscoverScreen 确认拍照 → 切换至捕获屏
-  const handlePhotoConfirm = useCallback((photoData: string) => {
+  const handlePhotoConfirm = useCallback((photoData: string, species: SpeciesType) => {
     setPendingPhoto(photoData)
+    setPendingSpecies(species)
     setActiveTab('fight')
   }, [])
 
@@ -72,6 +75,7 @@ const AppInner: React.FC = () => {
       case 'fight':
         return (
           <CaptureScreen
+            targetSpecies={pendingSpecies}
             onCaptureSuccess={handleCaptureSuccess}
             onCaptureFail={handleCaptureFail}
           />

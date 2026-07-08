@@ -1,6 +1,6 @@
 import React from 'react'
 import type { CardEntry } from '../types'
-import { RARITY_COLORS, RARITY_NAMES } from '../types'
+import { RARITY_COLORS, RARITY_NAMES, SPECIES_DEFS, getCardSpecies } from '../types'
 
 interface DetailPopupProps {
   entry: CardEntry
@@ -25,6 +25,11 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ entry, onClose, onViewOnMap }
         </span>
 
         <div style={styles.metaList}>
+          <div style={styles.metaRow}>
+            <span>{SPECIES_DEFS[getCardSpecies(entry)].emoji}</span>
+            <span style={styles.metaLabel}>物种</span>
+            <span style={styles.metaValue}>{SPECIES_DEFS[getCardSpecies(entry)].name}</span>
+          </div>
           <div style={styles.metaRow}>
             <span>📍</span>
             <span style={styles.metaLabel}>捕捉地点</span>

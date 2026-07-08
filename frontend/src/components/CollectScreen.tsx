@@ -1,9 +1,12 @@
 import React, { useState, useMemo } from 'react'
-import type { CardEntry, FilterTab, RarityTier } from '../types'
-import { RARITY_COLORS } from '../types'
+import type { CardEntry, FilterTab, RarityTier, SpeciesType } from '../types'
+import { RARITY_COLORS, SPECIES_DEFS, getCardSpecies } from '../types'
 import { useAnimalStore } from '../hooks/useAnimalStore'
 import DetailPopup from './DetailPopup'
 import LoadingScreen from './LoadingScreen'
+
+/** 物种筛选类型 */
+type SpeciesFilter = 'all' | SpeciesType
 
 interface CollectScreenProps {
   onMapOpen: (entries: CardEntry[], focus?: CardEntry) => void
@@ -12,6 +15,7 @@ interface CollectScreenProps {
 const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
   const { animals, loading } = useAnimalStore()
   const [filter, setFilter] = useState<FilterTab>('all')
+  const [speciesFilter, setSpeciesFilter] = useState<SpeciesFilter>('all')
   const [selectedEntry, setSelectedEntry] = useState<CardEntry | null>(null)
 
   const filtered = useMemo(() => {
@@ -23,14 +27,42 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
         case 'nearby': return e.location.includes('海曙区')
         default: return true
       }
+    }).filter(e => {
+      // 物种筛选
+      if (speciesFilter !== 'all' && getCardSpecies(e) !== speciesFilter) return false
+      return true
     })
-  }, [filter, animals])
+  }, [filter, speciesFilter, animals])
+
+  // 统计各物种已捕获数量
+  const speciesCounts = useMemo(() => {
+    const counts: Record<string, number> = { cat: 0, goose: 0, dog: 0 }
+    animals.filter(e => e.unlocked).forEach(e => {
+      const s = getCardSpecies(e)
+      if (counts[s] !== undefined) counts[s]++
+    })
+    return counts
+  }, [animals])
 
   // Pad to 9 cards (fill with locked placeholders)
+  // 为 pad 卡片分配物种以支持物种筛选
   const shown = useMemo(() => {
+    const speciesPool: SpeciesType[] = ['cat', 'goose', 'dog']
     const result: CardEntry[] = [...filtered]
     while (result.length < 9) {
-      result.push({ id: `pad${result.length}`, no: '#???', rarity: 'common', unlocked: false, captureDate: '—', location: '待发现', lat: 0, lng: 0, seed: 99 })
+      const padSpecies = speciesPool[result.length % 3]
+      result.push({
+        id: `pad${result.length}`,
+        no: '#???',
+        rarity: 'common',
+        species: padSpecies,
+        unlocked: false,
+        captureDate: '—',
+        location: '待发现',
+        lat: 0,
+        lng: 0,
+        seed: 99,
+      })
     }
     return result
   }, [filtered])
@@ -41,6 +73,14 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
     { key: 'today', label: '今日' },
     { key: 'week', label: '本周' },
     { key: 'nearby', label: '附近' },
+  ]
+
+  // 物种筛选 tab
+  const speciesTabs: { key: SpeciesFilter; label: string; emoji: string }[] = [
+    { key: 'all', label: '全部', emoji: '📖' },
+    { key: 'cat', label: '猫', emoji: '🐱' },
+    { key: 'goose', label: '鹅', emoji: '🪿' },
+    { key: 'dog', label: '狗', emoji: '🐶' },
   ]
 
   return (
@@ -56,6 +96,15 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
           <div style={styles.titleRow}>
             <span style={styles.title}>📖 Collection</span>
             <span style={styles.countPill}>{unlockedCount} / 50</span>
+          </div>
+
+          {/* 物种计数 */}
+          <div style={styles.speciesCounts}>
+            {speciesTabs.filter(t => t.key !== 'all').map(t => (
+              <span key={t.key} style={styles.speciesCount}>
+                {t.emoji} {speciesCounts[t.key] || 0}
+              </span>
+            ))}
           </div>
 
           {/* Search + Map */}
@@ -81,6 +130,22 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
               </button>
             ))}
           </div>
+
+          {/* 物种筛选 tab */}
+          <div style={styles.filterTabs}>
+            {speciesTabs.map(t => (
+              <button
+                key={t.key}
+                style={{
+                  ...styles.filterTab,
+                  ...(speciesFilter === t.key ? styles.filterTabActive : {}),
+                }}
+                onClick={() => setSpeciesFilter(t.key)}
+              >
+                {t.emoji} {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -100,6 +165,7 @@ const CollectScreen: React.FC<CollectScreenProps> = ({ onMapOpen }) => {
               {entry.unlocked ? (
                 <>
                   <div style={{ ...styles.cardPhoto, background: cardGradient(entry.seed) }}>
+                    <span style={{ fontSize: 28 }}>{SPECIES_DEFS[getCardSpecies(entry)].emoji}</span>
                     {entry.isNew && <span style={styles.newBadge}>NEW</span>}
                   </div>
                   <div style={styles.cardMeta}>
@@ -181,6 +247,17 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '2px 10px',
     fontSize: 11,
     fontWeight: 600,
+  },
+  // 物种计数行
+  speciesCounts: {
+    display: 'flex',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  speciesCount: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--ink-2)',
   },
   actionRow: {
     display: 'flex',
