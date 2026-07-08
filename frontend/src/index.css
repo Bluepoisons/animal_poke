@@ -1,0 +1,136 @@
+/* ====== 暖色卡通风设计系统 ====== */
+:root {
+  --orange: #FF8C42;
+  --orange-dark: #E67300;
+  --orange-50: #FFF0E5;
+  --orange-100: #FFE4CC;
+  --cream: #FFF8F0;
+  --cream-dark: #F5E6D3;
+  --white: #FFFFFF;
+  --ink: #4A2C1A;
+  --ink-2: #7A5A45;
+  --ink-3: #A89480;
+  --stamina: #FFD23F;
+  --coin: #FFB300;
+  --success: #4DCC4D;
+  --warn: #E55934;
+
+  --rarity-common: #8C8C8C;
+  --rarity-uncommon: #4DCC4D;
+  --rarity-rare: #4D8CFF;
+  --rarity-epic: #A65CF2;
+  --rarity-legendary: #FFCC33;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-card: 0 6px 0 rgba(230,115,0,0.12), 0 2px 8px rgba(74,44,26,0.08);
+  --shadow-btn: 0 4px 0 var(--orange-dark);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Baloo 2", "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #F7F2EC;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ====== 滚动条 ====== */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--orange-100);
+  border-radius: 4px;
+}
+
+/* ====== 通用组件 ====== */
+
+/* 胶囊标签 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.22);
+  color: var(--white);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 按钮基础 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.1s;
+  font-family: inherit;
+}
+.btn:active {
+  transform: translateY(2px);
+}
+.btn-primary {
+  background: var(--orange);
+  color: var(--white);
+  box-shadow: var(--shadow-btn);
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* 输入框 */
+.input {
+  border: 2px solid var(--orange-100);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--white);
+  outline: none;
+  font-family: inherit;
+}
+.input:focus {
+  border-color: var(--orange);
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+/* 手机容器（开发预览用） */
+.phone-frame {
+  width: 100%;
+  max-width: 390px;
+  height: 100vh;
+  max-height: 844px;
+  margin: 0 auto;
+  background: var(--cream);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(74,44,26,0.18);
+}
+@media (min-width: 600px) {
+  .phone-frame {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    border-radius: 36px;
+    border: 8px solid var(--white);
+  }
+}

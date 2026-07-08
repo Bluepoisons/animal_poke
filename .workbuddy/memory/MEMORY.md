@@ -2,7 +2,7 @@
 
 ## 项目
 LBS 动物收集手游（基于 CatchCat 概念改进）。
-目录：/Users/ji233/Documents/0MyProjects/animal_poke
+目录：/Users/bluepoisonss/Desktop/objects/animal_poke
 
 ## 项目约定（重要）
 - **设计文档唯一来源**：所有游戏设计改进只写进 `游戏开发计划.md`，不产出额外散落文件（不单独生成对辩汇总、评估图等过程文件）。开发计划.md 是唯一最终方案。
@@ -11,7 +11,7 @@ LBS 动物收集手游（基于 CatchCat 概念改进）。
 - **git 分叉处理**：用 rebase（`git pull --rebase`），保持线性历史。
 
 ## 技术栈（2026-07-08 确认）
-- **游戏引擎**：已从 Unity 2022 LTS 迁移到 **Godot 4.7**（远程 commit 113e7da）。
+- **前端框架**：已从 Godot 4.7 全面迁移到 **React 18 + Vite 6 + TypeScript 5.6（Web/PWA）**，前后端分离（2026-07-08，v1.4）。
 - **AI 推理**：从端侧改为**云端推理**，架构改为**在线优先**（远程 commit dae109c），隐私政策同步修订。
 - **后端服务（v1.3 新增）**：**Go 后端（Gin/Echo）作为联网服务总枢纽**，收口所有联网服务（鉴权/同步/反作弊/区域排行/对象存储）+ 全部第三方 API 代理与 AI 推理编排。客户端零第三方 Key、零直连外部服务，只与 Go 后端通信。照片链路：客户端→Go 后端→VLM→后端即时销毁。
 
@@ -29,7 +29,7 @@ LBS 动物收集手游（基于 CatchCat 概念改进）。
 
 ## UI 风格约定（2026-07-08 确立）
 - **视觉风格**：暖色橙色调卡通风。主色 `#FF8C42`（温暖橙）/ 深橙 `#E67300` / 奶油背景 `#FFF8F0` / 深棕文字 `#4A2C1A`。体力黄 `#FFD23F`、金币金 `#FFB300`。
-- **字体**：圆体（Baloo 2 + Nunito，中文回退 PingFang SC / 微软雅黑）；Godot 端建议引入站酷快乐体 / 思源圆体。
+- **字体**：圆体（Baloo 2 + Nunito，中文回退 PingFang SC / 微软雅黑）；前端用系统圆体字体栈（PingFang SC / 微软雅黑 / sans-serif）。
 - **组件**：圆角 16px（大）/ 10px（小）；按钮带 4px 实色下沿模拟立体按压感；暖色阴影 rgba(230,115,0,.12)。
-- **稀有度边框色不改**：灰/绿/蓝/紫/金（`rarity.gd` / 5.1 表硬性约定），保持稀有度视觉辨识度，不随主色调变化。
-- **现状**：`themes/default_theme.tres` 已由 #3 子代理改造为暖色橙色调卡通风；UI 设计稿见 `ui_design_m1.html` 与 `ui_collection_map_design.html`。地图系统通过 Go 后端 `/geo/reverse` 代理腾讯地图 API（当前 mock，联调期接入）。
+- **稀有度边框色不改**：灰/绿/蓝/紫/金（前端 `Rarity` 常量 / 5.1 表硬性约定），保持稀有度视觉辨识度，不随主色调变化。
+- **现状**：`frontend/src/index.css` 为暖色橙色调卡通风 CSS 变量主题；UI 设计稿见 `ui_design_m1.html` 与 `ui_collection_map_design.html`。地图系统通过 Go 后端 `/geo/city` 代理腾讯地图逆地理 API（当前 mock，联调期接入）。
