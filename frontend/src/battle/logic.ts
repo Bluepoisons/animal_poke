@@ -77,6 +77,26 @@ export function getWeatherElementBonus(weather: WeatherType, element: ElementTyp
   return WEATHER_ELEMENT_BONUS[weather][element] ?? 0
 }
 
+/**
+ * 应用状态修正倍率到战斗属性
+ * 与 applyWeatherModifier 一致，仅修正 hp/atk/def/spd，不修正 crit/eva
+ *
+ * @param stats 原始属性（已含天气修正）
+ * @param multiplier 状态修正倍率（1.0 = 无修正，0.65 = 感冒 -35%）
+ * @returns 修正后的属性
+ */
+export function applyStatusMultiplier(stats: BattleStats, multiplier: number): BattleStats {
+  if (multiplier === 1.0) return stats
+  return {
+    hp:   Math.round(stats.hp   * multiplier),
+    atk:  Math.round(stats.atk  * multiplier),
+    def:  Math.round(stats.def  * multiplier),
+    spd:  Math.round(stats.spd  * multiplier),
+    crit: stats.crit,
+    eva:  stats.eva,
+  }
+}
+
 // ===== 元素克制 =====
 
 /** 获取元素克制倍率 */
