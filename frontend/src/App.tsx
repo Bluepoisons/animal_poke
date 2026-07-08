@@ -3,6 +3,8 @@ import type { MainTab, CardEntry, SpeciesType } from './types'
 import { StaminaProvider } from './stamina/StaminaContext'
 import { useStamina } from './stamina/useStamina'
 import { ShopProvider } from './shop/ShopContext'
+import { LbsProvider } from './lbs/LbsContext'
+import { useLbs } from './lbs/useLbs'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
@@ -87,10 +89,7 @@ const AppInner: React.FC = () => {
 
   return (
     <div className="phone-frame">
-      <TopBar
-        location="宁波·晴"
-        weather="☀️"
-      />
+      <TopBar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         {renderContent()}
       </div>
@@ -105,7 +104,9 @@ const App: React.FC = () => {
   return (
     <StaminaProvider>
       <ShopProvider>
-        <AppInner />
+        <LbsProvider>
+          <AppInner />
+        </LbsProvider>
       </ShopProvider>
     </StaminaProvider>
   )

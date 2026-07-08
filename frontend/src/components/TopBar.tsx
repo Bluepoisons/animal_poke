@@ -1,9 +1,10 @@
 import React from 'react'
 import { useStamina } from '../stamina/useStamina'
+import { useLbs } from '../lbs/useLbs'
 
 interface TopBarProps {
-  location: string
-  weather: string
+  location?: string
+  weather?: string
   // 以下字段改为可选，优先从 Context 读取
   level?: number
   stamina?: number
@@ -13,11 +14,21 @@ interface TopBarProps {
 
 const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
   const staminaState = useStamina()
+  let lbsState: { cityName: string; provinceName: string } | null = null
+  try {
+    const lbs = useLbs()
+    lbsState = lbs.state
+  } catch {
+    // LbsProvider 未挂载时忽略
+  }
 
   const level = props.level ?? staminaState.state.level
   const currentStamina = props.stamina ?? staminaState.state.currentStamina
   const maxStamina = props.maxStamina ?? staminaState.maxStamina
   const gold = props.gold ?? staminaState.state.gold
+
+  // 城市名：优先从 props，其次从 LbsContext，最后默认"未知"
+  const displayLocation = location ?? (lbsState?.cityName || '未知')
 
   return (
     <div style={styles.container}>
@@ -27,7 +38,7 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
         <span className="pill">⚡ {currentStamina}/{maxStamina}</span>
         <span className="pill">🪙 {gold}</span>
       </div>
-      <span className="pill">{weather} {location}</span>
+      <span className="pill">{weather ?? '☀️'} {displayLocation}</span>
     </div>
   )
 }
