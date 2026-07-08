@@ -2,6 +2,8 @@ import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { SpeciesType } from '../types'
 import { SPECIES_DEFS } from '../types'
 import { mockVisionDetector, getSpeciesThreshold, type DetectionResult } from '../services/visionDetect'
+import { useLbs } from '../lbs/useLbs'
+import { useWeather } from '../weather/useWeather'
 
 type CameraState = 'loading' | 'denied' | 'ready' | 'captured'
 type DetectionState = 'idle' | 'detecting' | 'detected' | 'not_found' | 'error'
@@ -22,6 +24,33 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
   // 检测相关状态
   const [detectionState, setDetectionState] = useState<DetectionState>('idle')
   const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null)
+
+  // 天气 & 位置数据（try/catch 防止 Provider 未挂载）
+  let cityName = '未知'
+  let weatherEmoji = '☀️'
+  let weatherName = '未知'
+  let weatherDesc = '—'
+  let captureDesc = '天气数据加载中'
+  let coldRiskDesc = ''
+  let coldRisky = false
+  let isExtreme = false
+  try {
+    const lbs = useLbs()
+    cityName = lbs.state.cityName || '未知'
+  } catch { /* LbsProvider 未挂载 */ }
+  try {
+    const weather = useWeather()
+    const todayMeta = weather.todayMeta
+    const captureMod = weather.getCaptureModifier()
+    const coldRisk = weather.getColdRisk()
+    weatherEmoji = todayMeta?.emoji ?? '☀️'
+    weatherName = todayMeta?.name ?? '未知'
+    weatherDesc = todayMeta?.desc ?? '—'
+    captureDesc = captureMod.description
+    coldRiskDesc = coldRisk.description
+    coldRisky = coldRisk.isRisky
+    isExtreme = todayMeta?.type === 'extreme'
+  } catch { /* WeatherProvider 未挂载 */ }
 
   // 打开摄像头
   const startCamera = useCallback(async () => {
@@ -334,12 +363,28 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
         <div style={styles.crosshairH} />
       </div>
 
+      {/* 极端天气警告横幅 */}
+      {isExtreme && (
+        <div style={styles.extremeBanner}>
+          ⚠️ 极端天气 · 户外玩法暂停 · 注意安全
+        </div>
+      )}
+
       {/* 天气提示 */}
       <div style={styles.weatherStrip}>
-        <span style={{ fontSize: 18 }}>☀️</span>
+        <span style={{ fontSize: 18 }}>{weatherEmoji}</span>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>晴天 · 捕获 +5%</div>
-          <div style={{ fontSize: 10, color: 'var(--ink-3)' }}>宁波·晴 宠物状态愉悦</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>
+            {weatherName} · {captureDesc}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--ink-3)' }}>
+            {cityName} · {weatherDesc}
+          </div>
+          {coldRisky && (
+            <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 2 }}>
+              ⚠️ {coldRiskDesc}
+            </div>
+          )}
         </div>
       </div>
 
@@ -351,8 +396,9 @@ const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
       {/* 拍照按钮 */}
       <button
         className="btn btn-primary"
-        style={styles.captureBtn}
+        style={{ ...styles.captureBtn, ...(isExtreme ? { opacity: 0.4, pointerEvents: 'none' as const } : {}) }}
         onClick={capturePhoto}
+        disabled={isExtreme}
       >
         ◎
       </button>
@@ -492,6 +538,23 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     padding: '10px 14px',
     boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+    zIndex: 2,
+  },
+
+  // 极端天气警告横幅
+  extremeBanner: {
+    position: 'absolute',
+    left: '4%',
+    right: '4%',
+    bottom: '26%',
+    background: 'rgba(220,38,38,0.92)',
+    color: '#fff',
+    borderRadius: 12,
+    padding: '8px 14px',
+    fontSize: 13,
+    fontWeight: 700,
+    textAlign: 'center' as const,
+    boxShadow: '0 2px 12px rgba(220,38,38,0.4)',
     zIndex: 2,
   },
 

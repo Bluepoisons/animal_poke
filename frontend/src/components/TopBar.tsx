@@ -1,6 +1,7 @@
 import React from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useLbs } from '../lbs/useLbs'
+import { useWeather } from '../weather/useWeather'
 
 interface TopBarProps {
   location?: string
@@ -21,6 +22,12 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
   } catch {
     // LbsProvider 未挂载时忽略
   }
+  let weatherState: ReturnType<typeof useWeather> | null = null
+  try {
+    weatherState = useWeather()
+  } catch {
+    // WeatherProvider 未挂载时忽略
+  }
 
   const level = props.level ?? staminaState.state.level
   const currentStamina = props.stamina ?? staminaState.state.currentStamina
@@ -30,6 +37,13 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
   // 城市名：优先从 props，其次从 LbsContext，最后默认"未知"
   const displayLocation = location ?? (lbsState?.cityName || '未知')
 
+  // 天气：优先从 props，其次从 WeatherContext，最后默认
+  const weatherEmoji = weather ?? weatherState?.todayMeta?.emoji ?? '☀️'
+  const weatherName = weatherState?.todayMeta?.name ?? ''
+  const displayWeather = weatherName
+    ? `${weatherEmoji} ${weatherName} · ${displayLocation}`
+    : `${weatherEmoji} ${displayLocation}`
+
   return (
     <div style={styles.container}>
       <div style={styles.left}>
@@ -38,7 +52,7 @@ const TopBar: React.FC<TopBarProps> = ({ location, weather, ...props }) => {
         <span className="pill">⚡ {currentStamina}/{maxStamina}</span>
         <span className="pill">🪙 {gold}</span>
       </div>
-      <span className="pill">{weather ?? '☀️'} {displayLocation}</span>
+      <span className="pill">{displayWeather}</span>
     </div>
   )
 }
