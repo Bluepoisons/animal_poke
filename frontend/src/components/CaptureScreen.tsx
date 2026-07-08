@@ -1,43 +1,295 @@
-import React from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
+import type { CardEntry, RarityTier } from '../types'
+import { useStamina } from '../stamina/useStamina'
 
-const CaptureScreen: React.FC = () => (
-  <div style={styles.container}>
-    {/* Sky + Ground */}
-    <div style={styles.sky} />
-    <div style={styles.ground} />
+// 投掷力度相关常量
+const CHARGE_RATE = 2       // 每 tick 增加 2%
+const TICK_MS = 50          // 充能刷新间隔 50ms
+const OPTIMAL_MIN = 40      // 最佳力度区间下限
+const OPTIMAL_MAX = 80      // 最佳力度区间上限
+const BASE_SUCCESS_RATE = 0.70  // 基础命中率
 
-    {/* Top info pills */}
-    <div style={styles.topInfo}>
-      <span className="pill" style={styles.pill}>🎯 警惕值 中</span>
-      <span className="pill" style={{ ...styles.pill, background: 'var(--success)' }}>基础 70%</span>
-      <span className="pill" style={styles.pill}>🥫 ×8</span>
-    </div>
+// 稀有度权重（用于随机生成）
+const RARITY_WEIGHTS: { tier: RarityTier; weight: number }[] = [
+  { tier: 'common', weight: 60 },
+  { tier: 'uncommon', weight: 30 },
+  { tier: 'rare', weight: 15 },
+  { tier: 'epic', weight: 5 },
+  { tier: 'legendary', weight: 2 },
+]
 
-    {/* Instruction */}
-    <span style={styles.instruction}>滑动瞄准 · 松手投掷</span>
+/** 投掷状态机 */
+type ThrowState = 'idle' | 'charging' | 'throwing' | 'success' | 'fail'
 
-    {/* Target animal emoji */}
-    <div style={styles.target}>🐱</div>
+export interface CaptureScreenProps {
+  onCaptureSuccess?: (entry: CardEntry) => void
+  onCaptureFail?: () => void
+}
 
-    {/* Arc line (decorative) */}
-    <svg style={styles.svgOverlay} viewBox="0 0 100 100" preserveAspectRatio="none">
-      <path d="M5,70 Q50,20 95,30" fill="none" stroke="var(--orange)" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.6" />
-    </svg>
+/** 根据权重随机稀有度 */
+function randomRarity(): RarityTier {
+  const total = RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0)
+  let roll = Math.random() * total
+  for (const { tier, weight } of RARITY_WEIGHTS) {
+    roll -= weight
+    if (roll <= 0) return tier
+  }
+  return 'common'
+}
 
-    {/* Power bar */}
-    <div style={styles.powerWrap}>
-      <span style={{ color: 'var(--white)', fontSize: 11, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
-        力度 65%
-      </span>
-      <div style={styles.powerTrack}>
-        <div style={styles.powerFill} />
+/** 根据充能百分比计算命中率 */
+function calcSuccessRate(charge: number): number {
+  if (charge >= OPTIMAL_MIN && charge <= OPTIMAL_MAX) {
+    return BASE_SUCCESS_RATE
+  }
+  if (charge < OPTIMAL_MIN) {
+    return BASE_SUCCESS_RATE * (charge / OPTIMAL_MIN)
+  }
+  // charge > OPTIMAL_MAX
+  return BASE_SUCCESS_RATE * ((100 - charge) / (100 - OPTIMAL_MAX))
+}
+
+/** 生成随机 CardEntry */
+function generateCardEntry(): CardEntry {
+  return {
+    id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    no: `#${String(Math.floor(Math.random() * 60 + 1)).padStart(6, '0')}`,
+    rarity: randomRarity(),
+    unlocked: true,
+    captureDate: new Date().toISOString().split('T')[0],
+    location: '宁波·未知区域',
+    lat: 29.87 + (Math.random() - 0.5) * 0.05,
+    lng: 121.55 + (Math.random() - 0.5) * 0.05,
+    seed: Math.floor(Math.random() * 1000),
+    isNew: true,
+  }
+}
+
+const CaptureScreen: React.FC<CaptureScreenProps> = ({ onCaptureSuccess, onCaptureFail }) => {
+  const stamina = useStamina()
+  const [throwState, setThrowState] = useState<ThrowState>('idle')
+  const [charge, setCharge] = useState(0)
+  const chargeRef = useRef(0)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const canThrow = stamina.state.currentStamina >= 20
+
+  // 清理定时器
+  const clearTimers = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => clearTimers()
+  }, [clearTimers])
+
+  // 开始充能（按住按钮）
+  const startCharging = useCallback(() => {
+    if (!canThrow || throwState !== 'idle') return
+    setThrowState('charging')
+    chargeRef.current = 0
+    setCharge(0)
+    intervalRef.current = setInterval(() => {
+      chargeRef.current = Math.min(chargeRef.current + CHARGE_RATE, 100)
+      setCharge(chargeRef.current)
+    }, TICK_MS)
+  }, [canThrow, throwState])
+
+  // 投掷（松手）
+  const throwBall = useCallback(() => {
+    if (throwState !== 'charging') return
+    clearTimers()
+
+    // 消耗体力
+    stamina.consumeStamina(20)
+
+    const finalCharge = chargeRef.current
+    const successRate = calcSuccessRate(finalCharge)
+    const isSuccess = Math.random() < successRate
+
+    setThrowState('throwing')
+
+    timerRef.current = setTimeout(() => {
+      if (isSuccess) {
+        setThrowState('success')
+        const entry = generateCardEntry()
+        onCaptureSuccess?.(entry)
+      } else {
+        setThrowState('fail')
+        onCaptureFail?.()
+      }
+    }, 600)
+  }, [throwState, clearTimers, stamina, onCaptureSuccess, onCaptureFail])
+
+  // 回到待机状态
+  const resetToIdle = useCallback(() => {
+    setThrowState('idle')
+    setCharge(0)
+    chargeRef.current = 0
+  }, [])
+
+  // 处理按钮按下事件（支持触屏和鼠标）
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    startCharging()
+  }, [startCharging])
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    throwBall()
+  }, [throwBall])
+
+  // 力度条颜色（最佳区间为绿色）
+  const getPowerBarColor = () => {
+    if (throwState === 'charging') {
+      if (charge >= OPTIMAL_MIN && charge <= OPTIMAL_MAX) return 'var(--success)'
+      if (charge < 20) return 'var(--warn)'
+      return 'var(--orange)'
+    }
+    return 'var(--orange)'
+  }
+
+  // ---- 投掷中动画 ----
+  if (throwState === 'throwing') {
+    return (
+      <div style={styles.container}>
+        <div style={styles.sky} />
+        <div style={styles.ground} />
+        <div style={styles.target}>🐱</div>
+        <div style={styles.throwAnim}>
+          🥫
+        </div>
+        <div style={styles.centerMessage}>投掷中…</div>
       </div>
-    </div>
+    )
+  }
 
-    {/* Throw button */}
-    <button className="btn btn-primary" style={styles.throwBtn}>🥫 投掷</button>
-  </div>
-)
+  // ---- 成功状态 ----
+  if (throwState === 'success') {
+    return (
+      <div style={styles.container}>
+        <div style={styles.sky} />
+        <div style={styles.ground} />
+        <div style={styles.target}>🐱</div>
+        <div style={styles.centerMessage}>
+          <span style={{ fontSize: 48, display: 'block', marginBottom: 8 }}>🎉</span>
+          捕获成功！
+        </div>
+        <button
+          className="btn btn-primary"
+          style={styles.actionBtn}
+          onClick={resetToIdle}
+        >
+          继续捕获
+        </button>
+      </div>
+    )
+  }
+
+  // ---- 失败状态 ----
+  if (throwState === 'fail') {
+    return (
+      <div style={styles.container}>
+        <div style={styles.sky} />
+        <div style={styles.ground} />
+        <div style={styles.target}>🐱</div>
+        <div style={styles.centerMessage}>
+          <span style={{ fontSize: 48, display: 'block', marginBottom: 8 }}>😿</span>
+          差一点！
+        </div>
+        <button
+          className="btn btn-primary"
+          style={styles.actionBtn}
+          onClick={resetToIdle}
+        >
+          再试一次
+        </button>
+      </div>
+    )
+  }
+
+  // ---- 待机 + 充能状态 ----
+  return (
+    <div style={styles.container}>
+      {/* Sky + Ground */}
+      <div style={styles.sky} />
+      <div style={styles.ground} />
+
+      {/* Top info pills */}
+      <div style={styles.topInfo}>
+        <span className="pill" style={styles.pill}>🎯 警惕值 中</span>
+        <span className="pill" style={{ ...styles.pill, background: 'var(--success)' }}>
+          基础 {Math.round(BASE_SUCCESS_RATE * 100)}%
+        </span>
+        <span className="pill" style={styles.pill}>🥫 ×8</span>
+      </div>
+
+      {/* Instruction */}
+      <span style={styles.instruction}>
+        {throwState === 'idle' ? '按住投掷 · 松手命中' : '力度条充能中…'}
+      </span>
+
+      {/* Target animal emoji */}
+      <div style={styles.target}>🐱</div>
+
+      {/* Arc line (decorative) */}
+      <svg style={styles.svgOverlay} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M5,70 Q50,20 95,30" fill="none" stroke="var(--orange)" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.6" />
+      </svg>
+
+      {/* Power bar */}
+      <div style={styles.powerWrap}>
+        <span style={{ color: 'var(--white)', fontSize: 11, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+          力度 {charge}%
+        </span>
+        <div style={styles.powerTrack}>
+          <div
+            style={{
+              ...styles.powerFill,
+              width: `${charge}%`,
+              background: getPowerBarColor(),
+              transition: throwState === 'idle' ? 'width 0.2s' : 'none',
+            }}
+          />
+        </div>
+        {/* 最佳区间标记 */}
+        <div style={styles.optimalMarkers}>
+          <div style={{ ...styles.optimalMarker, left: `${OPTIMAL_MIN}%` }} />
+          <div style={{ ...styles.optimalMarker, left: `${OPTIMAL_MAX}%` }} />
+        </div>
+      </div>
+
+      {/* Throw button */}
+      {canThrow ? (
+        <button
+          className={`btn btn-primary ${throwState === 'charging' ? '' : ''}`}
+          style={{
+            ...styles.throwBtn,
+            cursor: 'pointer',
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+        >
+          🥫 投掷
+        </button>
+      ) : (
+        <div style={{ ...styles.throwBtn, ...styles.disabledBtn, cursor: 'not-allowed' }}>
+          ⚡ 体力不足
+        </div>
+      )}
+    </div>
+  )
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -119,12 +371,28 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(255,255,255,0.4)',
     border: '2px solid rgba(255,255,255,0.8)',
     overflow: 'hidden',
+    position: 'relative',
   },
   powerFill: {
-    width: '65%',
     height: '100%',
     borderRadius: 6,
     background: 'var(--orange)',
+  },
+  optimalMarkers: {
+    position: 'absolute',
+    top: 28,
+    left: 0,
+    right: 0,
+    height: 4,
+    pointerEvents: 'none',
+  },
+  optimalMarker: {
+    position: 'absolute',
+    width: 2,
+    height: 10,
+    background: 'var(--success)',
+    top: -5,
+    transform: 'translateX(-50%)',
   },
   throwBtn: {
     position: 'absolute',
@@ -135,6 +403,55 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     borderRadius: 24,
     zIndex: 2,
+    userSelect: 'none',
+    touchAction: 'none',
+  },
+  disabledBtn: {
+    position: 'absolute',
+    bottom: 12,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    padding: '8px 28px',
+    fontSize: 16,
+    borderRadius: 24,
+    zIndex: 2,
+    background: 'var(--ink-3)',
+    color: 'var(--white)',
+    opacity: 0.7,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerMessage: {
+    position: 'absolute',
+    top: '35%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    color: 'var(--white)',
+    fontSize: 22,
+    fontWeight: 700,
+    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+    zIndex: 3,
+    textAlign: 'center',
+  },
+  actionBtn: {
+    position: 'absolute',
+    bottom: 24,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    padding: '8px 28px',
+    fontSize: 16,
+    borderRadius: 24,
+    zIndex: 3,
+  },
+  throwAnim: {
+    position: 'absolute',
+    top: '25%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: 36,
+    zIndex: 3,
+    animation: 'none',
   },
 }
 

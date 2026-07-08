@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react'
 import type { MainTab, CardEntry } from './types'
 import { StaminaProvider } from './stamina/StaminaContext'
+import { useStamina } from './stamina/useStamina'
+import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
 import CollectScreen from './components/CollectScreen'
@@ -9,11 +11,18 @@ import DiscoverScreen from './components/DiscoverScreen'
 import CaptureScreen from './components/CaptureScreen'
 import PlaceholderScreen from './components/PlaceholderScreen'
 
-const App: React.FC = () => {
+/** App 内部组件：需在 StaminaProvider 内使用 hooks */
+const AppInner: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('camera')
   const [mapOpen, setMapOpen] = useState(false)
   const [mapEntries, setMapEntries] = useState<CardEntry[]>([])
   const [mapFocus, setMapFocus] = useState<CardEntry | undefined>()
+
+  // 待捕获照片数据（DiscoverScreen 拍摄完成后传送）
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null)
+
+  const { addAnimal } = useAnimalStore()
+  const { addCapture, addGold } = useStamina()
 
   const handleMapOpen = useCallback((entries: CardEntry[], focus?: CardEntry) => {
     setMapEntries(entries)
@@ -23,6 +32,28 @@ const App: React.FC = () => {
 
   const handleMapClose = useCallback(() => {
     setMapOpen(false)
+  }, [])
+
+  // DiscoverScreen 确认拍照 → 切换至捕获屏
+  const handlePhotoConfirm = useCallback((photoData: string) => {
+    setPendingPhoto(photoData)
+    setActiveTab('fight')
+  }, [])
+
+  // CaptureScreen 捕获成功 → 写入 IndexedDB + 体力结算 + 切换图鉴
+  const handleCaptureSuccess = useCallback((entry: CardEntry) => {
+    addAnimal(entry)
+    addCapture(1)
+    // 随机金币掉落 10~50
+    const goldDrop = Math.floor(Math.random() * 41) + 10
+    addGold(goldDrop)
+    setPendingPhoto(null)
+    setActiveTab('collection')
+  }, [addAnimal, addCapture, addGold])
+
+  // CaptureScreen 捕获失败 → 留在捕获屏，可重试
+  const handleCaptureFail = useCallback(() => {
+    // 留在 fight tab，不做切换
   }, [])
 
   const renderContent = () => {
@@ -35,28 +66,39 @@ const App: React.FC = () => {
       case 'collection':
         return <CollectScreen onMapOpen={handleMapOpen} />
       case 'camera':
-        return <DiscoverScreen />
+        return <DiscoverScreen onConfirm={handlePhotoConfirm} />
       case 'fight':
-        return <CaptureScreen />
+        return (
+          <CaptureScreen
+            onCaptureSuccess={handleCaptureSuccess}
+            onCaptureFail={handleCaptureFail}
+          />
+        )
       case 'store':
         return <PlaceholderScreen icon="🏪" title="Store" subtitle="道具商店 · 开发中" />
     }
   }
 
   return (
-    <StaminaProvider>
-      <div className="phone-frame">
-        <TopBar
-          location="宁波·晴"
-          weather="☀️"
-        />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-          {renderContent()}
-        </div>
-        {!mapOpen && (
-          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-        )}
+    <div className="phone-frame">
+      <TopBar
+        location="宁波·晴"
+        weather="☀️"
+      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+        {renderContent()}
       </div>
+      {!mapOpen && (
+        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
+    </div>
+  )
+}
+
+const App: React.FC = () => {
+  return (
+    <StaminaProvider>
+      <AppInner />
     </StaminaProvider>
   )
 }
