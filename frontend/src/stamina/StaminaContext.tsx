@@ -4,65 +4,70 @@ import {
   STORAGE_KEY,
   POTION_PRICE,
   POTION_RECOVERY,
+  CAPTURE_XP,
 } from './constants'
 import type { StaminaState, StaminaAction, StaminaContextValue, LevelUpResult, BuyPotionResult } from './types'
-import { getMaxStamina, calculateRecovery, tryLevelUp, canConsume, calculateBuyPotion, getTodayString, shouldResetDailyPurchases } from './logic'
+import {
+  getMaxStamina,
+  calculateRecovery,
+  tryLevelUp,
+  canConsume,
+  calculateBuyPotion,
+  getTodayString,
+  shouldResetDailyPurchases,
+  getExpProgress,
+  getCaptureXp,
+  migrateState,
+} from './logic'
 
-/** 从 localStorage 加载初始状态（含离线恢复 + 每日限购重置） */
+/** 从 localStorage 加载初始状态（含数据迁移 + 离线恢复 + 每日限购重置） */
 function loadInitialState(): StaminaState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
-      const parsed = JSON.parse(saved) as StaminaState
-      // 基本字段校验
-      if (
-        typeof parsed.level !== 'number' ||
-        typeof parsed.currentStamina !== 'number' ||
-        typeof parsed.totalCaptures !== 'number' ||
-        typeof parsed.lastRecoverTime !== 'number' ||
-        typeof parsed.gold !== 'number' ||
-        typeof parsed.potionPurchasesToday !== 'number' ||
-        typeof parsed.potionPurchaseDate !== 'string'
-      ) {
-        throw new Error('存档字段校验失败')
-      }
+      const parsed = JSON.parse(saved) as Partial<StaminaState>
+      const migrated = migrateState(parsed)
       // 加载时检查每日限购是否需要重置
-      if (shouldResetDailyPurchases(parsed.potionPurchaseDate)) {
-        parsed.potionPurchasesToday = 0
-        parsed.potionPurchaseDate = getTodayString()
+      if (shouldResetDailyPurchases(migrated.potionPurchaseDate)) {
+        migrated.potionPurchasesToday = 0
+        migrated.potionPurchaseDate = getTodayString()
       }
       // 加载时立即计算离线恢复
-      const maxStamina = getMaxStamina(parsed.level)
-      const oldStamina = parsed.currentStamina
+      const maxStamina = getMaxStamina(migrated.level)
+      const oldStamina = migrated.currentStamina
       const { current } = calculateRecovery(
-        parsed.lastRecoverTime,
+        migrated.lastRecoverTime,
         oldStamina,
         maxStamina
       )
-      // 离线恢复后必须更新 lastRecoverTime，否则下次 TICK 会重复恢复
       if (current > oldStamina) {
         const recoveredPoints = current - oldStamina
         const consumedTime = recoveredPoints * 360_000
-        parsed.lastRecoverTime = current >= maxStamina
+        migrated.lastRecoverTime = current >= maxStamina
           ? Date.now()
-          : parsed.lastRecoverTime + consumedTime
+          : migrated.lastRecoverTime + consumedTime
       }
-      parsed.currentStamina = current
-      return parsed
+      migrated.currentStamina = current
+      return migrated
     }
   } catch (e) {
     console.warn('加载体力存档失败，使用默认值:', e)
   }
 
-  // 默认初始状态：Lv.1，满体力，0 捕获，0 金币
+  // 默认初始状态
   return {
     level: 1,
+    exp: 0,
     currentStamina: 120,
     totalCaptures: 0,
     lastRecoverTime: Date.now(),
     gold: 0,
     potionPurchasesToday: 0,
     potionPurchaseDate: getTodayString(),
+    totalBattlesWon: 0,
+    totalBattles: 0,
+    currentWinStreak: 0,
+    maxWinStreak: 0,
   }
 }
 
@@ -77,15 +82,13 @@ function staminaReducer(state: StaminaState, action: StaminaAction): StaminaStat
         maxStamina,
         action.now
       )
-      // 体力没变化时不产生新状态
       if (current === state.currentStamina) {
         return state
       }
-      // 计算新的 lastRecoverTime
       const recoveredPoints = current - state.currentStamina
       const consumedTime = recoveredPoints * 360_000
       const newLastRecoverTime = current >= maxStamina
-        ? action.now // 满了，重置为当前时间
+        ? action.now
         : state.lastRecoverTime + consumedTime
 
       return {
@@ -97,7 +100,7 @@ function staminaReducer(state: StaminaState, action: StaminaAction): StaminaStat
 
     case 'CONSUME': {
       if (!canConsume(state.currentStamina, action.amount)) {
-        return state // 不扣
+        return state
       }
       return {
         ...state,
@@ -113,15 +116,33 @@ function staminaReducer(state: StaminaState, action: StaminaAction): StaminaStat
       }
     }
 
-    case 'ADD_CAPTURE': {
-      const newTotalCaptures = state.totalCaptures + action.count
-      const levelUpResult = tryLevelUp(state.level, newTotalCaptures)
+    case 'ADD_EXP': {
+      const newExp = state.exp + action.amount
+      const levelUpResult = tryLevelUp(state.level, newExp)
       if (levelUpResult.leveledUp) {
-        // 升级：恢复满体力 + 增加金币奖励
         const newMaxStamina = getMaxStamina(levelUpResult.newLevel)
         return {
           ...state,
           level: levelUpResult.newLevel,
+          exp: newExp,
+          currentStamina: newMaxStamina,
+          gold: state.gold + levelUpResult.rewardGold,
+        }
+      }
+      return { ...state, exp: newExp }
+    }
+
+    case 'ADD_CAPTURE': {
+      const xp = action.rarity ? getCaptureXp(action.rarity) : CAPTURE_XP.common
+      const newExp = state.exp + xp
+      const newTotalCaptures = state.totalCaptures + action.count
+      const levelUpResult = tryLevelUp(state.level, newExp)
+      if (levelUpResult.leveledUp) {
+        const newMaxStamina = getMaxStamina(levelUpResult.newLevel)
+        return {
+          ...state,
+          level: levelUpResult.newLevel,
+          exp: newExp,
           totalCaptures: newTotalCaptures,
           currentStamina: newMaxStamina,
           gold: state.gold + levelUpResult.rewardGold,
@@ -129,6 +150,7 @@ function staminaReducer(state: StaminaState, action: StaminaAction): StaminaStat
       }
       return {
         ...state,
+        exp: newExp,
         totalCaptures: newTotalCaptures,
       }
     }
@@ -159,6 +181,18 @@ function staminaReducer(state: StaminaState, action: StaminaAction): StaminaStat
         ...state,
         potionPurchasesToday: 0,
         potionPurchaseDate: action.date,
+      }
+    }
+
+    case 'RECORD_BATTLE': {
+      const won = action.result === 'win'
+      const newWinStreak = won ? state.currentWinStreak + 1 : 0
+      return {
+        ...state,
+        totalBattles: state.totalBattles + 1,
+        totalBattlesWon: state.totalBattlesWon + (won ? 1 : 0),
+        currentWinStreak: newWinStreak,
+        maxWinStreak: Math.max(state.maxWinStreak, newWinStreak),
       }
     }
 
@@ -195,7 +229,7 @@ export const StaminaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // 每日限购重置检查：每次 state 变化时检查日期
+  // 每日限购重置检查
   useEffect(() => {
     if (shouldResetDailyPurchases(state.potionPurchaseDate)) {
       dispatch({ type: 'RESET_DAILY_PURCHASES', date: getTodayString() })
@@ -209,7 +243,6 @@ export const StaminaProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const maxStamina = useMemo(() => getMaxStamina(state.level), [state.level])
 
-  // 计算 nextRecoverIn
   const nextRecoverIn = useMemo(() => {
     if (state.currentStamina >= maxStamina) return 0
     const { recoverTime } = calculateRecovery(
@@ -220,6 +253,11 @@ export const StaminaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     )
     return recoverTime
   }, [state.lastRecoverTime, state.currentStamina, maxStamina])
+
+  const { currentLevelExp, nextLevelExp, progress: expProgress } = useMemo(
+    () => getExpProgress(state.level, state.exp),
+    [state.level, state.exp]
+  )
 
   const consumeStamina = useCallback((amount: number): boolean => {
     if (!canConsume(state.currentStamina, amount)) {
@@ -233,11 +271,22 @@ export const StaminaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     dispatch({ type: 'ADD_STAMINA', amount })
   }, [])
 
-  const addCapture = useCallback((count: number): LevelUpResult => {
-    const result = tryLevelUp(state.level, state.totalCaptures + count)
-    dispatch({ type: 'ADD_CAPTURE', count })
+  const addCapture = useCallback((count: number, rarity?: import('../types').RarityTier): LevelUpResult => {
+    const xp = rarity ? getCaptureXp(rarity) : CAPTURE_XP.common
+    const result = tryLevelUp(state.level, state.exp + xp)
+    dispatch({ type: 'ADD_CAPTURE', count, rarity })
     return result
-  }, [state.level, state.totalCaptures])
+  }, [state.level, state.exp])
+
+  const addExp = useCallback((amount: number): LevelUpResult => {
+    const result = tryLevelUp(state.level, state.exp + amount)
+    dispatch({ type: 'ADD_EXP', amount })
+    return result
+  }, [state.level, state.exp])
+
+  const recordBattle = useCallback((result: 'win' | 'lose' | 'draw') => {
+    dispatch({ type: 'RECORD_BATTLE', result })
+  }, [])
 
   const addGold = useCallback((amount: number) => {
     dispatch({ type: 'ADD_GOLD', amount })
@@ -254,13 +303,18 @@ export const StaminaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const value = useMemo<StaminaContextValue>(() => ({
     state,
     maxStamina,
+    nextLevelExp,
+    currentLevelExp,
+    expProgress,
     nextRecoverIn,
     consumeStamina,
     addStamina,
     addCapture,
+    addExp,
+    recordBattle,
     addGold,
     buyStaminaPotion,
-  }), [state, maxStamina, nextRecoverIn, consumeStamina, addStamina, addCapture, addGold, buyStaminaPotion])
+  }), [state, maxStamina, nextLevelExp, currentLevelExp, expProgress, nextRecoverIn, consumeStamina, addStamina, addCapture, addExp, recordBattle, addGold, buyStaminaPotion])
 
   return (
     <StaminaContext.Provider value={value}>

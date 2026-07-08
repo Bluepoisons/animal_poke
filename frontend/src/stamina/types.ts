@@ -1,12 +1,18 @@
+import type { RarityTier } from '../types'
+
 /** 等级表单行结构 */
 export interface LevelTableRow {
   level: number
-  /** 升级所需累计捕获数 */
+  /** 升级所需累计捕获数（保留用于兼容/展示） */
   requiredCaptures: number
+  /** 升级所需累计经验值（等级驱动量） */
+  requiredExp: number
   /** 该等级体力上限 */
   maxStamina: number
   /** 升级奖励金币数（Lv.1 无升级奖励，为 0） */
   rewardGold: number
+  /** 商店稀有道具刷新率加成（百分比） */
+  shopBonus: number
   /** 是否为满级 */
   isMaxLevel: boolean
 }
@@ -15,9 +21,11 @@ export interface LevelTableRow {
 export interface StaminaState {
   /** 当前等级（1~10） */
   level: number
+  /** 当前经验值 */
+  exp: number
   /** 当前体力值（0 ~ maxStamina） */
   currentStamina: number
-  /** 累计捕获数（用于判定升级） */
+  /** 累计捕获数（统计字段，用于成就） */
   totalCaptures: number
   /** 上次自然恢复结算的时间戳（Unix ms） */
   lastRecoverTime: number
@@ -27,6 +35,14 @@ export interface StaminaState {
   potionPurchasesToday: number
   /** 今日购买计数的日期标记（自然日，格式 'YYYY-MM-DD'） */
   potionPurchaseDate: string
+  /** 累计战斗胜场 */
+  totalBattlesWon: number
+  /** 累计战斗总场次 */
+  totalBattles: number
+  /** 当前连胜数 */
+  currentWinStreak: number
+  /** 历史最高连胜 */
+  maxWinStreak: number
 }
 
 /** 升级结果 */
@@ -37,6 +53,8 @@ export interface LevelUpResult {
   newLevel: number
   /** 升级奖励金币数（未升级则为 0） */
   rewardGold: number
+  /** 跨越的等级列表（如 [3, 4] 表示从 Lv.2 升到 Lv.4 跨越了 Lv.3 和 Lv.4） */
+  crossedLevels: number[]
 }
 
 /** 自然恢复计算结果 */
@@ -62,10 +80,12 @@ export type StaminaAction =
   | { type: 'TICK_RECOVERY'; now: number }
   | { type: 'CONSUME'; amount: number }
   | { type: 'ADD_STAMINA'; amount: number }
-  | { type: 'ADD_CAPTURE'; count: number }
+  | { type: 'ADD_CAPTURE'; count: number; rarity?: RarityTier }
+  | { type: 'ADD_EXP'; amount: number }
   | { type: 'ADD_GOLD'; amount: number }
   | { type: 'BUY_POTION' }
   | { type: 'RESET_DAILY_PURCHASES'; date: string }
+  | { type: 'RECORD_BATTLE'; result: 'win' | 'lose' | 'draw' }
   | { type: 'LOAD_STATE'; state: StaminaState }
 
 /** StaminaContext 暴露给组件的接口 */
@@ -73,6 +93,12 @@ export interface StaminaContextValue {
   state: StaminaState
   /** 当前等级对应的体力上限 */
   maxStamina: number
+  /** 当前等级所需经验（升级阈值区间大小） */
+  nextLevelExp: number
+  /** 当前等级已获得经验（用于进度条） */
+  currentLevelExp: number
+  /** 当前等级经验进度百分比 0~100 */
+  expProgress: number
   /** 距离下次恢复的秒数（用于 UI 倒计时显示） */
   nextRecoverIn: number
   /** 消耗体力，返回是否成功（体力不足返回 false） */
@@ -80,7 +106,11 @@ export interface StaminaContextValue {
   /** 增加体力（不超过上限） */
   addStamina: (amount: number) => void
   /** 增加捕获数，内部自动检查升级 */
-  addCapture: (count: number) => LevelUpResult
+  addCapture: (count: number, rarity?: RarityTier) => LevelUpResult
+  /** 增加经验值，内部自动检查升级 */
+  addExp: (amount: number) => LevelUpResult
+  /** 记录战斗结果（更新战斗统计） */
+  recordBattle: (result: 'win' | 'lose' | 'draw') => void
   /** 增加金币 */
   addGold: (amount: number) => void
   /** 购买体力药剂（150 金币换 3 体力，每日限 3 次） */

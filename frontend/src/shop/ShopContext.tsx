@@ -6,6 +6,7 @@ import {
   SHOP_STORAGE_KEY,
   POTION_RECOVERY,
 } from './constants'
+import { CHECK_IN_XP } from '../stamina/constants'
 import type { ItemId } from './constants'
 import type {
   ShopState,
@@ -244,6 +245,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success) {
       // 发放金币奖励
       stamina.addGold(result.reward)
+      // 发放签到经验
+      stamina.addExp(CHECK_IN_XP)
       // 追踪签到产出
       economy.trackEarn(result.reward, 'checkin', `签到第${result.newStreak}天`)
       // 更新签到状态（含第 7 天额外道具）
