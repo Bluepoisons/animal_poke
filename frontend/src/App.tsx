@@ -7,6 +7,9 @@ import { LbsProvider } from './lbs/LbsContext'
 import { useLbs } from './lbs/useLbs'
 import { BattleProvider } from './battle/BattleContext'
 import { WeatherProvider } from './weather/WeatherContext'
+import { useWeather } from './weather/useWeather'
+import { StatusProvider } from './status/StatusContext'
+import { useStatus } from './status/useStatus'
 import { useAnimalStore } from './hooks/useAnimalStore'
 import TopBar from './components/TopBar'
 import TabBar from './components/TabBar'
@@ -32,6 +35,8 @@ const AppInner: React.FC = () => {
 
   const { addAnimal } = useAnimalStore()
   const { addCapture, addGold } = useStamina()
+  const statusCtx = useStatus()
+  const weatherCtx = useWeather()
 
   const handleMapOpen = useCallback((entries: CardEntry[], focus?: CardEntry) => {
     setMapEntries(entries)
@@ -57,9 +62,16 @@ const AppInner: React.FC = () => {
     // 随机金币掉落 10~50
     const goldDrop = Math.floor(Math.random() * 41) + 10
     addGold(goldDrop)
+
+    // 感冒判定：雨雪天捕获的宠物有概率自带感冒
+    const coldRisk = weatherCtx.getColdRisk()
+    if (coldRisk.isRisky && Math.random() < coldRisk.probability) {
+      statusCtx.applyCold(entry.id, 'capture')
+    }
+
     setPendingPhoto(null)
     setActiveTab('collection')
-  }, [addAnimal, addCapture, addGold])
+  }, [addAnimal, addCapture, addGold, statusCtx, weatherCtx])
 
   // CaptureScreen 捕获失败 → 留在捕获屏，可重试
   const handleCaptureFail = useCallback(() => {
@@ -112,9 +124,11 @@ const App: React.FC = () => {
       <LbsProvider>
         <WeatherProvider>
           <ShopProvider>
-            <BattleProvider>
-              <AppInner />
-            </BattleProvider>
+            <StatusProvider>
+              <BattleProvider>
+                <AppInner />
+              </BattleProvider>
+            </StatusProvider>
           </ShopProvider>
         </WeatherProvider>
       </LbsProvider>

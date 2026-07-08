@@ -1,6 +1,8 @@
 import React, { createContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
+import { useStatus } from '../status/useStatus'
+import { useWeather } from '../weather/useWeather'
 import type {
   BattleState,
   BattleAction,
@@ -29,6 +31,7 @@ import {
   cardEntryToBattlePet,
   computeBattleStats,
   applyWeatherModifier,
+  applyStatusMultiplier,
   pickElement,
 } from './logic'
 
@@ -119,6 +122,8 @@ export const BattleContext = createContext<BattleContextValue | null>(null)
 export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: WeatherType }> = ({ children, weather = 'sunny' }) => {
   const stamina = useStamina()
   const shop = useShop()
+  const status = useStatus()
+  const weatherCtx = useWeather()
 
   const [state, dispatch] = useReducer(battleReducer, undefined, () => ({
     ...initialBattleState,
@@ -200,9 +205,15 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
     stamina.consumeStamina(BATTLE_STAMINA_COST)
 
     const pet = cardEntryToBattlePet(entry, state.weather)
+    // 应用状态修正（感冒 -35% 等）
+    const statusMultiplier = status.getStatModifier(entry.id)
+    if (statusMultiplier !== 1.0) {
+      pet.stats = applyStatusMultiplier(pet.stats, statusMultiplier)
+      pet.currentHp = pet.stats.hp
+    }
     dispatch({ type: 'SELECT_PET', pet })
     return true
-  }, [stamina, state.weather])
+  }, [stamina, state.weather, status])
 
   // 开始匹配
   const startMatching = useCallback(() => {
@@ -313,8 +324,17 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
         shop.addItem(state.rewards.droppedItem as any)
       }
     }
+
+    // 感冒判定：雨雪天出战宠物有概率感冒（需在 RESET 前读取 playerPet.id）
+    if (state.playerPet) {
+      const coldRisk = weatherCtx.getColdRisk()
+      if (coldRisk.isRisky && Math.random() < coldRisk.probability) {
+        status.applyCold(state.playerPet.id, 'battle')
+      }
+    }
+
     dispatch({ type: 'RESET' })
-  }, [state.rewards, stamina, shop])
+  }, [state.rewards, state.playerPet, stamina, shop, weatherCtx, status])
 
   // 重置
   const reset = useCallback(() => {

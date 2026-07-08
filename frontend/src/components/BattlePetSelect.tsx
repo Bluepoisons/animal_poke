@@ -2,17 +2,19 @@ import React from 'react'
 import { useAnimalStore } from '../hooks/useAnimalStore'
 import { useBattle } from '../battle/useBattle'
 import { useStamina } from '../stamina/useStamina'
-import { cardEntryToBattlePet } from '../battle/logic'
+import { cardEntryToBattlePet, applyStatusMultiplier } from '../battle/logic'
 import { BATTLE_STAMINA_COST } from '../battle/constants'
 import { SPECIES_DEFS, RARITY_NAMES, RARITY_COLORS } from '../types'
 import type { CardEntry } from '../battle/types'
 import { ELEMENT_TYPES } from '../battle/constants'
+import { useStatus } from '../status/useStatus'
 
 /** 宠物选择界面 */
 const BattlePetSelect: React.FC = () => {
   const { animals } = useAnimalStore()
   const { selectPet, startMatching, state } = useBattle()
   const stamina = useStamina()
+  const statusCtx = useStatus()
 
   const availablePets = animals.filter(a => a.unlocked)
   const hasEnoughStamina = stamina.state.currentStamina >= BATTLE_STAMINA_COST
@@ -95,7 +97,7 @@ const BattlePetSelect: React.FC = () => {
 
               {/* 属性信息 */}
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>{speciesDef.name}</span>
                   <span style={{
                     fontSize: 10,
@@ -114,15 +116,39 @@ const BattlePetSelect: React.FC = () => {
                   }}>
                     {elementEmoji[element]} {element}
                   </span>
+                  {statusCtx.getPetStatusDisplay(entry.id).map((s, i) => {
+                    if (s.type === 'normal') return null
+                    return (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: s.color,
+                          background: 'var(--orange-50)',
+                          borderRadius: 8,
+                          padding: '2px 6px',
+                        }}
+                      >
+                        {s.emoji} {s.label}{s.remainingDays ? ` ${s.remainingDays}天` : ''}
+                      </span>
+                    )
+                  })}
                 </div>
-                {pet && (
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, display: 'flex', gap: 8 }}>
-                    <span>HP {pet.stats.hp}</span>
-                    <span>ATK {pet.stats.atk}</span>
-                    <span>DEF {pet.stats.def}</span>
-                    <span>SPD {pet.stats.spd}</span>
-                  </div>
-                )}
+                {pet && (() => {
+                  const mod = statusCtx.getStatModifier(entry.id)
+                  const modifiedPet = mod !== 1.0
+                    ? { ...pet, stats: applyStatusMultiplier(pet.stats, mod) }
+                    : pet
+                  return (
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, display: 'flex', gap: 8 }}>
+                      <span>HP {modifiedPet.stats.hp}{mod !== 1.0 && <span style={{ color: 'var(--warn)' }}>↓</span>}</span>
+                      <span>ATK {modifiedPet.stats.atk}{mod !== 1.0 && <span style={{ color: 'var(--warn)' }}>↓</span>}</span>
+                      <span>DEF {modifiedPet.stats.def}{mod !== 1.0 && <span style={{ color: 'var(--warn)' }}>↓</span>}</span>
+                      <span>SPD {modifiedPet.stats.spd}{mod !== 1.0 && <span style={{ color: 'var(--warn)' }}>↓</span>}</span>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* 出战按钮 */}
