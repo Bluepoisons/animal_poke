@@ -6,13 +6,23 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"animalpoke/backend/internal/config"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
+func testConfig() *config.Config {
+	return &config.Config{
+		ServerAddr: ":0",
+		LogLevel:   "INFO",
+		JWTSecret:  "test-secret",
+	}
+}
+
 func TestHealthRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := NewRouter(nil, nil)
+	r := NewRouter(testConfig(), nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -26,7 +36,7 @@ func TestHealthRoute(t *testing.T) {
 
 func TestPingRoute_DBNil(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := NewRouter(nil, nil)
+	r := NewRouter(testConfig(), nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
@@ -41,7 +51,7 @@ func TestPingRoute_DBNil(t *testing.T) {
 
 func TestCORSHeadersPresentThroughChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := NewRouter(nil, nil)
+	r := NewRouter(testConfig(), nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -53,7 +63,7 @@ func TestCORSHeadersPresentThroughChain(t *testing.T) {
 
 func TestRecoveryInChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := NewRouter(nil, nil)
+	r := NewRouter(testConfig(), nil)
 	r.GET("/boom", func(c *gin.Context) { panic("x") })
 
 	w := httptest.NewRecorder()
@@ -61,4 +71,28 @@ func TestRecoveryInChain(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestAuthDeviceRoute_Exists(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := NewRouter(testConfig(), nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device", nil)
+	r.ServeHTTP(w, req)
+
+	// 无 DB 时 auth 路由未注册, 返回 404
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGeoCityRoute_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := NewRouter(testConfig(), nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/city?lat=39.9&lng=116.4", nil)
+	r.ServeHTTP(w, req)
+
+	// 未鉴权应返回 401
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

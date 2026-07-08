@@ -10,6 +10,7 @@ import (
 type Config struct {
 	ServerAddr string
 	LogLevel   string
+	JWTSecret  string
 	Database   DatabaseConfig
 	ThirdParty ThirdPartyConfig
 }
@@ -44,6 +45,7 @@ func Load() *Config {
 	return &Config{
 		ServerAddr: getEnv("SERVER_ADDR", ":8080"),
 		LogLevel:   getEnv("LOG_LEVEL", "INFO"),
+		JWTSecret:  getEnv("JWT_SECRET", "animal-poke-dev-secret"),
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "127.0.0.1"),
 			Port:     getEnvInt("DB_PORT", 3306),

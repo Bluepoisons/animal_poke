@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/config"
+	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
 	"animalpoke/backend/internal/routes"
 
@@ -31,6 +32,10 @@ func main() {
 		slog.Error("数据库连接失败, 服务以降级模式启动(部分接口将不可用)", "err", err)
 	} else {
 		slog.Info("数据库连接成功")
+		// 自动迁移表结构(Device / Animal / AuditLog)
+		if err := db.AutoMigrate(&models.Device{}, &models.Animal{}, &models.AuditLog{}); err != nil {
+			slog.Error("数据库迁移失败", "err", err)
+		}
 		if sqlDB, err := db.DB(); err == nil && sqlDB != nil {
 			defer sqlDB.Close()
 		}
