@@ -1,14 +1,14 @@
 extends GdUnitTestSuite
 
-# 集成测试: 验证 7 个 autoload 全部在场景树中注册并可访问。
+# 集成测试: 验证全部 autoload 在场景树中注册并可访问。
 # Godot 4.7: autoload 全局名解析为类, 故 enum 走 preload 的脚本, 实例走 /root/<Name>。
 # project.godot [autoload] 顺序: ConfigManager → Logger → NetworkManager → SaveManager →
-# AudioManager → SceneManager → GameManager。
+# StaminaManager → AudioManager → SceneManager → GameManager。
 
 const NMScript := preload("res://scripts/autoload/network_manager.gd")
 const GMScript := preload("res://scripts/autoload/game_manager.gd")
 
-const AUTOLOADS := ["ConfigManager", "Logger", "NetworkManager", "SaveManager", "AudioManager", "SceneManager", "GameManager"]
+const AUTOLOADS := ["ConfigManager", "Logger", "NetworkManager", "SaveManager", "StaminaManager", "AudioManager", "SceneManager", "GameManager"]
 
 
 func test_all_autoloads_present() -> void:
@@ -51,3 +51,38 @@ func test_offline_guard_blocks_discover() -> void:
 	assert_bool(gm.call("transition_to", GMScript.GameState.DISCOVER)).is_true()
 	# 还原 NetworkManager 状态
 	nm.call("set_state", prev)
+
+
+func test_stamina_guard_blocks_capture_when_insufficient() -> void:
+	# 集成: StaminaManager 体力不足时, GameManager 转 CAPTURE 应被拦截
+	var nm := get_node_or_null("/root/NetworkManager")
+	var gm := get_node_or_null("/root/GameManager")
+	var stm := get_node_or_null("/root/StaminaManager")
+	if nm == null or gm == null or stm == null:
+		fail("autoload 不可用")
+		return
+
+	# 确保在线
+	var net_prev: int = nm.call("current_state")
+	nm.call("set_state", NMScript.NetState.ONLINE)
+
+	# 设体力为 0, 确保 can_capture 返回 false
+	var orig_stamina: int = stm.get("_current_stamina")
+	var orig_ts: int = stm.get("_last_update_unix")
+	stm.set("_current_stamina", 0)
+	stm.set("_last_update_unix", int(Time.get_unix_time_from_system()))
+
+	# 确保不在 CAPTURE
+	gm.call("transition_to", GMScript.GameState.MAIN_MENU)
+
+	# 体力不足, 应拦截
+	assert_bool(gm.call("transition_to", GMScript.GameState.CAPTURE)).is_false()
+
+	# 设体力为 30, 应允许
+	stm.set("_current_stamina", 30)
+	assert_bool(gm.call("transition_to", GMScript.GameState.CAPTURE)).is_true()
+
+	# 还原
+	stm.set("_current_stamina", orig_stamina)
+	stm.set("_last_update_unix", orig_ts)
+	nm.call("set_state", net_prev)

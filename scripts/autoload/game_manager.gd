@@ -75,4 +75,12 @@ func _is_transition_valid(from: int, to: int) -> bool:
 		if nm != null and nm.has_method("is_offline") and nm.call("is_offline"):
 			push_warning("[GameManager] 断网状态, 发现/捕获不可用 (在线优先架构 4.3)")
 			return false
+
+	# 体力不足时禁止捕获 (M1 体力系统)
+	if to == GameState.CAPTURE:
+		var stm: Node = get_node_or_null("/root/StaminaManager")
+		if stm != null and stm.has_method("can_capture") and not stm.call("can_capture"):
+			push_warning("[GameManager] 体力不足, 无法捕获 (体力系统 3.4)")
+			return false
+
 	return true
