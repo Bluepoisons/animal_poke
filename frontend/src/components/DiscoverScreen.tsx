@@ -2,7 +2,11 @@ import React, { useRef, useState, useEffect, useCallback } from 'react'
 
 type CameraState = 'loading' | 'denied' | 'ready' | 'captured'
 
-const DiscoverScreen: React.FC = () => {
+interface DiscoverScreenProps {
+  onConfirm?: (photoData: string) => void
+}
+
+const DiscoverScreen: React.FC<DiscoverScreenProps> = ({ onConfirm }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -70,11 +74,16 @@ const DiscoverScreen: React.FC = () => {
     startCamera()
   }, [startCamera])
 
-  // 确认拍照（TODO: 上传到后端）
+  // 确认拍照，通知外部切换至捕获屏
   const confirmPhoto = useCallback(() => {
-    setPhotoData(null)
-    startCamera()
-  }, [startCamera])
+    if (photoData && onConfirm) {
+      onConfirm(photoData)
+    } else {
+      // 未传入 onConfirm 时回退原有行为
+      setPhotoData(null)
+      startCamera()
+    }
+  }, [photoData, onConfirm, startCamera])
 
   // 生命周期：打开时申请摄像头，离开组件时关闭
   useEffect(() => {
