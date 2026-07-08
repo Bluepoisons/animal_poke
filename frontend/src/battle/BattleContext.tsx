@@ -1,6 +1,7 @@
 import React, { createContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
+import { useEconomy } from '../economy/useEconomy'
 import { useStatus } from '../status/useStatus'
 import { useWeather } from '../weather/useWeather'
 import type {
@@ -122,6 +123,7 @@ export const BattleContext = createContext<BattleContextValue | null>(null)
 export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: WeatherType }> = ({ children, weather = 'sunny' }) => {
   const stamina = useStamina()
   const shop = useShop()
+  const economy = useEconomy()
   const status = useStatus()
   const weatherCtx = useWeather()
 
@@ -319,6 +321,11 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
   const finishBattle = useCallback(() => {
     if (state.rewards) {
       stamina.addGold(state.rewards.gold)
+      // 追踪战斗产出
+      const source = state.result === 'win' ? 'battle_win'
+        : state.result === 'draw' ? 'battle_draw'
+        : 'battle_lose'
+      economy.trackEarn(state.rewards.gold, source, `战斗${state.result ?? ''}`)
       // 道具掉落处理
       if (state.rewards.droppedItem) {
         shop.addItem(state.rewards.droppedItem as any)
@@ -334,7 +341,7 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
     }
 
     dispatch({ type: 'RESET' })
-  }, [state.rewards, state.playerPet, stamina, shop, weatherCtx, status])
+  }, [state.rewards, state.result, state.playerPet, stamina, shop, economy, weatherCtx, status])
 
   // 重置
   const reset = useCallback(() => {

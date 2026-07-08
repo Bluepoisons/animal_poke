@@ -2,18 +2,22 @@ import React from 'react'
 import type { CardEntry } from '../types'
 import { RARITY_COLORS, RARITY_NAMES, SPECIES_DEFS, getCardSpecies } from '../types'
 import { useStatus } from '../status/useStatus'
+import { useDispatch } from '../economy/useDispatch'
 
 interface DetailPopupProps {
   entry: CardEntry
   onClose: () => void
   onViewOnMap: (entry: CardEntry) => void
+  onDispatch?: (entry: CardEntry) => void
 }
 
-const DetailPopup: React.FC<DetailPopupProps> = ({ entry, onClose, onViewOnMap }) => {
+const DetailPopup: React.FC<DetailPopupProps> = ({ entry, onClose, onViewOnMap, onDispatch }) => {
   const color = RARITY_COLORS[entry.rarity]
   const statusCtx = useStatus()
   const statusDisplays = statusCtx.getPetStatusDisplay(entry.id)
   const hasCold = statusCtx.hasStatus(entry.id, 'cold')
+  const dispatchCtx = useDispatch()
+  const petMission = dispatchCtx.getPetMission(entry.id)
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -87,6 +91,33 @@ const DetailPopup: React.FC<DetailPopupProps> = ({ entry, onClose, onViewOnMap }
           >
             💊 使用感冒药治疗
           </button>
+        )}
+
+        {/* 派遣状态 */}
+        {petMission ? (
+          <div style={styles.dispatchStatus}>
+            <span style={{ fontSize: 14 }}>🗺️ 派遣中</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {dispatchCtx.missionDefs.find(d => d.type === petMission.type)?.name}
+            </span>
+            {petMission.status === 'completed' ? (
+              <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ 可领取</span>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--orange-dark)' }}>
+                ⏰ {Math.floor(dispatchCtx.getMissionCountdown(petMission.id) / 60)}分钟
+              </span>
+            )}
+          </div>
+        ) : (
+          onDispatch && dispatchCtx.availableSlots > 0 && (
+            <button
+              className="btn"
+              style={styles.dispatchBtn}
+              onClick={() => onDispatch(entry)}
+            >
+              🗺️ 派遣
+            </button>
+          )
         )}
 
         <button
@@ -211,6 +242,25 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 0',
     fontSize: 13,
     borderRadius: 14,
+  },
+  dispatchStatus: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+    background: 'var(--orange-50)',
+    borderRadius: 10,
+    padding: '8px 10px',
+  },
+  dispatchBtn: {
+    width: '100%',
+    marginTop: 4,
+    padding: '8px 0',
+    fontSize: 13,
+    borderRadius: 14,
+    background: 'var(--cream-dark)',
+    color: 'var(--ink)',
   },
 }
 

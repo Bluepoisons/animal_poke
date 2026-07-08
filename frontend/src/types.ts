@@ -105,7 +105,7 @@ export function getCardSpecies(entry: CardEntry): SpeciesType {
 }
 
 export type FilterTab = 'all' | 'today' | 'week' | 'nearby'
-export type MainTab = 'profile' | 'collection' | 'camera' | 'fight' | 'store'
+export type MainTab = 'profile' | 'collection' | 'camera' | 'fight' | 'store' | 'dispatch'
 
 export const RARITY_COLORS: Record<RarityTier, string> = {
   common: 'var(--rarity-common)',

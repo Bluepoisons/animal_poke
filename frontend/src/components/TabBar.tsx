@@ -6,6 +6,7 @@ const TABS: { key: MainTab; icon: string; label: string }[] = [
   { key: 'collection', icon: '📖', label: 'Collection' },
   { key: 'camera', icon: '📷', label: 'Camera' },
   { key: 'fight', icon: '🥊', label: 'Fight' },
+  { key: 'dispatch', icon: '🗺️', label: 'Dispatch' },
   { key: 'store', icon: '🏪', label: 'Store' },
 ]
 
