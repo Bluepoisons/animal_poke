@@ -14,6 +14,15 @@ config/name="animal_poke"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+ConfigManager="*res://scripts/autoload/config_manager.gd"
+NetworkManager="*res://scripts/autoload/network_manager.gd"
+SaveManager="*res://scripts/autoload/save_manager.gd"
+AudioManager="*res://scripts/autoload/audio_manager.gd"
+SceneManager="*res://scripts/autoload/scene_manager.gd"
+GameManager="*res://scripts/autoload/game_manager.gd"
+
 [display]
 
 window/stretch/mode="canvas_items"
