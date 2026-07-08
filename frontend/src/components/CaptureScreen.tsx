@@ -482,4 +482,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default CaptureScreen
+export default React.memo(CaptureScreen)

@@ -106,4 +106,4 @@ const BattleScreen: React.FC = () => {
   }
 }
 
-export default BattleScreen
+export default React.memo(BattleScreen)

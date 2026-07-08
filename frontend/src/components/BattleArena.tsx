@@ -175,4 +175,4 @@ const BattleArena: React.FC = () => {
   )
 }
 
-export default BattleArena
+export default React.memo(BattleArena)

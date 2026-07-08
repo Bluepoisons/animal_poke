@@ -72,4 +72,4 @@ const HealthBar: React.FC<HealthBarProps> = ({ current, max, energy, maxEnergy, 
   )
 }
 
-export default HealthBar
+export default React.memo(HealthBar)

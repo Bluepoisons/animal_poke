@@ -52,4 +52,4 @@ const BattleLog: React.FC<BattleLogProps> = ({ logs }) => {
   )
 }
 
-export default BattleLog
+export default React.memo(BattleLog)

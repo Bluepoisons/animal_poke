@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 
 export const DB_NAME = 'animal-poke-db'
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
@@ -9,17 +9,30 @@ let dbPromise: Promise<IDBPDatabase> | null = null
 export function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // animals store：动物收藏数据
+      async upgrade(db, oldVersion, _newVersion, transaction) {
+        // v1: create stores + initial indexes
         if (!db.objectStoreNames.contains('animals')) {
           const store = db.createObjectStore('animals', { keyPath: 'id' })
           store.createIndex('by-date', 'captureDate')
           store.createIndex('by-rarity', 'rarity')
-          // 注意：unlocked 是 boolean，不是合法的 IndexedDB key，不能建索引
         }
-        // settings store：应用设置（单条记录）
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' })
+        }
+        // v2: add by-unlocked index + migrate existing records
+        if (oldVersion < 2) {
+          const store = transaction.objectStore('animals')
+          if (!store.indexNames.contains('by-unlocked')) {
+            store.createIndex('by-unlocked', 'isUnlocked')
+          }
+          // Migrate: add isUnlocked numeric field (0/1) to existing records
+          let cursor = await store.openCursor()
+          while (cursor) {
+            const record = cursor.value
+            record.isUnlocked = record.unlocked ? 1 : 0
+            await cursor.update(record)
+            cursor = await cursor.continue()
+          }
         }
       },
     })

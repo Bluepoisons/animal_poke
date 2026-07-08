@@ -465,4 +465,4 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
-export default DispatchScreen
+export default React.memo(DispatchScreen)
