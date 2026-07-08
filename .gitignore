@@ -2,8 +2,6 @@
 .godot/
 /android/
 
-# WorkBuddy 记忆与缓存
-.workbuddy/
 
 # 系统文件
 .DS_Store
