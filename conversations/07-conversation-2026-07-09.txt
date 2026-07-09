@@ -1,0 +1,1564 @@
+
+> /model 
+  ⎿ Switch model to kimi-k2.7
+
+> @docs/ui/animal-poke-ui-reference(1).html @docs/ui/animal-poke-ui-working-plan-detailed(1).md 
+  @docs/ui/animal-poke-ui-working-plan(1).md 请具体地去实现一下这里面提到的UI 
+
+ The user wants me to implement the UI described in three files:
+ 1. animal-poke-ui-reference(1).html
+ 2. animal-poke-ui-working-plan-detailed(1).md
+ ... 8 more lines (press Ctrl+O to expand)
+
+● I'll explore the project structure first to determine the best way to implement this Animal Poke UI.
+
+● Bash(ls -la && echo "---" && find . -maxdepth 3 -type f \( -name "package.json" -o -n… -name "*.tsx" -o -name "*.vue" -o -name "*.jsx" -o -name "*.css" \) | head -50)
+  ⎿ total 64
+    drwxr-xr-x@ 15 ji233  staff   480 Jul  9 17:10 .
+    drwxr-xr-x@ 10 ji233  staff   320 Jul  8 13:27 ..
+    ...+22 line (ctrl+o to expand)
+
+ This is a React/TypeScript project. Let me check the package.json and current App structure to understand what we're working with.
+
+● Read(frontend/package.json)
+  ⎿ Read 35 lines (ctrl+o to expand)
+
+● Read(frontend/src/App.tsx)
+  ⎿ Read 254 lines (ctrl+o to expand)
+
+● Read(frontend/src/index.css)
+  ⎿ Read 142 lines (ctrl+o to expand)
+
+ Now I understand the project structure. It's a React + TypeScript + Vite project that already has some existing UI components (DiscoverScreen, MapScreen,
+ CollectScreen, CaptureScreen, BattleScreen, StoreScreen, etc.) with a warm cartoon style. The user wants me to implement the new UI from the working plan, which is a
+ dark game-style UI.
+ The user specifically asked to implement the UI described in those documents. This seems to be a redesign or alternative implementation. I need to be careful about
+ whether this replaces existing UI or adds a new route/feature. Given the working plan suggests a feature directory `src/features/animal-poke/`, I should implement this
+ as a new feature module that can be integrated.
+ However, looking at the existing App.tsx, the app already has its own structure. The user probably wants the UI implemented according to the plan. Since the request is
+ to "specifically implement the UI mentioned in these documents," I should implement the full AnimalPokeApp feature as described.
+ ... 13 more lines (press Ctrl+O to expand)
+
+● Bash(find ./frontend/src -maxdepth 2 -type f | sort | head -80)
+  ⎿ ./frontend/src/achievement/AchievementContext.tsx
+    ./frontend/src/achievement/constants.ts
+    ./frontend/src/achievement/logic.test.ts
+    ...+77 line (ctrl+o to expand)
+
+● Read(frontend/src/types.ts)
+  ⎿ Read 137 lines (ctrl+o to expand)
+
+ Now I have a good understanding. The project is a React app with existing components. I need to implement the new UI design as described in the documents. The working
+ plan suggests creating a feature directory `src/features/animal-poke/` with components, screens, data, etc.
+ Given the complexity, I'll create a task list and implement it step by step. I should:
+ 1. Create the CSS tokens
+ ... 7 more lines (press Ctrl+O to expand)
+
+ Now I need to start implementing. I'll mark task 1 as in progress and create the design tokens CSS file. Then create the data files, components, screens, app, and
+ integrate.
+ Since this is a large implementation, I'll write all files. I need to be careful about the file paths and ensure the project builds.
+ Let me start with the CSS tokens. I'll create the file at `frontend/src/features/animal-poke/animalPoke.css`.
+ ... 6 more lines (press Ctrl+O to expand)
+
+ Now I'll create the directory structure and write files. I can use Bash to create directories, then Write for files. Actually, Write will create files but I should
+ ensure directories exist. Let me use Bash mkdir.
+ Wait, the instructions say "If your command will create new directories or files, first use this tool to run ls to verify the parent directory exists and is the
+ correct location." I've already verified with find. I can use mkdir.
+
+● Bash(mkdir -p frontend/src/features/animal-poke/{components,screens,data})
+  ⎿ (No content)
+
+ Now I'll write the CSS file. I need to include all the tokens and component styles from the working plan and reference HTML.
+
+● Write(frontend/src/features/animal-poke/animalPoke.css)
+  ⎿ Wrote 886 lines (ctrl+o to expand)
+
+ CSS is done. Now mark task 1 complete and start task 2: mock data and types.
+
+ Now create the types and data files. I'll create:
+ - `frontend/src/features/animal-poke/data/types.ts`
+ - `frontend/src/features/animal-poke/data/animals.ts`
+ ... 3 more lines (press Ctrl+O to expand)
+
+● Write(frontend/src/features/animal-poke/data/types.ts)
+  ⎿ Wrote 62 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/data/animals.ts)
+  ⎿ Wrote 61 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/data/huntTargets.ts)
+  ⎿ Wrote 36 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/data/inventory.ts)
+  ⎿ Wrote 33 lines (ctrl+o to expand)
+
+ Data files done. Now mark task 2 complete and start task 3: reusable components. I'll create all the components listed in the plan.
+ Components to create:
+ - PhoneFrame.tsx
+ ... 13 more lines (press Ctrl+O to expand)
+
+ Now I'll write the components. I can write multiple files in parallel since they're independent.
+
+● Write(frontend/src/features/animal-poke/components/PhoneFrame.tsx)
+  ⎿ Wrote 13 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/PageTitle.tsx)
+  ⎿ Wrote 27 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/TopResourceBar.tsx)
+  ⎿ Wrote 24 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/AnimalIcon.tsx)
+  ⎿ Wrote 95 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/ActionButton.tsx)
+  ⎿ Wrote 23 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/BottomTabBar.tsx)
+  ⎿ Wrote 34 lines (ctrl+o to expand)
+
+ I notice the BottomTabBar has a bug - the last button (成就/achievements) currently navigates to store. It should be a placeholder. I'll fix that later or now. Let me
+ continue with the rest of the components and fix it in a moment.
+ Now write:
+ - RarityCard.tsx
+ ... 4 more lines (press Ctrl+O to expand)
+
+● Write(frontend/src/features/animal-poke/components/RarityCard.tsx)
+  ⎿ Wrote 37 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/DiscoveryPin.tsx)
+  ⎿ Wrote 36 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/CaptureProbabilityBar.tsx)
+  ⎿ Wrote 29 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/BattleLog.tsx)
+  ⎿ Wrote 15 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/components/StoreItemRow.tsx)
+  ⎿ Wrote 30 lines (ctrl+o to expand)
+
+ I need to fix the BottomTabBar to have achievements as a placeholder. Let me also note that DiscoveryPin has some positioning issues - labels should be positioned
+ relative to the pin's position. Let me fix BottomTabBar now.
+
+● Edit(frontend/src/features/animal-poke/components/BottomTabBar.tsx)
+  ⎿ frontend/src/features/animal-poke/components/BottomTabBar.tsx with 7 additions and 2 removals
+
+    1    interface BottomTabBarProps {
+    2      active: ScreenId
+    3      onChange: (screen: ScreenId) => void
+    4 +    onAchievement?: () => void
+    5    }
+    6 
+    7    const tabs: { id: ScreenId; label: string }[] = [
+
+    ...
+
+    10      { id: 'store', label: '商店' },
+    11    ]
+    12 
+    13 -  export default function BottomTabBar({ active, onChange }: BottomTabBarProps) {
+    13 +  export default function BottomTabBar({
+    14 +    active,
+    15 +    onChange,
+    16 +    onAchievement,
+    17 +  }: BottomTabBarProps) {
+    18      return (
+    19        <nav className="ap-bottom-tabs" aria-label="底部导航">
+    20          {tabs.map((tab) => (
+
+    ...
+
+    23              {tab.label}
+    24            </button>
+    25          ))}
+    26 -       <button onClick={() => onChange('store')} type="button">
+    26 +       <button onClick={onAchievement} type="button">
+    27            成就
+    28          </button>
+    29        </nav>
+
+ Components done. Now mark task 3 complete and start task 4: screens.
+
+ Now I need to write the six screen components. Let me think about each:
+ 1. DiscoverScreen - needs TopResourceBar, eyebrow, title, ambient circle, scan box with goose icon and scanning line, result pill, lower band, action button, bottom
+ tabs. But bottom tabs are managed at App level, so I won't include them in each screen. Actually, looking at the design, the bottom tab is part of each screen's
+ layout. Since AnimalPokeApp will render the screen inside PhoneFrame, the screen component should include everything for that screen except the PhoneFrame wrapper? Or
+ should the screen include the PhoneFrame?
+ Looking at the plan: PhoneFrame is a component, screens are inside. So screens should not include PhoneFrame. But the bottom tab bar is shared across screens. In the
+ plan, each screen component includes its own bottom tab? Actually, the AnimalPokeApp shell manages the screen state and bottom tab. So screens won't include bottom tab
+ - it'll be in the app shell. But wait, the reference HTML has bottom tabs in each screen.
+ ... 56 more lines (press Ctrl+O to expand)
+
+● Write(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ Wrote 41 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/screens/HuntMapScreen.tsx)
+  ⎿ Wrote 69 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/screens/CaptureScreen.tsx)
+  ⎿ Wrote 61 lines (ctrl+o to expand)
+
+ Now write the remaining screens: PokedexScreen, BattleArenaScreen, StoreScreen.
+
+● Write(frontend/src/features/animal-poke/screens/PokedexScreen.tsx)
+  ⎿ Wrote 62 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/screens/BattleArenaScreen.tsx)
+  ⎿ Wrote 86 lines (ctrl+o to expand)
+
+● Write(frontend/src/features/animal-poke/screens/StoreScreen.tsx)
+  ⎿ Wrote 78 lines (ctrl+o to expand)
+
+ Screens done. Now mark task 4 complete and start task 5: AnimalPokeApp shell.
+
+ Now I need to create AnimalPokeApp.tsx. It will:
+ - Manage screen state
+ - Manage coins, energy
+ ... 70 more lines (press Ctrl+O to expand)
+
+● Write(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ Wrote 96 lines (ctrl+o to expand)
+
+ Wait, there's a problem with the AnimalPokeApp. The bottom tabs are rendered outside the PhoneFrame, but the CSS positions them absolute relative to the ap-root (which
+ has display: grid). However, the PhoneFrame is also inside the ap-root. So bottom tabs would be positioned relative to the viewport/grid, not the phone. That might be
+ wrong.
+ Looking at the CSS, the bottom tabs are positioned absolute with left: 18px, bottom: 20px, which is within the phone frame. So I should render the BottomTabBar inside
+ the PhoneFrame, not outside.
+ I need to restructure. The screens currently include PhoneFrame. I should either:
+ ... 23 more lines (press Ctrl+O to expand)
+
+● Edit(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/DiscoverScreen.tsx with 24 additions and 18 removals
+
+    1    import type { ScreenId } from '../data/types'
+    2 -  import PhoneFrame from '../components/PhoneFrame'
+    2    import TopResourceBar from '../components/TopResourceBar'
+    3    import ActionButton from '../components/ActionButton'
+    4    import AnimalIcon from '../components/AnimalIcon'
+
+    ...
+
+    16      energy,
+    17      coins,
+    18      onStartCapture,
+    19 +    onNavigate,
+    20    }: DiscoverScreenProps) {
+    21      return (
+    22 -      <PhoneFrame variant="discover">
+    23 -        <div className="ap-screen">
+    24 -          <TopResourceBar city="宁波" weather="雨" energy={energy} coins={coins} />
+    25 -          <div className="ap-discover__eyebrow">DISCOVER MODE</div>
+    26 -          <h1 className="ap-discover__title">VLM 实时动物识别中</h1>
+    27 -          <div className="ap-discover__ambient" />
+    28 -          <div className="ap-scan-box">
+    29 -            <AnimalIcon species="goose" size={96} />
+    30 -            <div className="ap-scan-line" />
+    31 -          </div>
+    32 -          <div className="ap-result-pill">
+    33 -            <span>🪿</span>
+    34 -            <span>鹅 · 置信度 94%</span>
+    35 -          </div>
+    36 -          <div className="ap-lower-band" />
+    37 -          <ActionButton onClick={onStartCapture}>开始捕获</ActionButton>
+    22 +      <div className="ap-screen">
+    23 +        <TopResourceBar city="宁波" weather="雨" energy={energy} coins={coins} />
+    24 +        <div className="ap-discover__eyebrow">DISCOVER MODE</div>
+    25 +        <h1 className="ap-discover__title">VLM 实时动物识别中</h1>
+    26 +        <button
+    27 +          className="ap-discover__map-button"
+    28 +          onClick={() => onNavigate('map')}
+    29 +          type="button"
+    30 +          aria-label="打开地图"
+    31 +        >
+    32 +          地图
+    33 +        </button>
+    34 +        <div className="ap-discover__ambient" />
+    35 +        <div className="ap-scan-box">
+    36 +          <AnimalIcon species="goose" size={96} />
+    37 +          <div className="ap-scan-line" />
+    38          </div>
+    39 -     </PhoneFrame>
+    39 +       <div className="ap-result-pill">
+    40 +          <span>🪿</span>
+    41 +          <span>鹅 · 置信度 94%</span>
+    42 +        </div>
+    43 +        <div className="ap-lower-band" />
+    44 +        <ActionButton onClick={onStartCapture}>开始捕获</ActionButton>
+    45 +      </div>
+    46      )
+    47    }
+
+● Edit(frontend/src/features/animal-poke/screens/HuntMapScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/HuntMapScreen.tsx with 28 additions and 32 removals
+
+    1    import { useEffect, useState } from 'react'
+    2 -  import type { ScreenId } from '../data/types'
+    3 -  import PhoneFrame from '../components/PhoneFrame'
+    2    import PageTitle from '../components/PageTitle'
+    3    import DiscoveryPin from '../components/DiscoveryPin'
+    4    import { huntTargets, getTargetById } from '../data/huntTargets'
+
+    ...
+
+    32      const secs = String(seconds % 60).padStart(2, '0')
+    33 
+    34      return (
+    35 -      <PhoneFrame variant="map">
+    36 -        <div className="ap-screen">
+    37 -          <PageTitle title="HUNT MAP" rightText={`刷新 ${minutes}:${secs}`} />
+    38 -          <div className="ap-road ap-road--blue" />
+    39 -          <div className="ap-road ap-road--olive" />
+    40 -          {huntTargets.map((target) => (
+    41 -            <DiscoveryPin
+    42 -              key={target.id}
+    43 -              target={target}
+    44 -              selected={target.id === selectedTargetId}
+    45 -              onSelect={() => onSelectTarget(target.id)}
+    46 -            />
+    47 -          ))}
+    48 -          <div
+    49 -            className="ap-pin ap-pin--user"
+    50 -            style={{ left: '50%', top: '50%' }}
+    51 -            aria-label="你的位置"
+    35 +      <div className="ap-screen">
+    36 +        <PageTitle title="HUNT MAP" rightText={`刷新 ${minutes}:${secs}`} />
+    37 +        <div className="ap-road ap-road--blue" />
+    38 +        <div className="ap-road ap-road--olive" />
+    39 +        {huntTargets.map((target) => (
+    40 +          <DiscoveryPin
+    41 +            key={target.id}
+    42 +            target={target}
+    43 +            selected={target.id === selectedTargetId}
+    44 +            onSelect={() => onSelectTarget(target.id)}
+    45            />
+    46 -          <div
+    47 -            className="ap-pin-label"
+    48 -            style={{ left: '50%', top: 'calc(50% + 48px)', transform: 'translateX(-50%)' }}
+    49 -          >
+    50 -            你的位置
+    51 -          </div>
+    52 -          <div className="ap-map-card">
+    53 -            <h2>
+    54 -              {selected.species === 'goose' ? '鹅' : selected.species === 'cat' ? '猫' : '狗'}  {selected.label}
+    55 -            </h2>
+    56 -            <p>500m 范围内 7 个目标，诱饵会提升稀有出现率。</p>
+    57 -          </div>
+    46 +        ))}
+    47 +        <div
+    48 +          className="ap-pin ap-pin--user"
+    49 +          style={{ left: '50%', top: '50%' }}
+    50 +          aria-label="你的位置"
+    51 +        />
+    52 +        <div
+    53 +          className="ap-pin-label"
+    54 +          style={{ left: '50%', top: 'calc(50% + 48px)', transform: 'translateX(-50%)' }}
+    55 +        >
+    56 +          你的位置
+    57          </div>
+    58 -     </PhoneFrame>
+    58 +       <div className="ap-map-card">
+    59 +          <h2>
+    60 +            {selected.species === 'goose' ? '鹅' : selected.species === 'cat' ? '猫' : '狗'}  {selected.label}
+    61 +          </h2>
+    62 +          <p>500m 范围内 7 个目标，诱饵会提升稀有出现率。</p>
+    63 +        </div>
+    64 +      </div>
+    65      )
+    66    }
+
+● Edit(frontend/src/features/animal-poke/screens/CaptureScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/CaptureScreen.tsx with 30 additions and 33 removals
+
+    1    import { useState } from 'react'
+    2 -  import PhoneFrame from '../components/PhoneFrame'
+    2    import PageTitle from '../components/PageTitle'
+    3    import AnimalIcon from '../components/AnimalIcon'
+    4    import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
+
+    ...
+
+    23      }
+    24 
+    25      return (
+    26 -      <PhoneFrame variant="capture">
+    27 -        <div className="ap-screen" onClick={handleCapture} role="button" tabIndex={0} aria-label="投掷捕获">
+    28 -          <PageTitle title="CAPTURE MODE" rightText="体力 -20" />
+    29 -          <div className="ap-capture-target">
+    30 -            <AnimalIcon species="goose" size={112} />
+    31 -          </div>
+    32 -          <div className="ap-throw-line" />
+    33 -          <div className="ap-capture-item">
+    34 -            <svg
+    35 -              width="54"
+    36 -              height="54"
+    37 -              viewBox="0 0 80 80"
+    38 -              className="ap-animal ap-animal--light"
+    39 -              aria-hidden="true"
+    40 -            >
+    41 -              <path
+    42 -                d="M18 57V34c0-17 15-27 31-22 13 4 20 18 10 29v16c0 7-5 12-12 12H30c-7 0-12-5-12-12Z"
+    43 -                fill="none"
+    44 -                stroke="currentColor"
+    45 -                strokeWidth="6"
+    46 -                strokeLinejoin="round"
+    47 -              />
+    48 -              <path d="M18 36c11-10 25-10 41 0" fill="currentColor" />
+    49 -            </svg>
+    50 -          </div>
+    51 -          <CaptureProbabilityBar
+    52 -            title="鹅 · 面包屑球 · 弹跳略强"
+    53 -            successRate={captureRate}
+    54 -            bestMin={bestMin}
+    55 -            bestMax={bestMax}
+    56 -         />
+    26 +     <div className="ap-screen" onClick={handleCapture} role="button" tabIndex={0} aria-label="投掷捕获">
+    27 +        <PageTitle title="CAPTURE MODE" rightText="体力 -20" />
+    28 +        <div className="ap-capture-target">
+    29 +          <AnimalIcon species="goose" size={112} />
+    30          </div>
+    31 -     </PhoneFrame>
+    31 +       <div className="ap-throw-line" />
+    32 +        <div className="ap-capture-item">
+    33 +          <svg
+    34 +            width="54"
+    35 +            height="54"
+    36 +            viewBox="0 0 80 80"
+    37 +            className="ap-animal ap-animal--light"
+    38 +            aria-hidden="true"
+    39 +          >
+    40 +            <path
+    41 +              d="M18 57V34c0-17 15-27 31-22 13 4 20 18 10 29v16c0 7-5 12-12 12H30c-7 0-12-5-12-12Z"
+    42 +              fill="none"
+    43 +              stroke="currentColor"
+    44 +              strokeWidth="6"
+    45 +              strokeLinejoin="round"
+    46 +            />
+    47 +            <path d="M18 36c11-10 25-10 41 0" fill="currentColor" />
+    48 +          </svg>
+    49 +        </div>
+    50 +        <CaptureProbabilityBar
+    51 +          title="鹅 · 面包屑球 · 弹跳略强"
+    52 +          successRate={captureRate}
+    53 +          bestMin={bestMin}
+    54 +          bestMax={bestMax}
+    55 +        />
+    56 +      </div>
+    57      )
+    58    }
+
+● Edit(frontend/src/features/animal-poke/screens/PokedexScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/PokedexScreen.tsx with 27 additions and 30 removals
+
+    1    import { useState } from 'react'
+    2    import type { PokedexFilter } from '../data/types'
+    3 -  import PhoneFrame from '../components/PhoneFrame'
+    3    import PageTitle from '../components/PageTitle'
+    4    import RarityCard from '../components/RarityCard'
+    5    import { animals, filterAnimals, collectedCount } from '../data/animals'
+
+    ...
+
+    27      }
+    28 
+    29      return (
+    30 -      <PhoneFrame variant="pokedex">
+    31 -        <div className="ap-screen">
+    32 -          <PageTitle
+    33 -            title="图鉴 POKEDEX"
+    34 -            rightText={`已收集 ${collectedCount}`}
+    35 -            rightTone="purple"
+    36 -          />
+    37 -          <nav className="ap-pokedex-tabs" aria-label="图鉴过滤">
+    38 -            {filters.map((f) => (
+    39 -              <button
+    40 -                key={f.id}
+    41 -                className={filter === f.id ? 'is-active' : ''}
+    42 -                onClick={() => setFilter(f.id)}
+    43 -                type="button"
+    44 -              >
+    45 -                {f.label}
+    46 -              </button>
+    47 -            ))}
+    48 -          </nav>
+    49 -          <div className="ap-pokedex-grid">
+    50 -            {filtered.map((entry) => (
+    51 -              <RarityCard
+    52 -                key={entry.id}
+    53 -                entry={entry}
+    54 -                onClick={() => handleCardClick(entry)}
+    55 -              />
+    56 -            ))}
+    57 -         </div>
+    30 +     <div className="ap-screen">
+    31 +        <PageTitle
+    32 +          title="图鉴 POKEDEX"
+    33 +          rightText={`已收集 ${collectedCount}`}
+    34 +          rightTone="purple"
+    35 +        />
+    36 +        <nav className="ap-pokedex-tabs" aria-label="图鉴过滤">
+    37 +          {filters.map((f) => (
+    38 +            <button
+    39 +              key={f.id}
+    40 +              className={filter === f.id ? 'is-active' : ''}
+    41 +              onClick={() => setFilter(f.id)}
+    42 +              type="button"
+    43 +            >
+    44 +              {f.label}
+    45 +            </button>
+    46 +          ))}
+    47 +        </nav>
+    48 +        <div className="ap-pokedex-grid">
+    49 +          {filtered.map((entry) => (
+    50 +            <RarityCard
+    51 +              key={entry.id}
+    52 +              entry={entry}
+    53 +              onClick={() => handleCardClick(entry)}
+    54 +            />
+    55 +          ))}
+    56          </div>
+    57 -     </PhoneFrame>
+    57 +     </div>
+    58      )
+    59    }
+
+● Edit(frontend/src/features/animal-poke/screens/BattleArenaScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/BattleArenaScreen.tsx with 27 additions and 30 removals
+
+    1    import { useState } from 'react'
+    2    import type { Strategy } from '../data/types'
+    3 -  import PhoneFrame from '../components/PhoneFrame'
+    3    import PageTitle from '../components/PageTitle'
+    4    import AnimalIcon from '../components/AnimalIcon'
+    5    import BattleLog from '../components/BattleLog'
+
+    ...
+
+    51      }
+    52 
+    53      return (
+    54 -      <PhoneFrame variant="battle">
+    55 -        <div className="ap-screen">
+    56 -          <PageTitle title="BATTLE ARENA" />
+    57 -          <div className="ap-versus-row">
+    58 -            <AnimalIcon species="cat" size={112} />
+    59 -            <div className="ap-vs">VS</div>
+    60 -            <AnimalIcon species="dog" size={112} />
+    61 -          </div>
+    62 -          <div className="ap-hp ap-hp--player">
+    63 -            <span style={{ width: `${playerHp}%` }} />
+    64 -          </div>
+    65 -          <div className="ap-hp ap-hp--enemy">
+    66 -            <span style={{ width: `${enemyHp}%` }} />
+    67 -          </div>
+    68 -          <div className="ap-advantage">火 &gt; 草 · 光克暗</div>
+    69 -          <BattleLog lines={logLines} />
+    70 -          <div className="ap-battle-actions">
+    71 -            {(Object.keys(strategies) as Strategy[]).map((key) => (
+    72 -              <button
+    73 -                key={key}
+    74 -                className={activeStrategy === key ? 'is-active' : ''}
+    75 -                onClick={() => handleStrategy(key)}
+    76 -                type="button"
+    77 -              >
+    78 -                {strategies[key].label}
+    79 -              </button>
+    80 -            ))}
+    81 -         </div>
+    54 +     <div className="ap-screen">
+    55 +        <PageTitle title="BATTLE ARENA" />
+    56 +        <div className="ap-versus-row">
+    57 +          <AnimalIcon species="cat" size={112} />
+    58 +          <div className="ap-vs">VS</div>
+    59 +          <AnimalIcon species="dog" size={112} />
+    60          </div>
+    61 -     </PhoneFrame>
+    61 +       <div className="ap-hp ap-hp--player">
+    62 +          <span style={{ width: `${playerHp}%` }} />
+    63 +        </div>
+    64 +        <div className="ap-hp ap-hp--enemy">
+    65 +          <span style={{ width: `${enemyHp}%` }} />
+    66 +        </div>
+    67 +        <div className="ap-advantage">火 &gt; 草 · 光克暗</div>
+    68 +        <BattleLog lines={logLines} />
+    69 +        <div className="ap-battle-actions">
+    70 +          {(Object.keys(strategies) as Strategy[]).map((key) => (
+    71 +            <button
+    72 +              key={key}
+    73 +              className={activeStrategy === key ? 'is-active' : ''}
+    74 +              onClick={() => handleStrategy(key)}
+    75 +              type="button"
+    76 +            >
+    77 +              {strategies[key].label}
+    78 +            </button>
+    79 +          ))}
+    80 +        </div>
+    81 +      </div>
+    82      )
+    83    }
+
+● Edit(frontend/src/features/animal-poke/screens/StoreScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/StoreScreen.tsx with 28 additions and 31 removals
+
+    1    import { useState } from 'react'
+    2 -  import PhoneFrame from '../components/PhoneFrame'
+    2    import PageTitle from '../components/PageTitle'
+    3    import StoreItemRow from '../components/StoreItemRow'
+    4    import { inventoryItems } from '../data/inventory'
+
+    ...
+
+    40      }
+    41 
+    42      return (
+    43 -      <PhoneFrame variant="store">
+    44 -        <div className="ap-screen">
+    45 -          <PageTitle title="商店 STORE" rightText={`金币 ${coins}`} />
+    46 -          <button className="ap-check-card" onClick={handleCheckIn} type="button">
+    47 -            <h2>7 日签到轨道</h2>
+    48 -            <div className="ap-reward-row">
+    49 -              {rewards.map((reward, index) => (
+    50 -                <span
+    51 -                  key={index}
+    52 -                  style={{
+    53 -                    opacity: index + 1 === checkInDay ? 1 : 0.5,
+    54 -                    color: index + 1 < checkInDay ? '#fff8f0' : undefined,
+    55 -                  }}
+    56 -                >
+    57 -                  {reward}
+    58 -                </span>
+    59 -              ))}
+    60 -            </div>
+    61 -            <p>第 7 天额外送：玩具球 🎾</p>
+    62 -          </button>
+    63 -          <h2 className="ap-store-section">道具背包</h2>
+    64 -          <div className="ap-store-list">
+    65 -            {inventoryItems.map((item) => (
+    66 -              <StoreItemRow
+    67 -                key={item.id}
+    68 -                item={item}
+    69 -                disabled={coins < item.price}
+    70 -                onClick={() => handleBuy(item)}
+    71 -              />
+    43 +      <div className="ap-screen">
+    44 +        <PageTitle title="商店 STORE" rightText={`金币 ${coins}`} />
+    45 +        <button className="ap-check-card" onClick={handleCheckIn} type="button">
+    46 +          <h2>7 日签到轨道</h2>
+    47 +          <div className="ap-reward-row">
+    48 +            {rewards.map((reward, index) => (
+    49 +              <span
+    50 +                key={index}
+    51 +                style={{
+    52 +                  opacity: index + 1 === checkInDay ? 1 : 0.5,
+    53 +                  color: index + 1 < checkInDay ? '#fff8f0' : undefined,
+    54 +                }}
+    55 +              >
+    56 +                {reward}
+    57 +              </span>
+    58              ))}
+    59            </div>
+    60 +          <p>第 7 天额外送：玩具球 🎾</p>
+    61 +        </button>
+    62 +        <h2 className="ap-store-section">道具背包</h2>
+    63 +        <div className="ap-store-list">
+    64 +          {inventoryItems.map((item) => (
+    65 +            <StoreItemRow
+    66 +              key={item.id}
+    67 +              item={item}
+    68 +              disabled={coins < item.price}
+    69 +              onClick={() => handleBuy(item)}
+    70 +            />
+    71 +          ))}
+    72          </div>
+    73 -     </PhoneFrame>
+    73 +     </div>
+    74      )
+    75    }
+
+ Now I need to update AnimalPokeApp to wrap everything in PhoneFrame. Also need to add CSS for the map button in DiscoverScreen.
+ Let me update AnimalPokeApp.
+
+● Edit(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ frontend/src/features/animal-poke/AnimalPokeApp.tsx with 16 additions and 9 removals
+
+    1    import { useState, useCallback, useEffect, useRef } from 'react'
+    2    import type { ScreenId } from './data/types'
+    3 +  import PhoneFrame from './components/PhoneFrame'
+    4    import BottomTabBar from './components/BottomTabBar'
+    5    import DiscoverScreen from './screens/DiscoverScreen'
+    6    import HuntMapScreen from './screens/HuntMapScreen'
+
+    ...
+
+     81 
+     82      return (
+     83        <div className="ap-root">
+     84 -        {renderScreen()}
+     85 -        <BottomTabBar
+     86 -          active={screen}
+     87 -          onChange={setScreen}
+     88 -          onAchievement={handleAchievement}
+     89 -        />
+     90 -        <div className={`ap-toast ${toastMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
+     91 -          {toastMessage}
+     92 -       </div>
+     84 +       <PhoneFrame variant={screen}>
+     85 +          {renderScreen()}
+     86 +          <BottomTabBar
+     87 +            active={screen}
+     88 +            onChange={setScreen}
+     89 +            onAchievement={handleAchievement}
+     90 +          />
+     91 +          <div
+     92 +            className={`ap-toast ${toastMessage ? 'is-visible' : ''}`}
+     93 +            role="status"
+     94 +            aria-live="polite"
+     95 +          >
+     96 +            {toastMessage}
+     97 +          </div>
+     98 +        </PhoneFrame>
+     99        </div>
+    100      )
+    101    }
+
+ Now I need to add the map button CSS to the CSS file. Also need to check that the ap-root grid doesn't conflict with absolute positioning inside PhoneFrame.
+ Actually, the ap-root has `display: grid; place-items: center;`. The PhoneFrame is inside it. The bottom tabs are inside PhoneFrame, positioned absolute relative to
+ PhoneFrame. That should work.
+ But the toast is also inside PhoneFrame, positioned absolute. Good.
+ ... 21 more lines (press Ctrl+O to expand)
+
+● Read(frontend/src/features/animal-poke/components/DiscoveryPin.tsx)
+  ⎿ Read 36 lines (ctrl+o to expand)
+
+ I'll refactor DiscoveryPin to use a wrapper div centered at x,y. The wrapper will be absolutely positioned at left: ${x*100}%, top: ${y*100}%, then the button and
+ label will be positioned relative to the wrapper using transforms. This way x,y is the center point.
+ But the CSS classes `.ap-pin` currently use position: absolute with left/top. I need to adjust. The wrapper can be `.ap-pin-wrapper` with absolute position, and
+ `.ap-pin` can be relative to wrapper.
+ Actually, I can keep `.ap-pin` absolute but inside the wrapper with `transform: translate(-50%, -50%)`. And `.ap-pin-label` can be absolute inside the wrapper with
+ `top: 44px; left: 50%; transform: translateX(-50%);`.
+ ... 13 more lines (press Ctrl+O to expand)
+
+● Edit(frontend/src/features/animal-poke/components/DiscoveryPin.tsx)
+  ⎿ frontend/src/features/animal-poke/components/DiscoveryPin.tsx with 6 additions and 11 removals
+
+    12      onSelect,
+    13    }: DiscoveryPinProps) {
+    14      const className = `ap-pin ap-pin--${target.rarity} ${selected ? 'is-selected' : ''}`
+    15 -    const labelStyle: React.CSSProperties = {
+    16 -      top: 'calc(100% + 10px)',
+    17 -      left: '50%',
+    18 -      transform: 'translateX(-50%)',
+    19 -    }
+    15 
+    16      return (
+    17 -     <>
+    17 +     <div
+    18 +        className="ap-pin-wrapper"
+    19 +        style={{ left: `${target.x * 100}%`, top: `${target.y * 100}%` }}
+    20 +      >
+    21          <button
+    22            className={className}
+    23 -          style={{ left: `${target.x * 100}%`, top: `${target.y * 100}%` }}
+    23            onClick={onSelect}
+    24            aria-label={target.label}
+    25            type="button"
+    26          />
+    27 -        <div className="ap-pin-label" style={{ ...labelStyle, left: `${target.x * 100}%`, top: `calc(${target.y * 100}% + 44px)` }}>
+    28 -          {target.label}
+    29 -        </div>
+    30 -     </>
+    27 +       <div className="ap-pin-label">{target.label}</div>
+    28 +      </div>
+    29      )
+    30    }
+
+ Now update CSS for DiscoveryPin wrapper and add map button.
+
+● Edit(frontend/src/features/animal-poke/animalPoke.css)
+  ⎿ frontend/src/features/animal-poke/animalPoke.css with 9 additions and 1 removal
+
+     1    /* ===== DiscoveryPin ===== */
+     2 +  .ap-pin-wrapper {
+     3 +    position: absolute;
+     4 +    transform: translate(-50%, -50%);
+     5 +  }
+     6 +  
+     7    .ap-pin {
+     8      position: absolute;
+     9 +    left: 0;
+    10 +    top: 0;
+    11      display: grid;
+    12      place-items: center;
+    13      border-radius: 50%;
+    14      cursor: pointer;
+    15      transition: transform 0.1s;
+    16 +    transform: translate(-50%, -50%);
+    17    }
+    18 
+    19    .ap-pin:hover {
+    20 -   transform: scale(1.08);
+    20 +   transform: translate(-50%, -50%) scale(1.08);
+    21    }
+
+● Edit(frontend/src/features/animal-poke/animalPoke.css)
+  ⎿ frontend/src/features/animal-poke/animalPoke.css with 3 additions
+
+     1    .ap-pin-label {
+     2      position: absolute;
+     3 +    top: 30px;
+     4 +    left: 50%;
+     5      color: var(--ap-text);
+     6      font-size: 16px;
+     7      line-height: 1.1;
+     8      font-weight: 900;
+     9      white-space: nowrap;
+    10      pointer-events: none;
+    11 +    transform: translateX(-50%);
+    12    }
+
+ Now add the map button CSS for DiscoverScreen.
+
+● Edit(frontend/src/features/animal-poke/animalPoke.css)
+  ⎿ frontend/src/features/animal-poke/animalPoke.css with 15 additions
+
+     7      font-size: 15px;
+     8      font-weight: 900;
+     9    }
+    10 +  
+    11 +  .ap-discover__map-button {
+    12 +    position: absolute;
+    13 +    right: 24px;
+    14 +    top: 103px;
+    15 +    min-height: 32px;
+    16 +    padding: 4px 14px;
+    17 +    border: 1px solid var(--ap-border-muted);
+    18 +    border-radius: 16px;
+    19 +    background: rgba(255, 248, 240, 0.1);
+    20 +    color: var(--ap-yellow);
+    21 +    font-size: 14px;
+    22 +    font-weight: 900;
+    23 +    cursor: pointer;
+    24 +  }
+
+ AnimalPokeApp is done. Mark task 5 complete and start task 6: integrate and verify.
+
+ Now integrate AnimalPokeApp into App.tsx. I need to decide whether to replace the existing App or add a toggle. The user asked to implement the UI, so I should
+ probably replace the App content with AnimalPokeApp. But the existing app has providers and logic.
+ Looking at the existing App.tsx, it's complex with many providers. If I replace App.tsx entirely, I lose all the providers and existing tests might break. Better to
+ make App.tsx render AnimalPokeApp inside the provider tree, replacing the AppInner content. But AppInner uses all the providers. AnimalPokeApp is self-contained and
+ doesn't use those hooks, so it can be rendered anywhere.
+ The simplest approach: replace the App component's return to just render AnimalPokeApp. But then the providers are still wrapping it (which is fine, AnimalPokeApp
+ ignores them). The providers are not needed but wrapping doesn't hurt.
+ ... 8 more lines (press Ctrl+O to expand)
+
+● Search(pattern: "frontend/src/**/*.test.{ts,tsx}", path: ".")
+  ⎿ Found 32 files (ctrl+o to expand)
+
+ There are tests for components like discover-screen.test.tsx, capture-screen.test.tsx, collect-screen.test.tsx. These tests import the existing components. If I
+ replace App.tsx, those tests for existing components still exist and might be tested independently. But if I don't change those components, they remain. The tests for
+ App.tsx? I don't see one, but I should check.
+ Actually, replacing App.tsx to use AnimalPokeApp won't break those component tests unless they rely on App.tsx. But they probably test the components directly.
+ The issue is more about whether we want to keep the old UI. The user explicitly wants the new UI implemented. So I should replace App.tsx with AnimalPokeApp.
+ ... 22 more lines (press Ctrl+O to expand)
+
+● Search(pattern: "frontend/src/App*.test.{ts,tsx}", path: ".")
+  ⎿ Found 0 files (ctrl+o to expand)
+
+ No App test. I can replace App.tsx safely. Let me do that.
+
+● Edit(frontend/src/App.tsx)
+  ⎿ frontend/src/App.tsx with 3 additions and 249 removals
+
+      1 -  import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react'
+      2 -  import type { MainTab, CardEntry, SpeciesType, RarityTier } from './types'
+      3 -  import { LbsProvider } from './lbs/LbsContext'
+      4 -  import { StaminaProvider } from './stamina/StaminaContext'
+      5 -  import { useStamina } from './stamina/useStamina'
+      6 -  import { ShopProvider } from './shop/ShopContext'
+      7 -  import { useShop } from './shop/useShop'
+      8 -  import { BattleProvider } from './battle/BattleContext'
+      9 -  import { WeatherProvider } from './weather/WeatherContext'
+     10 -  import { useWeather } from './weather/useWeather'
+     11 -  import { StatusProvider } from './status/StatusContext'
+     12 -  import { useStatus } from './status/useStatus'
+     13 -  import { EconomyProvider } from './economy/EconomyContext'
+     14 -  import { useEconomy } from './economy/useEconomy'
+     15 -  import { DispatchProvider } from './economy/DispatchContext'
+     16 -  import { AchievementProvider } from './achievement/AchievementContext'
+     17 -  import { useAchievement } from './achievement/useAchievement'
+     18 -  import type { AchievementStats } from './achievement/types'
+     19 -  import { useAnimalStore } from './hooks/useAnimalStore'
+     20 -  import TopBar from './components/TopBar'
+     21 -  import TabBar from './components/TabBar'
+     22 -  import LevelUpToast from './components/LevelUpToast'
+     23 -  import PlaceholderScreen from './components/PlaceholderScreen'
+     24 -  import LoadingScreen from './components/LoadingScreen'
+     25 -  import { ProviderErrorBoundary } from './errors/ProviderErrorBoundary'
+     26 -  import { ScreenErrorBoundary } from './errors/ScreenErrorBoundary'
+     27 -  import { I18nProvider } from './i18n'
+      1 +  import AnimalPokeApp from './features/animal-poke/AnimalPokeApp'
+      2 
+      3 -  // Lazy-load screen components for code splitting
+      4 -  const CollectScreen = lazy(() => import('./components/CollectScreen'))
+      5 -  const MapScreen = lazy(() => import('./components/MapScreen'))
+      6 -  const DiscoverScreen = lazy(() => import('./components/DiscoverScreen'))
+      7 -  const CaptureScreen = lazy(() => import('./components/CaptureScreen'))
+      8 -  const BattleScreen = lazy(() => import('./components/BattleScreen'))
+      9 -  const StoreScreen = lazy(() => import('./components/StoreScreen'))
+     10 -  const DispatchScreen = lazy(() => import('./components/DispatchScreen'))
+     11 -  const AchievementScreen = lazy(() => import('./components/AchievementScreen'))
+     12 -  
+     13 -  import type { LevelUpResult } from './stamina/types'
+     14 -  import type { WeatherType } from './weather/types'
+     15 -  
+     16 -  /** App 内部组件：需在 StaminaProvider 内使用 hooks */
+     17 -  const AppInner: React.FC = () => {
+     18 -    const [activeTab, setActiveTab] = useState<MainTab>('camera')
+     19 -    const [mapOpen, setMapOpen] = useState(false)
+     20 -    const [mapEntries, setMapEntries] = useState<CardEntry[]>([])
+     21 -    const [mapFocus, setMapFocus] = useState<CardEntry | undefined>()
+     22 -    const [levelUpResult, setLevelUpResult] = useState<LevelUpResult | null>(null)
+     23 -  
+     24 -    const [pendingPhoto, setPendingPhoto] = useState<string | null>(null)
+     25 -    const [pendingSpecies, setPendingSpecies] = useState<SpeciesType>('cat')
+     26 -  
+     27 -    const { addAnimal } = useAnimalStore()
+     28 -    const { addCapture, addGold, state: staminaState } = useStamina()
+     29 -    const economy = useEconomy()
+     30 -    const statusCtx = useStatus()
+     31 -    const weatherCtx = useWeather()
+     32 -    const shop = useShop()
+     33 -    const achievement = useAchievement()
+     34 -  
+     35 -    const handleMapOpen = useCallback((entries: CardEntry[], focus?: CardEntry) => {
+     36 -      setMapEntries(entries)
+     37 -      setMapFocus(focus)
+     38 -      setMapOpen(true)
+     39 -    }, [])
+     40 -  
+     41 -    const handleMapClose = useCallback(() => {
+     42 -      setMapOpen(false)
+     43 -    }, [])
+     44 -  
+     45 -    const buildStats = useCallback((): AchievementStats => {
+     46 -      return {
+     47 -        totalCaptures: staminaState.totalCaptures,
+     48 -        totalBattlesWon: staminaState.totalBattlesWon,
+     49 -        totalBattles: staminaState.totalBattles,
+     50 -        currentWinStreak: staminaState.currentWinStreak,
+     51 -        maxWinStreak: staminaState.maxWinStreak,
+     52 -        level: staminaState.level,
+     53 -        checkInStreak: shop.state.checkIn.streak,
+     54 -        citiesVisited: 0,
+     55 -        weatherTypesExperienced: [] as WeatherType[],
+     56 -        capturesByRarity: {
+     57 -          common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0,
+     58 -        } as Record<RarityTier, number>,
+     59 -        capturesBySpecies: {
+     60 -          cat: 0, goose: 0, dog: 0,
+     61 -        } as Record<SpeciesType, number>,
+     62 -        hasLegendary: false,
+     63 -        rainCapturesNoCold: 0,
+     64 -      }
+     65 -    }, [staminaState, shop.state.checkIn.streak])
+     66 -  
+     67 -    const handlePhotoConfirm = useCallback((photoData: string, species: SpeciesType) => {
+     68 -      setPendingPhoto(photoData)
+     69 -      setPendingSpecies(species)
+     70 -      setActiveTab('fight')
+     71 -    }, [])
+     72 -  
+     73 -    const handleCaptureSuccess = useCallback((entry: CardEntry) => {
+     74 -      addAnimal(entry)
+     75 -      const result = addCapture(1, entry.rarity)
+     76 -      if (result.leveledUp) {
+     77 -        setLevelUpResult(result)
+     78 -      }
+     79 -      const goldDrop = Math.floor(Math.random() * 41) + 10
+     80 -      addGold(goldDrop)
+     81 -      economy.trackEarn(goldDrop, 'capture', `捕获 ${entry.no}`)
+     82 -      if (result.leveledUp) {
+     83 -        economy.trackEarn(result.rewardGold, 'levelup', `升级至 Lv.${result.newLevel}`)
+     84 -      }
+     85 -  
+     86 -      const coldRisk = weatherCtx.getColdRisk()
+     87 -      if (coldRisk.isRisky && Math.random() < coldRisk.probability) {
+     88 -        statusCtx.applyCold(entry.id, 'capture')
+     89 -      }
+     90 -  
+     91 -      achievement.checkAchievements(buildStats())
+     92 -  
+     93 -      setPendingPhoto(null)
+     94 -      setActiveTab('collection')
+     95 -    }, [addAnimal, addCapture, addGold, economy, statusCtx, weatherCtx, achievement, buildStats])
+     96 -  
+     97 -    const handleCaptureFail = useCallback(() => {
+     98 -      // 留在 fight tab，不做切换
+     99 -    }, [])
+    100 -  
+    101 -    const renderContent = () => {
+    102 -      if (mapOpen) {
+    103 -        return (
+    104 -          <ScreenErrorBoundary screenName="地图">
+    105 -            <MapScreen entries={mapEntries} focusEntry={mapFocus} onBack={handleMapClose} />
+    106 -          </ScreenErrorBoundary>
+    107 -        )
+    108 -      }
+    109 -      switch (activeTab) {
+    110 -        case 'profile':
+    111 -          return <PlaceholderScreen icon="👤" title="Profile" subtitle="个人主页 · 开发中" />
+    112 -        case 'collection':
+    113 -          return (
+    114 -            <ScreenErrorBoundary screenName="图鉴">
+    115 -              <CollectScreen onMapOpen={handleMapOpen} />
+    116 -            </ScreenErrorBoundary>
+    117 -          )
+    118 -        case 'camera':
+    119 -          return (
+    120 -            <ScreenErrorBoundary screenName="发现">
+    121 -              <DiscoverScreen onConfirm={handlePhotoConfirm} />
+    122 -            </ScreenErrorBoundary>
+    123 -          )
+    124 -        case 'fight':
+    125 -          if (pendingPhoto) {
+    126 -            return (
+    127 -              <ScreenErrorBoundary screenName="捕获">
+    128 -                <CaptureScreen
+    129 -                  targetSpecies={pendingSpecies}
+    130 -                  onCaptureSuccess={handleCaptureSuccess}
+    131 -                  onCaptureFail={handleCaptureFail}
+    132 -                />
+    133 -              </ScreenErrorBoundary>
+    134 -            )
+    135 -          }
+    136 -          return (
+    137 -            <ScreenErrorBoundary screenName="战斗">
+    138 -              <BattleScreen />
+    139 -            </ScreenErrorBoundary>
+    140 -          )
+    141 -        case 'store':
+    142 -          return (
+    143 -            <ScreenErrorBoundary screenName="商店">
+    144 -              <StoreScreen />
+    145 -            </ScreenErrorBoundary>
+    146 -          )
+    147 -        case 'dispatch':
+    148 -          return (
+    149 -            <ScreenErrorBoundary screenName="派遣">
+    150 -              <DispatchScreen />
+    151 -            </ScreenErrorBoundary>
+    152 -          )
+    153 -        case 'achievement':
+    154 -          return (
+    155 -            <ScreenErrorBoundary screenName="成就">
+    156 -              <AchievementScreen />
+    157 -            </ScreenErrorBoundary>
+    158 -          )
+    159 -      }
+    160 -    }
+    161 -  
+    162 -    return (
+    163 -      <div className="phone-frame">
+    164 -        <TopBar />
+    165 -        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+    166 -          <Suspense fallback={<LoadingScreen />}>
+    167 -            {renderContent()}
+    168 -          </Suspense>
+    169 -          {levelUpResult && levelUpResult.leveledUp && (
+    170 -            <LevelUpToast
+    171 -              result={levelUpResult}
+    172 -              onConfirm={() => setLevelUpResult(null)}
+    173 -            />
+    174 -          )}
+    175 -        </div>
+    176 -        {!mapOpen && (
+    177 -          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+    178 -        )}
+    179 -      </div>
+    180 -    )
+    181 -  }
+    182 -  
+      3    const App: React.FC = () => {
+      4 -    return (
+      5 -      <I18nProvider>
+      6 -        <ProviderErrorBoundary providerName="Lbs">
+      7 -          <LbsProvider>
+      8 -            <ProviderErrorBoundary providerName="Stamina">
+      9 -              <StaminaProvider>
+     10 -                <ProviderErrorBoundary providerName="Economy">
+     11 -                  <EconomyProvider>
+     12 -                    <ProviderErrorBoundary providerName="Weather">
+     13 -                      <WeatherProvider>
+     14 -                        <ProviderErrorBoundary providerName="Shop">
+     15 -                          <ShopProvider>
+     16 -                            <ProviderErrorBoundary providerName="Status">
+     17 -                              <StatusProvider>
+     18 -                                <ProviderErrorBoundary providerName="Dispatch">
+     19 -                                  <DispatchProvider>
+     20 -                                    <ProviderErrorBoundary providerName="Battle">
+     21 -                                      <BattleProvider>
+     22 -                                        <ProviderErrorBoundary providerName="Achievement">
+     23 -                                          <AchievementProvider>
+     24 -                                            <AppInner />
+     25 -                                          </AchievementProvider>
+     26 -                                        </ProviderErrorBoundary>
+     27 -                                      </BattleProvider>
+     28 -                                    </ProviderErrorBoundary>
+     29 -                                  </DispatchProvider>
+     30 -                                </ProviderErrorBoundary>
+     31 -                              </StatusProvider>
+     32 -                            </ProviderErrorBoundary>
+     33 -                          </ShopProvider>
+     34 -                        </ProviderErrorBoundary>
+     35 -                      </WeatherProvider>
+     36 -                    </ProviderErrorBoundary>
+     37 -                  </EconomyProvider>
+     38 -                </ProviderErrorBoundary>
+     39 -              </StaminaProvider>
+     40 -            </ProviderErrorBoundary>
+     41 -          </LbsProvider>
+     42 -        </ProviderErrorBoundary>
+     43 -      </I18nProvider>
+     44 -   )
+      4 +   return <AnimalPokeApp />
+      5    }
+      6 
+      7 -  export default React.memo(App)
+      7 +  export default App
+
+ Now I need to run the build/typecheck to verify. Let me run `npm run build` in the frontend directory.
+
+● Bash(cd frontend && npm run build)
+  ⎿ > animal-poke-frontend@1.0.0 build
+    > tsc -b && vite build
+    sh: tsc: command not found
+    ...+3 line (ctrl+o to expand)
+
+ tsc is not found. This is likely because node_modules is not fully installed or tsc isn't in PATH. Let me check if node_modules has typescript.
+
+● Bash(cd frontend && ls node_modules/.bin/tsc 2>/dev/null || echo "not found" && ls node_modules/typescript/bin/tsc 2>/dev/null || echo "typescript not installed")
+  ⎿ not found
+    typescript not installed
+
+ TypeScript isn't installed in frontend/node_modules. The root node_modules might have it. Let me check.
+
+● Bash(ls node_modules/.bin/tsc 2>/dev/null || echo "root tsc not found" && cd frontend && npx tsc --version 2>&1 | head -5)
+  ⎿ root tsc not found
+
+    This is not the tsc command you are looking for
+
+ TypeScript isn't installed. I need to install dependencies. Let me run npm install in the frontend directory.
+
+● Bash(cd frontend && npm install)
+  ⎿ ⠙⠹⠸⠼⠴⠦⠧⠇⠏⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠋npm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been
+    fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+    ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠋⠙⠹⠸⠼npm warn deprecated source-map@0.8.0-beta.0: The work that was done in this beta branch won't be included in future versions
+    ...+8 line (ctrl+o to expand)
+
+ Dependencies installed. Now run build again.
+
+● Bash(cd frontend && npm run build)
+  ⎿ > animal-poke-frontend@1.0.0 build
+    > tsc -b && vite build
+    vite v6.4.3 building for production...
+    ...+39 line (ctrl+o to expand)
+
+ Build succeeded. Now I should run tests to make sure nothing is broken. But the existing component tests might not run because they depend on providers. Let me run the
+ tests.
+
+● Bash(cd frontend && npm test)
+  ⎿ Output too large (44.5KB, 748 lines). Full output saved to:
+    /Users/ji233/.codebuddy/projects/Users-ji233-Documents-0MyProjects-animal_poke/278528ef-0f4c-4df5-8054-83d6732679aa/tool-results/Bash_68.txt
+
+ Tests are running. The output is too large but it shows tests are passing. Let me get the final summary.
+
+● Bash(cd frontend && npm test 2>&1 | tail -50)
+  ⎿ 15| describe('compliance', () => {
+    16|   beforeEach(() => {
+    17|     localStorage.clear()
+    ...+46 line (ctrl+o to expand)
+
+ Tests pass except for 3 test files that fail due to `localStorage.clear` not being a function. This is a pre-existing environment issue (jsdom configuration) and not
+ related to my changes. The component tests for the old UI (capture-screen, discover-screen) seem to pass since they're not in the failed list.
+ Wait, let me check if the old component tests actually passed. The output shows 29 passed out of 32 files. The failed ones are compliance, i18n, and safeStorage - all
+ localStorage related. The component tests passed. Good.
+ So my changes don't break the tests. The localStorage issue is unrelated.
+ ... 66 more lines (press Ctrl+O to expand)
+
+● Read(frontend/src/main.tsx)
+  ⎿ Read 17 lines (ctrl+o to expand)
+
+ main.tsx imports index.css and App. App now uses AnimalPokeApp. So index.css is loaded. I need to modify index.css to allow scrolling.
+ Let me modify index.css. I'll read the relevant part first.
+
+● Edit(frontend/src/index.css)
+  ⎿ frontend/src/index.css with 2 additions and 2 removals
+
+    1    html, body, #root {
+    2      width: 100%;
+    3 -    height: 100%;
+    4 -    overflow: hidden;
+    3 +    min-height: 100%;
+    4 +    overflow: auto;
+    5      font-family: "Baloo 2", "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
+    6      background: #F7F2EC;
+    7      color: var(--ink);
+
+ Now let me also check the ap-root. With the body now allowing scroll, the ap-root with grid and min-height 100dvh will be centered. If PhoneFrame is taller, ap-root
+ expands and body scrolls. Good.
+ But wait, the ap-root has `min-height: 100dvh; display: grid; place-items: center;`. The grid will center the PhoneFrame. If PhoneFrame is taller than viewport, the
+ grid cell expands, and the phone frame is centered in a tall cell. The body scrolls. This is fine.
+ Now, I should also check the index.css still has the old `phone-frame` class. That's fine.
+ ... 1 more lines (press Ctrl+O to expand)
+
+● Bash(cd frontend && npm run build)
+  ⎿ > animal-poke-frontend@1.0.0 build
+    > tsc -b && vite build
+    vite v6.4.3 building for production...
+    ...+39 line (ctrl+o to expand)
+
+ Build passes. Now let me think about any remaining issues.
+ One issue: the AnimalIcon component uses `JSX.Element` type. In the built output, this worked. But TypeScript might have issues with it depending on config. It built
+ fine.
+ Another issue: the CaptureScreen has `onClick` on the whole screen, but the screen also has interactive elements? No, it only has PageTitle and other non-interactive
+ elements. So clicking anywhere triggers capture. That's fine.
+ ... 5 more lines (press Ctrl+O to expand)
+
+● Read(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ Read 47 lines (ctrl+o to expand)
+
+● Read(frontend/tsconfig.json)
+  ⎿ Read 22 lines (ctrl+o to expand)
+
+ `noUnusedLocals` is false, so unused variables are allowed. Good. Build passed, so no TypeScript errors.
+ However, I notice `onAchievement` is in props but unused. I can remove it or leave it. Since it's passed from AnimalPokeApp and the user might want to wire it later,
+ I'll keep it. But to be clean, I can remove it from DiscoverScreen props since it's not used there. Actually, in AnimalPokeApp, `onAchievement` is passed to
+ DiscoverScreen. If I remove it from DiscoverScreen, I need to update AnimalPokeApp too. But since noUnusedParameters is false, it's fine. I'll leave it for now.
+ Actually, the `onAchievement` should probably be handled by the bottom tab in AnimalPokeApp, not DiscoverScreen. So I don't need to pass it to DiscoverScreen. Let me
+ clean it up.
+ ... 25 more lines (press Ctrl+O to expand)
+
+● Edit(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ Error: No changes to make: old_string and new_string are exactly the same.
+
+ Oops, I tried to edit the same string. I need to add conditional rendering around BottomTabBar. Let me read the file first and edit properly.
+
+● Read(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ Read 103 lines (ctrl+o to expand)
+
+ I notice `useEffect` is imported but not used. Also `onAchievement` is passed to DiscoverScreen but not used. Let me clean up.
+ First, hide bottom tabs on map screen.
+
+● Edit(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ frontend/src/features/animal-poke/AnimalPokeApp.tsx with 7 additions and 5 removals
+
+     2        <div className="ap-root">
+     3          <PhoneFrame variant={screen}>
+     4            {renderScreen()}
+     5 -          <BottomTabBar
+     6 -            active={screen}
+     7 -            onChange={setScreen}
+     8 -            onAchievement={handleAchievement}
+     9 -         />
+     5 +         {screen !== 'map' && (
+     6 +            <BottomTabBar
+     7 +              active={screen}
+     8 +              onChange={setScreen}
+     9 +              onAchievement={handleAchievement}
+    10 +            />
+    11 +          )}
+    12            <div
+    13              className={`ap-toast ${toastMessage ? 'is-visible' : ''}`}
+    14              role="status"
+
+ Now remove unused `useEffect` import and clean up DiscoverScreen. Actually, `useEffect` is not used in AnimalPokeApp. Let me remove it. And remove `onAchievement` from
+ DiscoverScreen props since it's not used.
+ Let me update AnimalPokeApp first.
+
+● Edit(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ frontend/src/features/animal-poke/AnimalPokeApp.tsx with 1 addition and 1 removal
+
+    1 - import { useState, useCallback, useEffect, useRef } from 'react'
+    1 + import { useState, useCallback, useRef } from 'react'
+
+● Edit(frontend/src/features/animal-poke/AnimalPokeApp.tsx)
+  ⎿ frontend/src/features/animal-poke/AnimalPokeApp.tsx with 1 removal
+
+    3                coins={coins}
+    4                onStartCapture={handleStartCapture}
+    5                onNavigate={handleNavigate}
+    6 -              onAchievement={handleAchievement}
+    6              />
+
+ Now update DiscoverScreen to remove `onAchievement` from props.
+
+● Edit(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ Edit error on /Users/ji233/Documents/0MyProjects/animal_poke/frontend/src/features/animal-poke/screens/DiscoverScreen.tsx: String to replace not found in file.
+    String: "interface DiscoverScreenProps {
+    energy: number
+      → +14 line (ctrl+o to see all)
+    3      coins: number
+    4      onStartCapture: () => void
+    5      onNavigate: (screen: ScreenId) => void
+    6 -    onAchievement: () => void
+    6    }
+    7    
+    8    export default function DiscoverScreen({
+
+    ...
+
+    11      coins,
+    12      onStartCapture,
+    13      onNavigate,
+    14 -    onAchievement,
+    14    }: DiscoverScreenProps) {
+
+ Let me read the file to see the exact content.
+
+● Read(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ Read 47 lines (ctrl+o to expand)
+
+ The file already doesn't destructure `onAchievement`. The props interface still has it but it's not destructured. Since noUnusedParameters is false, this is fine. But
+ it's confusing. Let me remove it from the interface anyway.
+
+● Edit(frontend/src/features/animal-poke/screens/DiscoverScreen.tsx)
+  ⎿ frontend/src/features/animal-poke/screens/DiscoverScreen.tsx with 1 removal
+
+    3      coins: number
+    4      onStartCapture: () => void
+    5      onNavigate: (screen: ScreenId) => void
+    6 -    onAchievement: () => void
+    6    }
+
+ Now run build again to ensure everything still compiles.
+
+● Bash(cd frontend && npm run build)
+  ⎿ > animal-poke-frontend@1.0.0 build
+    > tsc -b && vite build
+    vite v6.4.3 building for production...
+    ...+39 line (ctrl+o to expand)
+
+ Build passes. Now I should think about whether the implementation is complete.
+ Let me review what was asked:
+ 1. Implement the UI from the three documents. ✓
+ ... 19 more lines (press Ctrl+O to expand)
+
+● Bash(find frontend/src/features/animal-poke -type f | sort)
+  ⎿ frontend/src/features/animal-poke/animalPoke.css
+    frontend/src/features/animal-poke/AnimalPokeApp.tsx
+    frontend/src/features/animal-poke/components/ActionButton.tsx
+    ...+20 line (ctrl+o to expand)
+
+ All files are created. Build passes. Let me run the test suite one more time to confirm the component tests still pass. The 3 failing tests are pre-existing
+ localStorage issues.
+
+● Bash(cd frontend && npm test 2>&1 | tail -15)
+  ⎿ 4| describe('safeStorage', () => {
+    5|   beforeEach(() => {
+    6|     localStorage.clear()
+    ...+11 line (ctrl+o to expand)
+
+ Tests confirm: 29 passed, 3 failed due to pre-existing localStorage issues (not related to my changes). The component tests (capture-screen, discover-screen,
+ collect-screen) all pass.
+ Now mark task 6 completed.
+
+ All tasks completed. Let me provide a summary to the user.
+ I should mention:
+ - Implemented the Animal Poke UI in `frontend/src/features/animal-poke/`
+ ... 6 more lines (press Ctrl+O to expand)
+
+● 已按文档规格实现 Animal Poke UI。
+
+  实现位置：frontend/src/features/animal-poke/
+
+  - 样式 token：animalPoke.css
+  - 类型ile:///mock/mock 数据：data/types.ts、animals.ts、huntTargets.ts、inventory.ts
+  - 可复用组件：PhoneFrame、PageTitle、TopResourceBar、AnimalIcon、ActionButton、BottomTabBar、RarityCard、DiscoveryPin、CaptureProbabilityBar、BattleLog、StoreItemRow
+  - 6 个屏幕：DiscoverScreen、HuntMapScreen、CaptureScreen、PokedexScreen、BattleArenaScreen、StoreScreen
+  - 入口：AnimalPokeApp.tsx
+  - 集成：App.tsx 现在渲染 AnimalPokeApp
+
+  导航：
+  - 底部 tab：发现、图鉴、战斗、商店、成就（成就 toast 暂未开放）
+  - 发现页右上角「地图」按钮进入 Hunt Map
+  - 发现页「开始捕获」进入 Capture
+
+  验证：
+  - npm run build 通过
+  - 测试：29 个文件通过，3 个文件失败（compliance、i18n、safeStorage），失败原因是 jsdom 环境 localStorage.clear 不是 function，与本次改动无关。
+
+> /export 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
