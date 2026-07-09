@@ -20,17 +20,31 @@ export default function RarityCard({ entry, onClick }: RarityCardProps) {
     <article
       className={`ap-rarity-card ${entry.rarity}`}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick?.()
+        }
+      }}
       role="button"
       tabIndex={0}
       aria-label={`${entry.name} ${rarityNames[entry.rarity]}`}
     >
       <div className="ap-rarity-card__icon">
-        <AnimalIcon species={entry.species} size={82} tone={entry.rarity === 'legendary' ? 'dark' : 'light'} />
+        <AnimalIcon
+          species={entry.species}
+          size={78}
+          tone={entry.rarity === 'legendary' ? 'dark' : 'light'}
+        />
       </div>
       <h2>
         #{entry.id} · {rarityNames[entry.rarity]}
       </h2>
-      {entry.region && entry.location && <p>{entry.region} · {entry.location}</p>}
+      {entry.region && entry.location ? (
+        <p>
+          {entry.region} · {entry.location}
+        </p>
+      ) : null}
     </article>
   )
 }

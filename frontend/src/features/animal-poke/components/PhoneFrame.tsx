@@ -7,6 +7,8 @@ interface PhoneFrameProps {
 
 export default function PhoneFrame({ variant, children }: PhoneFrameProps) {
   return (
-    <section className={`ap-phone ap-phone--${variant}`}>{children}</section>
+    <section className={`ap-phone ap-phone--${variant}`} aria-label="手机界面">
+      {children}
+    </section>
   )
 }

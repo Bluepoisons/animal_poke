@@ -22,28 +22,33 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const handleCardClick = (entry: (typeof animals)[0]) => {
     if (!entry.collected) {
       onToast('尚未发现')
+      return
     }
+    onToast(`${entry.name} · 已贴进手账`)
   }
 
   return (
     <div className="ap-screen">
       <PageTitle
-        title="图鉴 POKEDEX"
+        title="图鉴"
+        subtitle="POKEDEX · 贴纸收藏册"
         rightText={`已收集 ${collectedCount}`}
-        rightTone="purple"
+        rightTone="pink"
       />
+
       <nav className="ap-pokedex-tabs" aria-label="图鉴过滤">
-        {filters.map((f) => (
+        {filters.map((item) => (
           <button
-            key={f.id}
-            className={filter === f.id ? 'is-active' : ''}
-            onClick={() => setFilter(f.id)}
+            key={item.id}
+            className={filter === item.id ? 'is-active' : ''}
+            onClick={() => setFilter(item.id)}
             type="button"
           >
-            {f.label}
+            {item.label}
           </button>
         ))}
       </nav>
+
       <div className="ap-pokedex-grid">
         {filtered.map((entry) => (
           <RarityCard

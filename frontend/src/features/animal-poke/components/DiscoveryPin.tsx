@@ -22,6 +22,7 @@ export default function DiscoveryPin({
         className={className}
         onClick={onSelect}
         aria-label={target.label}
+        aria-pressed={selected}
         type="button"
       />
       <div className="ap-pin-label">{target.label}</div>

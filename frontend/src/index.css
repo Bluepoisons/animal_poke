@@ -1,141 +1,159 @@
-/* ====== 暖色卡通风设计系统 ====== */
+/* ====== Studygram / Notebook Kawaii Design System ====== */
 :root {
-  --orange: #FF8C42;
-  --orange-dark: #E67300;
-  --orange-50: #FFF0E5;
-  --orange-100: #FFE4CC;
-  --cream: #FFF8F0;
-  --cream-dark: #F5E6D3;
-  --white: #FFFFFF;
-  --ink: #4A2C1A;
-  --ink-2: #7A5A45;
-  --ink-3: #A89480;
-  --stamina: #FFD23F;
-  --coin: #FFB300;
-  --success: #4DCC4D;
-  --warn: #E55934;
+  /* Core palette from design.md */
+  --paper: #f4f2e9;
+  --paper-deep: #ebe6d6;
+  --paper-line: rgba(141, 110, 84, 0.14);
+  --ink: #2b2b2b;
+  --ink-soft: #5a4a3a;
+  --ink-muted: #8d6e54;
+  --ink-faint: #a8a8a8;
+  --soft-blue: #6fa3d2;
+  --soft-blue-deep: #4f86b8;
+  --pink: #ff9ec6;
+  --pink-deep: #f07aab;
+  --yellow: #f2e66b;
+  --yellow-deep: #e4d44a;
+  --brown: #8d6e54;
+  --white: #fffdf8;
+  --success: #7bc47f;
+  --danger: #ef7b8a;
+  --shadow: 0 2px 12px rgba(43, 43, 43, 0.06);
+  --shadow-lift: 0 6px 18px rgba(43, 43, 43, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --touch: 44px;
+  --frame-w: 390px;
+  --frame-max: 430px;
+  --frame-min-h: 844px;
 
-  --rarity-common: #8C8C8C;
-  --rarity-uncommon: #4DCC4D;
-  --rarity-rare: #4D8CFF;
-  --rarity-epic: #A65CF2;
-  --rarity-legendary: #FFCC33;
-
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --shadow-card: 0 6px 0 rgba(230,115,0,0.12), 0 2px 8px rgba(74,44,26,0.08);
-  --shadow-btn: 0 4px 0 var(--orange-dark);
+  /* Rarity */
+  --rarity-common: #a8a8a8;
+  --rarity-uncommon: #7bc47f;
+  --rarity-rare: #6fa3d2;
+  --rarity-epic: #c79bff;
+  --rarity-legendary: #f2e66b;
 }
 
-* {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   min-height: 100%;
-  overflow: auto;
-  font-family: "Baloo 2", "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #F7F2EC;
+  font-family: "Patrick Hand", "ZCOOL KuaiLe", "Comic Neue", "Nunito", "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  background: #ddd6c5;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ====== 滚动条 ====== */
+button,
+input {
+  font-family: inherit;
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--orange-100);
+  background: rgba(141, 110, 84, 0.28);
   border-radius: 4px;
 }
 
-/* ====== 通用组件 ====== */
-
-/* 胶囊标签 */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255,255,255,0.22);
-  color: var(--white);
-  border-radius: 20px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* 按钮基础 */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--radius-md);
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.1s, filter 0.1s;
-  font-family: inherit;
-}
-.btn:active {
-  transform: translateY(2px);
-}
-.btn-primary {
-  background: var(--orange);
-  color: var(--white);
-  box-shadow: var(--shadow-btn);
-}
-.btn-primary:hover {
-  filter: brightness(1.1);
-}
-
-/* 输入框 */
-.input {
-  border: 2px solid var(--orange-100);
-  border-radius: 12px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--ink-2);
-  background: var(--white);
-  outline: none;
-  font-family: inherit;
-}
-.input:focus {
-  border-color: var(--orange);
-}
-.input::placeholder {
-  color: var(--ink-3);
-}
-
-/* 旋转动画 */
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* 手机容器（开发预览用） */
-.phone-frame {
-  width: 100%;
-  max-width: 390px;
-  height: 100vh;
-  max-height: 844px;
-  margin: 0 auto;
-  background: var(--cream);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 18px 40px rgba(74,44,26,0.18);
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
-@media (min-width: 600px) {
-  .phone-frame {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    border-radius: 36px;
-    border: 8px solid var(--white);
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@keyframes scan {
+  0% {
+    top: 12%;
+  }
+  50% {
+    top: 78%;
+  }
+  100% {
+    top: 12%;
+  }
+}
+
+@keyframes highlighter {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sticker-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-8deg);
+  }
+  70% {
+    transform: scale(1.06) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
   }
 }

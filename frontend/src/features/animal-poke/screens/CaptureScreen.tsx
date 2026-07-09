@@ -22,36 +22,50 @@ export default function CaptureScreen({ onToast }: CaptureScreenProps) {
   }
 
   return (
-    <div className="ap-screen" onClick={handleCapture} role="button" tabIndex={0} aria-label="投掷捕获">
-      <PageTitle title="CAPTURE MODE" rightText="体力 -20" />
-      <div className="ap-capture-target">
-        <AnimalIcon species="goose" size={112} />
+    <div className="ap-screen">
+      <PageTitle
+        title="CAPTURE"
+        subtitle="点击画面投掷 · 手账捕捉页"
+        rightText="体力 -20"
+        rightTone="pink"
+      />
+
+      <div
+        className="ap-capture-stage"
+        onClick={handleCapture}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            handleCapture()
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label="投掷捕获"
+      >
+        <div className="ap-capture-target">
+          <div className="ap-animal-badge ap-animal-badge--yellow" style={{ width: 148, height: 148 }}>
+            <AnimalIcon species="goose" size={112} />
+          </div>
+        </div>
+        <div className="ap-throw-line" aria-hidden="true" />
+        <div className="ap-capture-item" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="28" fill="#FFFDF8" stroke="#2B2B2B" strokeWidth="5" />
+            <path d="M12 40h56" stroke="#2B2B2B" strokeWidth="5" />
+            <circle cx="40" cy="40" r="10" fill="#FF9EC6" stroke="#2B2B2B" strokeWidth="4" />
+          </svg>
+        </div>
       </div>
-      <div className="ap-throw-line" />
-      <div className="ap-capture-item">
-        <svg
-          width="54"
-          height="54"
-          viewBox="0 0 80 80"
-          className="ap-animal ap-animal--light"
-          aria-hidden="true"
-        >
-          <path
-            d="M18 57V34c0-17 15-27 31-22 13 4 20 18 10 29v16c0 7-5 12-12 12H30c-7 0-12-5-12-12Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="6"
-            strokeLinejoin="round"
-          />
-          <path d="M18 36c11-10 25-10 41 0" fill="currentColor" />
-        </svg>
-      </div>
+
       <CaptureProbabilityBar
         title="鹅 · 面包屑球 · 弹跳略强"
         successRate={captureRate}
         bestMin={bestMin}
         bestMax={bestMax}
       />
+
+      <p className="ap-capture-hint">轻点画面投出贴纸球</p>
     </div>
   )
 }

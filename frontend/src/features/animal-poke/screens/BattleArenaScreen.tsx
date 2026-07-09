@@ -51,21 +51,51 @@ export default function BattleArenaScreen() {
 
   return (
     <div className="ap-screen">
-      <PageTitle title="BATTLE ARENA" />
+      <PageTitle
+        title="BATTLE"
+        subtitle="ARENA · 手账对战页"
+        rightText="回合中"
+        rightTone="blue"
+      />
+
       <div className="ap-versus-row">
-        <AnimalIcon species="cat" size={112} />
+        <div className="ap-fighter">
+          <div className="ap-animal-badge ap-animal-badge--pink" style={{ width: 112, height: 112 }}>
+            <AnimalIcon species="cat" size={88} />
+          </div>
+          <span className="ap-fighter__name">我的猫</span>
+        </div>
         <div className="ap-vs">VS</div>
-        <AnimalIcon species="dog" size={112} />
+        <div className="ap-fighter">
+          <div className="ap-animal-badge ap-animal-badge--blue" style={{ width: 112, height: 112 }}>
+            <AnimalIcon species="dog" size={88} />
+          </div>
+          <span className="ap-fighter__name">野生狗</span>
+        </div>
       </div>
-      <div className="ap-hp ap-hp--player">
-        <span style={{ width: `${playerHp}%` }} />
+
+      <div className="ap-hp-row">
+        <div className="ap-hp-meta">
+          <span>我方 HP</span>
+          <span>{playerHp}</span>
+        </div>
+        <div className="ap-hp ap-hp--player" aria-label={`我方血量 ${playerHp}`}>
+          <span style={{ width: `${playerHp}%` }} />
+        </div>
+        <div className="ap-hp-meta">
+          <span>敌方 HP</span>
+          <span>{enemyHp}</span>
+        </div>
+        <div className="ap-hp ap-hp--enemy" aria-label={`敌方血量 ${enemyHp}`}>
+          <span style={{ width: `${enemyHp}%` }} />
+        </div>
       </div>
-      <div className="ap-hp ap-hp--enemy">
-        <span style={{ width: `${enemyHp}%` }} />
-      </div>
+
       <div className="ap-advantage">火 &gt; 草 · 光克暗</div>
+
       <BattleLog lines={logLines} />
-      <div className="ap-battle-actions">
+
+      <div className="ap-battle-actions" aria-label="战斗策略">
         {(Object.keys(strategies) as Strategy[]).map((key) => (
           <button
             key={key}

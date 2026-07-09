@@ -10,7 +10,11 @@ export default function AnimalIcon({
   tone = 'light',
 }: AnimalIconProps) {
   const toneClass =
-    tone === 'dark' ? 'ap-animal--dark' : tone === 'muted' ? 'ap-animal--muted' : 'ap-animal--light'
+    tone === 'dark'
+      ? 'ap-animal--dark'
+      : tone === 'muted'
+        ? 'ap-animal--muted'
+        : 'ap-animal--light'
 
   if (species === 'unknown') {
     return (
@@ -21,47 +25,101 @@ export default function AnimalIcon({
         viewBox="0 0 120 120"
         aria-hidden="true"
       >
-        <text x="60" y="80" textAnchor="middle" fontSize="48" fontWeight="900" fill="currentColor">
+        <circle
+          cx="60"
+          cy="60"
+          r="42"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeDasharray="8 6"
+        />
+        <text
+          x="60"
+          y="72"
+          textAnchor="middle"
+          fontSize="28"
+          fontWeight="700"
+          fill="currentColor"
+          fontFamily="Patrick Hand, ZCOOL KuaiLe, sans-serif"
+        >
           ???
         </text>
       </svg>
     )
   }
 
-  const paths: Record<'cat' | 'goose' | 'dog', string> = {
-    goose: 'M39 28c18-14 40-5 42 15 2 18-3 29 22 30l-13 23c-19-2-34-10-42-24-1 12 2 21 11 28-12 5-24 4-34-1 9-8 12-18 9-30-4-13-4-26 5-41Z',
-    cat: 'M30 50 27 18l25 21h16l25-21-3 32c10 14 7 34-9 45-15 11-43 11-58 0-16-11-19-31-9-45Z',
-    dog: 'M38 28c14-9 35-9 49 0 17 11 19 40 5 57-15 18-50 18-65 0-14-17-12-46 11-57Z',
+  if (species === 'cat') {
+    return (
+      <svg
+        className={`ap-animal ${toneClass}`}
+        width={size}
+        height={size}
+        viewBox="0 0 120 120"
+        aria-hidden="true"
+      >
+        <path
+          d="M34 48 28 18l24 20h16l24-20-6 30c12 12 10 34-4 46-14 12-42 12-56 0-14-12-16-34-4-46Z"
+          fill="rgba(255,158,198,0.25)"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinejoin="round"
+        />
+        <circle cx="46" cy="62" r="4.5" fill="currentColor" />
+        <circle cx="74" cy="62" r="4.5" fill="currentColor" />
+        <path
+          d="M60 70v8M48 84c8 6 16 6 24 0M34 70H16M36 80H18M86 70h18M84 80h18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M54 74c2 3 10 3 12 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
   }
 
-  const ears: Record<'cat' | 'goose' | 'dog', string> = {
-    goose: 'M38 30 21 37l18 5',
-    cat: '',
-    dog: '',
-  }
-
-  const extraBody: Record<'cat' | 'goose' | 'dog', JSX.Element | null> = {
-    goose: (
-      <>
-        <circle cx="55" cy="33" r="4" fill="currentColor" />
-        <path d="M51 71c12 12 28 13 42 4M36 99c-4 8-10 10-20 10M57 101c5 7 14 8 24 5" fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
-      </>
-    ),
-    cat: (
-      <>
-        <circle cx="46" cy="63" r="5" fill="currentColor" />
-        <circle cx="74" cy="63" r="5" fill="currentColor" />
-        <path d="M60 72v8M48 84c8 6 16 6 24 0M35 72H14M37 82H17M85 72h21M83 82h20" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      </>
-    ),
-    dog: (
-      <>
-        <path d="M35 30c-14 0-24 12-21 30 2 14 14 18 24 12M85 30c14 0 24 12 21 30-2 14-14 18-24 12" fill="currentColor" />
-        <circle cx="48" cy="61" r="5" fill="currentColor" />
-        <circle cx="73" cy="61" r="5" fill="currentColor" />
-        <path d="M60 71v7M48 82c8 8 16 8 24 0" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      </>
-    ),
+  if (species === 'dog') {
+    return (
+      <svg
+        className={`ap-animal ${toneClass}`}
+        width={size}
+        height={size}
+        viewBox="0 0 120 120"
+        aria-hidden="true"
+      >
+        <path
+          d="M38 34c14-10 34-10 48 0 16 10 18 38 4 54-14 16-46 16-60 0-14-16-12-44 8-54Z"
+          fill="rgba(111,163,210,0.22)"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M34 34c-12 2-22 14-18 30 3 12 14 16 24 10M86 34c12 2 22 14 18 30-3 12-14 16-24 10"
+          fill="rgba(111,163,210,0.35)"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinejoin="round"
+        />
+        <circle cx="48" cy="60" r="4.5" fill="currentColor" />
+        <circle cx="72" cy="60" r="4.5" fill="currentColor" />
+        <ellipse cx="60" cy="72" rx="6" ry="4" fill="currentColor" />
+        <path
+          d="M48 82c8 8 16 8 24 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
   }
 
   return (
@@ -73,22 +131,27 @@ export default function AnimalIcon({
       aria-hidden="true"
     >
       <path
-        d={paths[species]}
-        fill="none"
+        d="M40 34c16-14 36-8 40 10 3 14-2 24 18 28l-10 18c-16-2-28-8-36-20 0 10 2 18 10 24-10 4-22 3-30-2 8-6 10-16 8-26-3-12-4-24 0-32Z"
+        fill="rgba(242,230,107,0.35)"
         stroke="currentColor"
-        strokeWidth="7"
+        strokeWidth="5"
         strokeLinejoin="round"
       />
-      {ears[species] && (
-        <path
-          d={ears[species]}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="7"
-          strokeLinejoin="round"
-        />
-      )}
-      {extraBody[species]}
+      <circle cx="56" cy="38" r="3.5" fill="currentColor" />
+      <path
+        d="M50 70c10 10 24 12 36 4M38 96c-3 6-8 8-16 8M56 98c4 6 12 7 20 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M68 42c8 2 12 8 10 14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }

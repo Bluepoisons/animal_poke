@@ -38,7 +38,7 @@ export interface HuntTarget {
 
 export interface InventoryItem {
   id: string
-  icon: string
+  icon: 'ball' | 'super-ball' | 'bait' | 'potion'
   name: string
   effect: string
   price: number

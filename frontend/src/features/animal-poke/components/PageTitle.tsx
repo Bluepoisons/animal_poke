@@ -1,26 +1,34 @@
 interface PageTitleProps {
   title: string
+  subtitle?: string
   rightText?: string
-  rightTone?: 'yellow' | 'purple'
+  rightTone?: 'yellow' | 'pink' | 'blue'
 }
 
 export default function PageTitle({
   title,
+  subtitle,
   rightText,
   rightTone = 'yellow',
 }: PageTitleProps) {
+  const toneClass =
+    rightTone === 'pink'
+      ? 'ap-page-right--pink'
+      : rightTone === 'blue'
+        ? 'ap-page-right--blue'
+        : ''
+
   return (
-    <>
-      <h1 className="ap-page-title">{title}</h1>
-      {rightText && (
-        <div
-          className={`ap-page-right ${
-            rightTone === 'purple' ? 'ap-page-right--purple' : ''
-          }`}
-        >
-          {rightText}
-        </div>
-      )}
-    </>
+    <header className="ap-page-head">
+      <div>
+        <h1 className="ap-page-title">
+          <span className="ap-highlight">{title}</span>
+        </h1>
+        {subtitle ? <p className="ap-page-sub">{subtitle}</p> : null}
+      </div>
+      {rightText ? (
+        <div className={`ap-page-right ${toneClass}`}>{rightText}</div>
+      ) : null}
+    </header>
   )
 }
