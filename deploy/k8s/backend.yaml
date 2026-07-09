@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: animal-poke-backend
+  namespace: production
+  labels:
+    app: animal-poke-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: animal-poke-backend
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: animal-poke-backend
+    spec:
+      containers:
+        - name: backend
+          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: GIN_MODE
+              value: "release"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: jwt-secret
+            - name: TENCENT_MAP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: tencent-map-key
+            - name: DB_HOST
+              value: "mysql.production.svc.cluster.local"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: "animal_poke"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: animal-poke-backend
+  namespace: production
+spec:
+  selector:
+    app: animal-poke-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: animal-poke-backend-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: animal-poke-backend
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
