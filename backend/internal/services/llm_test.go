@@ -1,6 +1,9 @@
 package services
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"animalpoke/backend/internal/config"
@@ -40,6 +43,49 @@ func TestLLMService_GenerateValue_Mock(t *testing.T) {
 	assert.NotEmpty(t, result.Class)
 	assert.NotEmpty(t, result.Element)
 	assert.NotEmpty(t, result.Narrative)
+}
+
+func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
+	var requestBody struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&requestBody))
+		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"rarity\":3,\"hp\":60,\"atk\":20,\"def\":18,\"spd\":22,\"class\":\"Ranger\",\"element\":\"Wind\",\"narrative\":\"swift and alert\"}"}}]}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.ThirdPartyConfig{
+		LLMEndpoint: server.URL,
+		LLMKey:      "test-key",
+		LLMModel:    "qwen3.6-flash",
+	}
+	svc := NewLLMService(cfg)
+
+	result, err := svc.GenerateValue(ValueInput{
+		Species:             "cat",
+		Breed:               "Tabby",
+		Color:               "orange",
+		BodyType:            "lean",
+		SubjectCompleteness: 8,
+		Clarity:             8,
+		Lighting:            8,
+		Composition:         8,
+		Pose:                8,
+		Angle:               8,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "qwen3.6-flash", requestBody.Model)
+	assert.NotEmpty(t, requestBody.Messages)
+	assert.Equal(t, 3, result.Rarity)
 }
 
 func TestWeightedRarity_Distribution(t *testing.T) {

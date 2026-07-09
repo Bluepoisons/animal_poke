@@ -38,6 +38,7 @@ type ThirdPartyConfig struct {
 	VLMKey           string
 	LLMEndpoint      string
 	LLMKey           string
+	LLMModel         string
 }
 
 // Load 读取配置, 优先级: OS 环境变量 > .env > 默认值。
@@ -60,6 +61,7 @@ func Load() *Config {
 			VLMKey:           getEnv("VLM_KEY", ""),
 			LLMEndpoint:      getEnv("LLM_ENDPOINT", ""),
 			LLMKey:           getEnv("LLM_KEY", ""),
+			LLMModel:         getEnv("LLM_MODEL", ""),
 		},
 	}
 }

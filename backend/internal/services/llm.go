@@ -44,7 +44,7 @@ type ValueInput struct {
 // GenerateValue 调用 LLM 生成稀有度/六维属性/叙事。
 func (s *LLMService) GenerateValue(input ValueInput) (*ValueResult, error) {
 	// dev mode: LLM Key 未配置时返回 mock
-	if s.cfg.LLMKey == "" || s.cfg.LLMEndpoint == "" {
+	if s.cfg.LLMKey == "" || s.cfg.LLMEndpoint == "" || s.cfg.LLMModel == "" {
 		slog.Debug("LLM 未配置, 返回 mock 数值")
 		return mockValue(input), nil
 	}
@@ -55,6 +55,7 @@ func (s *LLMService) GenerateValue(input ValueInput) (*ValueResult, error) {
 
 func (s *LLMService) callLLM(prompt string) (*ValueResult, error) {
 	body := map[string]interface{}{
+		"model": s.cfg.LLMModel,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

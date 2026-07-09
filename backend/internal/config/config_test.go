@@ -38,7 +38,7 @@ func TestDSN(t *testing.T) {
 func TestLoad_Defaults(t *testing.T) {
 	keys := []string{
 		"SERVER_ADDR", "LOG_LEVEL", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
-		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY", "VLM_ENDPOINT", "VLM_KEY", "LLM_ENDPOINT", "LLM_KEY",
+		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY", "VLM_ENDPOINT", "VLM_KEY", "LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
 	}
 	saved := map[string]string{}
 	for _, k := range keys {
@@ -64,6 +64,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "animal_poke", cfg.Database.DBName)
 	assert.Equal(t, "", cfg.ThirdParty.TencentMapKey)
 	assert.Equal(t, "", cfg.ThirdParty.VLMKey)
+	assert.Equal(t, "", cfg.ThirdParty.LLMModel)
 }
 
 func TestLoad_Overrides(t *testing.T) {
@@ -75,6 +76,7 @@ func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("DB_PASSWORD", "pw")
 	t.Setenv("DB_NAME", "prod")
 	t.Setenv("TENCENT_MAP_KEY", "tk")
+	t.Setenv("LLM_MODEL", "qwen3.6-flash")
 
 	cfg := Load()
 	assert.Equal(t, ":9999", cfg.ServerAddr)
@@ -85,6 +87,7 @@ func TestLoad_Overrides(t *testing.T) {
 	assert.Equal(t, "pw", cfg.Database.Password)
 	assert.Equal(t, "prod", cfg.Database.DBName)
 	assert.Equal(t, "tk", cfg.ThirdParty.TencentMapKey)
+	assert.Equal(t, "qwen3.6-flash", cfg.ThirdParty.LLMModel)
 }
 
 func TestGetEnv_Default(t *testing.T) {
