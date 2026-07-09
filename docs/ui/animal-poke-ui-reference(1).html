@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Animal Poke UI Reference</title>
+  <style>
+    :root {
+      --ap-orange: #ff8c42;
+      --ap-orange-deep: #e67300;
+      --ap-cream: #fff8f0;
+      --ap-brown: #4a2c1a;
+      --ap-yellow: #ffd23f;
+      --ap-gold: #ffb300;
+      --ap-black: #050606;
+      --ap-off-black: #080a09;
+      --ap-panel: #111313;
+      --ap-panel-soft: rgba(255, 248, 240, 0.09);
+      --ap-panel-medium: rgba(255, 248, 240, 0.13);
+      --ap-border-muted: rgba(255, 248, 240, 0.22);
+      --ap-text: #fff8f0;
+      --ap-text-muted: rgba(255, 248, 240, 0.72);
+      --ap-text-dim: rgba(255, 248, 240, 0.48);
+      --ap-cyan: #88f4ff;
+      --ap-blue: #45b9ff;
+      --ap-green: #67dd67;
+      --ap-lime: #82e36e;
+      --ap-pink: #ff4a89;
+      --ap-purple: #9b5cff;
+      --ap-common: #777777;
+      --ap-bg-discover: linear-gradient(180deg, #10241a 0%, #132b1d 44%, #071009 100%);
+      --ap-bg-map: linear-gradient(180deg, #315f2f 0%, #112a20 48%, #07100d 100%);
+      --ap-bg-capture: linear-gradient(180deg, #4a210e 0%, #160d08 56%, #050403 100%);
+      --ap-bg-pokedex: linear-gradient(180deg, #26183f 0%, #100b1c 56%, #05050c 100%);
+      --ap-bg-battle: linear-gradient(180deg, #2a1038 0%, #12081b 56%, #05040b 100%);
+      --ap-bg-store: linear-gradient(180deg, #4a2c1a 0%, #190d05 56%, #070403 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: #030404;
+      color: var(--ap-text);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      justify-items: center;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .reference-toolbar {
+      width: min(100%, 760px);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .reference-toolbar button {
+      min-height: 36px;
+      border: 1px solid rgba(255, 248, 240, 0.24);
+      border-radius: 999px;
+      padding: 0 14px;
+      background: rgba(255, 248, 240, 0.08);
+      color: var(--ap-text);
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .reference-toolbar button.is-active {
+      border-color: var(--ap-orange);
+      color: var(--ap-yellow);
+    }
+
+    .phone {
+      position: relative;
+      width: min(calc(100vw - 28px), 390px);
+      min-height: 844px;
+      overflow: hidden;
+      border: 2px solid var(--frame-color);
+      border-radius: 34px;
+      background: var(--frame-bg);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+    }
+
+    .screen {
+      display: none;
+      position: relative;
+      width: 100%;
+      min-height: 844px;
+    }
+
+    .screen.is-active {
+      display: block;
+    }
+
+    .screen-discover {
+      --frame-color: var(--ap-orange);
+      --frame-bg: var(--ap-bg-discover);
+    }
+
+    .screen-map {
+      --frame-color: var(--ap-green);
+      --frame-bg: var(--ap-bg-map);
+    }
+
+    .screen-capture {
+      --frame-color: var(--ap-yellow);
+      --frame-bg: var(--ap-bg-capture);
+    }
+
+    .screen-pokedex {
+      --frame-color: var(--ap-purple);
+      --frame-bg: var(--ap-bg-pokedex);
+    }
+
+    .screen-battle {
+      --frame-color: var(--ap-pink);
+      --frame-bg: var(--ap-bg-battle);
+    }
+
+    .screen-store {
+      --frame-color: var(--ap-gold);
+      --frame-bg: var(--ap-bg-store);
+    }
+
+    .page-title {
+      position: absolute;
+      left: 24px;
+      top: 38px;
+      margin: 0;
+      color: var(--ap-text);
+      font-size: 32px;
+      line-height: 1.05;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .page-right {
+      position: absolute;
+      top: 48px;
+      right: 58px;
+      color: var(--ap-yellow);
+      font-size: 17px;
+      line-height: 1.1;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .page-right.purple {
+      color: #ceb9ff;
+    }
+
+    .animal {
+      display: block;
+      color: currentColor;
+    }
+
+    .resource-bar {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      width: calc(100% - 36px);
+      height: 54px;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1fr;
+      align-items: center;
+      padding: 0 17px;
+      border: 1px solid rgba(255, 248, 240, 0.22);
+      border-radius: 24px;
+      background: rgba(255, 248, 240, 0.11);
+      color: var(--ap-text);
+      font-size: 17px;
+      font-weight: 950;
+    }
+
+    .resource-bar span:not(:first-child) {
+      color: var(--ap-yellow);
+      text-align: center;
+    }
+
+    .eyebrow {
+      position: absolute;
+      left: 24px;
+      top: 105px;
+      color: var(--ap-orange);
+      font-size: 15px;
+      font-weight: 950;
+    }
+
+    .discover-title {
+      position: absolute;
+      left: 24px;
+      top: 136px;
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.08;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .ambient-circle {
+      position: absolute;
+      left: 217px;
+      top: 96px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: rgba(92, 62, 30, 0.64);
+    }
+
+    .scan-box {
+      position: absolute;
+      left: 104px;
+      top: 294px;
+      width: 188px;
+      height: 158px;
+      display: grid;
+      place-items: center;
+      border: 4px solid var(--ap-yellow);
+      border-radius: 22px;
+      color: var(--ap-text);
+    }
+
+    .scan-line {
+      position: absolute;
+      left: -42px;
+      top: 77px;
+      width: 222px;
+      height: 2px;
+      background: var(--ap-cyan);
+      animation: scan 1.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes scan {
+      from {
+        transform: translateY(-42px);
+      }
+      to {
+        transform: translateY(42px);
+      }
+    }
+
+    .result-pill {
+      position: absolute;
+      left: 84px;
+      top: 470px;
+      width: 222px;
+      height: 49px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px solid rgba(255, 210, 63, 0.62);
+      border-radius: 24px;
+      background: rgba(5, 6, 6, 0.88);
+      font-size: 20px;
+      font-weight: 950;
+    }
+
+    .lower-band {
+      position: absolute;
+      left: 0;
+      top: 590px;
+      width: 100%;
+      height: 254px;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0.22));
+    }
+
+    .primary-button {
+      position: absolute;
+      left: 58px;
+      top: 684px;
+      width: 274px;
+      height: 58px;
+      border: 0;
+      border-bottom: 4px solid var(--ap-orange-deep);
+      border-radius: 29px;
+      background: var(--ap-orange);
+      color: var(--ap-text);
+      font-size: 20px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .primary-button:active {
+      transform: translateY(1px);
+      border-bottom-width: 2px;
+    }
+
+    .bottom-tabs {
+      position: absolute;
+      left: 18px;
+      bottom: 20px;
+      width: calc(100% - 36px);
+      height: 54px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      border: 1px solid rgba(255, 248, 240, 0.12);
+      border-radius: 22px;
+      background: rgba(5, 6, 6, 0.94);
+    }
+
+    .bottom-tabs button {
+      min-height: 44px;
+      border: 0;
+      background: transparent;
+      color: var(--ap-text-muted);
+      font-size: 16px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .bottom-tabs button.is-active {
+      color: var(--ap-text);
+    }
+
+    .road {
+      position: absolute;
+      border-radius: 999px;
+    }
+
+    .road-blue {
+      left: 50px;
+      top: 150px;
+      width: 82px;
+      height: 690px;
+      background: rgba(76, 190, 255, 0.42);
+      transform: rotate(18deg);
+      transform-origin: center;
+    }
+
+    .road-olive {
+      left: 28px;
+      top: 430px;
+      width: 344px;
+      height: 44px;
+      background: rgba(170, 184, 116, 0.45);
+      transform: rotate(-11deg);
+      transform-origin: center;
+    }
+
+    .pin {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .pin-rare {
+      left: 92px;
+      top: 309px;
+      width: 34px;
+      height: 34px;
+      border: 5px solid #8bd9ff;
+      background: var(--ap-blue);
+    }
+
+    .pin-legendary {
+      left: 277px;
+      top: 229px;
+      width: 58px;
+      height: 58px;
+      border: 6px solid #ffe88c;
+      background: var(--ap-yellow);
+    }
+
+    .pin-user {
+      left: 175px;
+      top: 400px;
+      width: 43px;
+      height: 43px;
+      background: var(--ap-blue);
+    }
+
+    .pin-green {
+      left: 263px;
+      top: 577px;
+      width: 34px;
+      height: 34px;
+      border: 5px solid #a8f29a;
+      background: var(--ap-lime);
+    }
+
+    .pin-label {
+      position: absolute;
+      color: var(--ap-text);
+      font-size: 17px;
+      line-height: 1.1;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .label-rare {
+      left: 58px;
+      top: 351px;
+    }
+
+    .label-legendary {
+      left: 257px;
+      top: 300px;
+    }
+
+    .label-user {
+      left: 160px;
+      top: 449px;
+    }
+
+    .map-card {
+      position: absolute;
+      left: 24px;
+      top: 656px;
+      width: calc(100% - 48px);
+      height: 139px;
+      padding: 24px 20px;
+      border: 1px solid rgba(255, 248, 240, 0.15);
+      border-radius: 24px;
+      background: rgba(5, 6, 6, 0.88);
+    }
+
+    .map-card h2 {
+      margin: 0 0 14px;
+      font-size: 23px;
+      line-height: 1.15;
+      font-weight: 950;
+    }
+
+    .map-card p {
+      margin: 0;
+      color: var(--ap-text-muted);
+      font-size: 16px;
+      line-height: 1.35;
+      font-weight: 850;
+    }
+
+    .throw-line {
+      position: absolute;
+      left: 85px;
+      top: 492px;
+      width: 262px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--ap-yellow);
+      transform: rotate(-15deg);
+      transform-origin: left center;
+    }
+
+    .capture-target {
+      position: absolute;
+      left: 139px;
+      top: 248px;
+      color: var(--ap-text);
+    }
+
+    .capture-item {
+      position: absolute;
+      left: 89px;
+      top: 535px;
+      color: var(--ap-text);
+    }
+
+    .probability-card {
+      position: absolute;
+      left: 34px;
+      top: 616px;
+      width: calc(100% - 68px);
+      height: 120px;
+      padding: 25px 20px 0;
+      border: 1px solid rgba(255, 210, 63, 0.45);
+      border-radius: 22px;
+      background: rgba(255, 248, 240, 0.12);
+    }
+
+    .probability-card h2 {
+      margin: 0 0 21px;
+      font-size: 19px;
+      line-height: 1.1;
+      font-weight: 950;
+    }
+
+    .probability {
+      width: 100%;
+      height: 16px;
+      display: flex;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .probability span:nth-child(1) {
+      width: 33%;
+      background: #bf6a33;
+    }
+
+    .probability span:nth-child(2) {
+      width: 34%;
+      background: #d8ad52;
+    }
+
+    .probability span:nth-child(3) {
+      width: 7%;
+      background: var(--ap-green);
+    }
+
+    .probability span:nth-child(4) {
+      width: 26%;
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .probability-card p {
+      margin: 20px 0 0;
+      font-size: 17px;
+      font-weight: 950;
+      color: var(--ap-yellow);
+    }
+
+    .pokedex-tabs {
+      position: absolute;
+      left: 28px;
+      top: 91px;
+      display: flex;
+      gap: 18px;
+    }
+
+    .pokedex-tabs button {
+      min-height: 34px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ap-text);
+      font-size: 18px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .pokedex-tabs button:not(.is-active) {
+      color: rgba(255, 248, 240, 0.72);
+    }
+
+    .pokedex-grid {
+      position: absolute;
+      left: 26px;
+      top: 130px;
+      display: grid;
+      grid-template-columns: 156px 156px;
+      gap: 32px 30px;
+    }
+
+    .rarity-card {
+      width: 156px;
+      height: 205px;
+      padding: 22px 20px;
+      border: 4px solid var(--rarity);
+      border-radius: 22px;
+      background: var(--card-bg);
+      color: var(--card-text);
+    }
+
+    .rarity-card.legendary {
+      --rarity: var(--ap-yellow);
+      --card-bg: var(--ap-cream);
+      --card-text: var(--ap-brown);
+    }
+
+    .rarity-card.rare {
+      --rarity: var(--ap-blue);
+      --card-bg: #132638;
+      --card-text: var(--ap-text);
+    }
+
+    .rarity-card.uncommon {
+      --rarity: var(--ap-green);
+      --card-bg: #102a18;
+      --card-text: var(--ap-text);
+    }
+
+    .rarity-card.locked {
+      --rarity: var(--ap-common);
+      --card-bg: #090a0a;
+      --card-text: var(--ap-common);
+      display: grid;
+      place-items: center;
+      font-size: 31px;
+      font-weight: 950;
+    }
+
+    .rarity-icon {
+      height: 86px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+    }
+
+    .rarity-card h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      line-height: 1.1;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .rarity-card p {
+      margin: 0;
+      color: currentColor;
+      opacity: 0.76;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
+    .versus-row {
+      position: absolute;
+      left: 50px;
+      top: 214px;
+      width: 290px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      color: var(--ap-text);
+    }
+
+    .versus-row .vs {
+      color: var(--ap-pink);
+      font-size: 42px;
+      line-height: 1;
+      font-weight: 950;
+    }
+
+    .hp {
+      position: absolute;
+      top: 333px;
+      width: 134px;
+      height: 14px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 248, 240, 0.10);
+    }
+
+    .hp.player {
+      left: 34px;
+    }
+
+    .hp.enemy {
+      left: 226px;
+    }
+
+    .hp span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    .hp.player span {
+      width: 82%;
+      background: var(--ap-green);
+    }
+
+    .hp.enemy span {
+      width: 100%;
+      background: var(--ap-pink);
+    }
+
+    .advantage {
+      position: absolute;
+      left: 88px;
+      top: 386px;
+      color: var(--ap-yellow);
+      font-size: 20px;
+      font-weight: 950;
+    }
+
+    .battle-log {
+      position: absolute;
+      left: 28px;
+      top: 475px;
+      width: calc(100% - 56px);
+      height: 153px;
+      padding: 27px 22px;
+      border: 1px solid rgba(255, 248, 240, 0.22);
+      border-radius: 22px;
+      background: rgba(255, 248, 240, 0.10);
+      font-size: 19px;
+      line-height: 1.45;
+      font-weight: 950;
+    }
+
+    .battle-actions {
+      position: absolute;
+      left: 52px;
+      top: 696px;
+      display: flex;
+      gap: 30px;
+    }
+
+    .battle-actions button {
+      min-height: 44px;
+      border: 0;
+      background: transparent;
+      color: var(--ap-text);
+      font-size: 21px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .battle-actions button.is-active {
+      color: var(--ap-yellow);
+    }
+
+    .check-card {
+      position: absolute;
+      left: 26px;
+      top: 93px;
+      width: calc(100% - 52px);
+      height: 137px;
+      padding: 28px 22px;
+      border: 1px solid rgba(255, 179, 0, 0.55);
+      border-radius: 22px;
+      background: rgba(255, 248, 240, 0.10);
+      appearance: none;
+      color: var(--ap-text);
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+
+    .check-card h2 {
+      margin: 0 0 24px;
+      font-size: 23px;
+      line-height: 1.1;
+      font-weight: 950;
+    }
+
+    .reward-row {
+      display: flex;
+      gap: 12px;
+      color: var(--ap-yellow);
+      font-size: 19px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .check-card p {
+      margin: 20px 0 0;
+      color: var(--ap-text);
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .store-section {
+      position: absolute;
+      left: 28px;
+      top: 278px;
+      margin: 0;
+      font-size: 28px;
+      font-weight: 950;
+    }
+
+    .store-list {
+      position: absolute;
+      left: 36px;
+      right: 36px;
+      top: 328px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .store-item {
+      min-height: 52px;
+      display: grid;
+      grid-template-columns: 36px 1fr 64px;
+      gap: 12px;
+      align-items: center;
+      color: var(--ap-text);
+      font-size: 18px;
+      line-height: 1.18;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .store-item .icon {
+      font-size: 24px;
+      text-align: center;
+    }
+
+    .store-item .price {
+      text-align: right;
+      font-size: 21px;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 96px;
+      max-width: calc(100% - 48px);
+      transform: translateX(-50%);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(5, 6, 6, 0.92);
+      color: var(--ap-text);
+      font-size: 14px;
+      font-weight: 900;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+      white-space: nowrap;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+    }
+
+    @media (max-width: 380px) {
+      body {
+        padding: 0;
+      }
+
+      .phone {
+        width: 100vw;
+        border-radius: 28px;
+      }
+
+      .page-title {
+        font-size: 29px;
+      }
+
+      .discover-title {
+        font-size: 27px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="icon-goose" viewBox="0 0 120 120">
+      <path d="M39 28c18-14 40-5 42 15 2 18-3 29 22 30l-13 23c-19-2-34-10-42-24-1 12 2 21 11 28-12 5-24 4-34-1 9-8 12-18 9-30-4-13-4-26 5-41Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M38 30 21 37l18 5" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/>
+      <circle cx="55" cy="33" r="4" fill="currentColor"/>
+      <path d="M51 71c12 12 28 13 42 4M36 99c-4 8-10 10-20 10M57 101c5 7 14 8 24 5" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-cat" viewBox="0 0 120 120">
+      <path d="M30 50 27 18l25 21h16l25-21-3 32c10 14 7 34-9 45-15 11-43 11-58 0-16-11-19-31-9-45Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/>
+      <circle cx="46" cy="63" r="5" fill="currentColor"/>
+      <circle cx="74" cy="63" r="5" fill="currentColor"/>
+      <path d="M60 72v8M48 84c8 6 16 6 24 0M35 72H14M37 82H17M85 72h21M83 82h20" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-dog" viewBox="0 0 120 120">
+      <path d="M38 28c14-9 35-9 49 0 17 11 19 40 5 57-15 18-50 18-65 0-14-17-12-46 11-57Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M35 30c-14 0-24 12-21 30 2 14 14 18 24 12M85 30c14 0 24 12 21 30-2 14-14 18-24 12" fill="currentColor"/>
+      <circle cx="48" cy="61" r="5" fill="currentColor"/>
+      <circle cx="73" cy="61" r="5" fill="currentColor"/>
+      <path d="M60 71v7M48 82c8 8 16 8 24 0" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-bread" viewBox="0 0 80 80">
+      <path d="M18 57V34c0-17 15-27 31-22 13 4 20 18 10 29v16c0 7-5 12-12 12H30c-7 0-12-5-12-12Z" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M18 36c11-10 25-10 41 0" fill="currentColor"/>
+    </symbol>
+  </svg>
+
+  <nav class="reference-toolbar" aria-label="Animal Poke screens">
+    <button class="is-active" data-open="discover">Discover</button>
+    <button data-open="map">Hunt Map</button>
+    <button data-open="capture">Capture</button>
+    <button data-open="pokedex">Pokedex</button>
+    <button data-open="battle">Battle</button>
+    <button data-open="store">Store</button>
+  </nav>
+
+  <main class="phone screen-discover">
+    <section class="screen screen-discover is-active" data-screen="discover" aria-label="Discover">
+      <div class="resource-bar">
+        <strong>宁波 · 雨</strong>
+        <span>⚡ 84</span>
+        <span>● 1260</span>
+      </div>
+      <div class="eyebrow">DISCOVER MODE</div>
+      <h1 class="discover-title">VLM 实时动物识别中</h1>
+      <div class="ambient-circle"></div>
+      <div class="scan-box">
+        <svg class="animal" width="100" height="100"><use href="#icon-goose"></use></svg>
+        <div class="scan-line"></div>
+      </div>
+      <div class="result-pill">鹅 · 置信度 94%</div>
+      <div class="lower-band"></div>
+      <button class="primary-button" data-open="capture">开始捕获</button>
+      <nav class="bottom-tabs" aria-label="Bottom tabs">
+        <button class="is-active" data-open="discover">发现</button>
+        <button data-open="pokedex">图鉴</button>
+        <button data-open="battle">战斗</button>
+        <button data-open="store">商店</button>
+        <button data-toast="成就暂未开放">成就</button>
+      </nav>
+    </section>
+
+    <section class="screen screen-map" data-screen="map" aria-label="Hunt Map">
+      <h1 class="page-title">HUNT MAP</h1>
+      <div class="page-right">刷新 <span id="timer">04:32</span></div>
+      <div class="road road-blue"></div>
+      <div class="road road-olive"></div>
+      <button class="pin pin-rare" aria-label="稀有 230m" data-toast="选择：稀有 · 230m"></button>
+      <div class="pin-label label-rare">稀有 · 230m</div>
+      <button class="pin pin-legendary" aria-label="传说 480m" data-toast="选择：传说 · 480m"></button>
+      <div class="pin-label label-legendary">传说 · 480m</div>
+      <div class="pin pin-user" aria-hidden="true"></div>
+      <div class="pin-label label-user">你的位置</div>
+      <button class="pin pin-green" aria-label="少见 50m" data-toast="选择：发现点 · 50m"></button>
+      <div class="map-card">
+        <h2>鹅  发现点 · 50m 内可捕获</h2>
+        <p>500m 范围内 7 个目标，诱饵会提升稀有出现率。</p>
+      </div>
+    </section>
+
+    <section class="screen screen-capture" data-screen="capture" aria-label="Capture Mode">
+      <h1 class="page-title">CAPTURE MODE</h1>
+      <div class="page-right">体力 -20</div>
+      <svg class="animal capture-target" width="112" height="112"><use href="#icon-goose"></use></svg>
+      <div class="throw-line"></div>
+      <svg class="animal capture-item" width="58" height="58"><use href="#icon-bread"></use></svg>
+      <div class="probability-card">
+        <h2>鹅 · 面包屑球 · 弹跳略强</h2>
+        <div class="probability" aria-label="捕获概率区间">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <p>捕获成功率 78% · 最佳力度 35-75</p>
+      </div>
+    </section>
+
+    <section class="screen screen-pokedex" data-screen="pokedex" aria-label="Pokedex">
+      <h1 class="page-title">图鉴 POKEDEX</h1>
+      <div class="page-right purple">已收集 59</div>
+      <nav class="pokedex-tabs" aria-label="Pokedex filters">
+        <button class="is-active">全部</button>
+        <button>猫</button>
+        <button>鹅</button>
+        <button>狗</button>
+      </nav>
+      <div class="pokedex-grid">
+        <article class="rarity-card legendary">
+          <div class="rarity-icon"><svg class="animal" width="82" height="82"><use href="#icon-cat"></use></svg></div>
+          <h2>#000014 · 传说</h2>
+          <p>海曙区 · 月湖</p>
+        </article>
+        <article class="rarity-card rare">
+          <div class="rarity-icon"><svg class="animal" width="82" height="82"><use href="#icon-dog"></use></svg></div>
+          <h2>#000057 · 稀有</h2>
+          <p>江北区 · 滨江</p>
+        </article>
+        <article class="rarity-card uncommon">
+          <div class="rarity-icon"><svg class="animal" width="82" height="82"><use href="#icon-goose"></use></svg></div>
+          <h2>#000058 · 少见</h2>
+        </article>
+        <article class="rarity-card locked">???</article>
+      </div>
+    </section>
+
+    <section class="screen screen-battle" data-screen="battle" aria-label="Battle Arena">
+      <h1 class="page-title">BATTLE ARENA</h1>
+      <div class="versus-row">
+        <svg class="animal" width="112" height="112"><use href="#icon-cat"></use></svg>
+        <div class="vs">VS</div>
+        <svg class="animal" width="112" height="112"><use href="#icon-dog"></use></svg>
+      </div>
+      <div class="hp player"><span></span></div>
+      <div class="hp enemy"><span></span></div>
+      <div class="advantage">火 &gt; 草 · 光克暗</div>
+      <div class="battle-log">
+        <div>战斗日志</div>
+        <div id="battle-line-1">猫 使用 激进策略，暴击 x2</div>
+        <div id="battle-line-2">获得金币 +70 · 掉落诱饵</div>
+      </div>
+      <div class="battle-actions">
+        <button class="is-active" data-strategy="激进">激进</button>
+        <button data-strategy="平衡">平衡</button>
+        <button data-strategy="防守">防守</button>
+      </div>
+    </section>
+
+    <section class="screen screen-store" data-screen="store" aria-label="Store">
+      <h1 class="page-title">商店 STORE</h1>
+      <div class="page-right">金币 <span id="coins">1260</span></div>
+      <div class="check-card" role="button" tabindex="0" data-toast="签到成功：金币 +20">
+        <h2>7 日签到轨道</h2>
+        <div class="reward-row"><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>80</span><span>150</span></div>
+        <p>第 7 天额外送：玩具球 🎾</p>
+      </div>
+      <h2 class="store-section">道具背包</h2>
+      <div class="store-list">
+        <div class="store-item" data-toast="已购买：玩具球"><span class="icon">🎾</span><span>玩具球 捕获 +15%</span><span class="price">50</span></div>
+        <div class="store-item" data-toast="已购买：高级玩具球"><span class="icon">⚾</span><span>高级玩具球 捕获 +25%</span><span class="price">120</span></div>
+        <div class="store-item" data-toast="已购买：诱饵"><span class="icon">🧀</span><span>诱饵 30 分钟稀有提升</span><span class="price">100</span></div>
+        <div class="store-item" data-toast="已购买：体力药剂"><span class="icon">🧪</span><span>体力药剂 体力 +3</span><span class="price">150</span></div>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    const phone = document.querySelector(".phone");
+    const screens = [...document.querySelectorAll("[data-screen]")];
+    const openButtons = [...document.querySelectorAll("[data-open]")];
+    const toolbarButtons = [...document.querySelectorAll(".reference-toolbar [data-open]")];
+    const toast = document.querySelector("#toast");
+
+    function openScreen(name) {
+      screens.forEach((screen) => screen.classList.toggle("is-active", screen.dataset.screen === name));
+      phone.className = `phone screen-${name}`;
+      openButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.open === name));
+      toolbarButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.open === name));
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 1500);
+    }
+
+    document.addEventListener("click", (event) => {
+      const openTarget = event.target.closest("[data-open]");
+      if (openTarget) {
+        openScreen(openTarget.dataset.open);
+        return;
+      }
+
+      const toastTarget = event.target.closest("[data-toast]");
+      if (toastTarget) {
+        showToast(toastTarget.dataset.toast);
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const toastTarget = event.target.closest("[data-toast]");
+      if (!toastTarget) return;
+      event.preventDefault();
+      showToast(toastTarget.dataset.toast);
+    });
+
+    document.querySelectorAll("[data-strategy]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-strategy]").forEach((item) => item.classList.remove("is-active"));
+        button.classList.add("is-active");
+        const strategy = button.dataset.strategy;
+        document.querySelector("#battle-line-1").textContent = `猫 使用 ${strategy}策略，稳定命中`;
+        document.querySelector("#battle-line-2").textContent = strategy === "激进" ? "获得金币 +70 · 掉落诱饵" : "获得金币 +45";
+      });
+    });
+
+    let timerSeconds = 272;
+    window.setInterval(() => {
+      timerSeconds -= 1;
+      if (timerSeconds < 0) timerSeconds = 272;
+      const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
+      const seconds = String(timerSeconds % 60).padStart(2, "0");
+      document.querySelector("#timer").textContent = `${minutes}:${seconds}`;
+    }, 1000);
+  </script>
+</body>
+</html>

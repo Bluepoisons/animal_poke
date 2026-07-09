@@ -37,8 +37,8 @@
 
 html, body, #root {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  overflow: auto;
   font-family: "Baloo 2", "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
   background: #F7F2EC;
   color: var(--ink);
