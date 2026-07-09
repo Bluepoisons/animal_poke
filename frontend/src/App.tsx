@@ -24,6 +24,7 @@ import PlaceholderScreen from './components/PlaceholderScreen'
 import LoadingScreen from './components/LoadingScreen'
 import { ProviderErrorBoundary } from './errors/ProviderErrorBoundary'
 import { ScreenErrorBoundary } from './errors/ScreenErrorBoundary'
+import { I18nProvider } from './i18n'
 
 // Lazy-load screen components for code splitting
 const CollectScreen = lazy(() => import('./components/CollectScreen'))
@@ -207,43 +208,45 @@ const AppInner: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <ProviderErrorBoundary providerName="Lbs">
-      <LbsProvider>
-        <ProviderErrorBoundary providerName="Stamina">
-          <StaminaProvider>
-            <ProviderErrorBoundary providerName="Economy">
-              <EconomyProvider>
-                <ProviderErrorBoundary providerName="Weather">
-                  <WeatherProvider>
-                    <ProviderErrorBoundary providerName="Shop">
-                      <ShopProvider>
-                        <ProviderErrorBoundary providerName="Status">
-                          <StatusProvider>
-                            <ProviderErrorBoundary providerName="Dispatch">
-                              <DispatchProvider>
-                                <ProviderErrorBoundary providerName="Battle">
-                                  <BattleProvider>
-                                    <ProviderErrorBoundary providerName="Achievement">
-                                      <AchievementProvider>
-                                        <AppInner />
-                                      </AchievementProvider>
-                                    </ProviderErrorBoundary>
-                                  </BattleProvider>
-                                </ProviderErrorBoundary>
-                              </DispatchProvider>
-                            </ProviderErrorBoundary>
-                          </StatusProvider>
-                        </ProviderErrorBoundary>
-                      </ShopProvider>
-                    </ProviderErrorBoundary>
-                  </WeatherProvider>
-                </ProviderErrorBoundary>
-              </EconomyProvider>
-            </ProviderErrorBoundary>
-          </StaminaProvider>
-        </ProviderErrorBoundary>
-      </LbsProvider>
-    </ProviderErrorBoundary>
+    <I18nProvider>
+      <ProviderErrorBoundary providerName="Lbs">
+        <LbsProvider>
+          <ProviderErrorBoundary providerName="Stamina">
+            <StaminaProvider>
+              <ProviderErrorBoundary providerName="Economy">
+                <EconomyProvider>
+                  <ProviderErrorBoundary providerName="Weather">
+                    <WeatherProvider>
+                      <ProviderErrorBoundary providerName="Shop">
+                        <ShopProvider>
+                          <ProviderErrorBoundary providerName="Status">
+                            <StatusProvider>
+                              <ProviderErrorBoundary providerName="Dispatch">
+                                <DispatchProvider>
+                                  <ProviderErrorBoundary providerName="Battle">
+                                    <BattleProvider>
+                                      <ProviderErrorBoundary providerName="Achievement">
+                                        <AchievementProvider>
+                                          <AppInner />
+                                        </AchievementProvider>
+                                      </ProviderErrorBoundary>
+                                    </BattleProvider>
+                                  </ProviderErrorBoundary>
+                                </DispatchProvider>
+                              </ProviderErrorBoundary>
+                            </StatusProvider>
+                          </ProviderErrorBoundary>
+                        </ShopProvider>
+                      </ProviderErrorBoundary>
+                    </WeatherProvider>
+                  </ProviderErrorBoundary>
+                </EconomyProvider>
+              </ProviderErrorBoundary>
+            </StaminaProvider>
+          </ProviderErrorBoundary>
+        </LbsProvider>
+      </ProviderErrorBoundary>
+    </I18nProvider>
   )
 }
 
