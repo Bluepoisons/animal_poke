@@ -22,6 +22,8 @@ import TabBar from './components/TabBar'
 import LevelUpToast from './components/LevelUpToast'
 import PlaceholderScreen from './components/PlaceholderScreen'
 import LoadingScreen from './components/LoadingScreen'
+import { ProviderErrorBoundary } from './errors/ProviderErrorBoundary'
+import { ScreenErrorBoundary } from './errors/ScreenErrorBoundary'
 
 // Lazy-load screen components for code splitting
 const CollectScreen = lazy(() => import('./components/CollectScreen'))
@@ -44,9 +46,7 @@ const AppInner: React.FC = () => {
   const [mapFocus, setMapFocus] = useState<CardEntry | undefined>()
   const [levelUpResult, setLevelUpResult] = useState<LevelUpResult | null>(null)
 
-  // 待捕获照片数据（DiscoverScreen 拍摄完成后传送）
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null)
-  // 待捕获物种（DiscoverScreen 检测后传送）
   const [pendingSpecies, setPendingSpecies] = useState<SpeciesType>('cat')
 
   const { addAnimal } = useAnimalStore()
@@ -67,7 +67,6 @@ const AppInner: React.FC = () => {
     setMapOpen(false)
   }, [])
 
-  // 构建成就统计数据
   const buildStats = useCallback((): AchievementStats => {
     return {
       totalCaptures: staminaState.totalCaptures,
@@ -90,76 +89,98 @@ const AppInner: React.FC = () => {
     }
   }, [staminaState, shop.state.checkIn.streak])
 
-  // DiscoverScreen 确认拍照 → 切换至捕获屏
   const handlePhotoConfirm = useCallback((photoData: string, species: SpeciesType) => {
     setPendingPhoto(photoData)
     setPendingSpecies(species)
     setActiveTab('fight')
   }, [])
 
-  // CaptureScreen 捕获成功 → 写入 IndexedDB + 体力结算 + 切换图鉴
   const handleCaptureSuccess = useCallback((entry: CardEntry) => {
     addAnimal(entry)
     const result = addCapture(1, entry.rarity)
     if (result.leveledUp) {
       setLevelUpResult(result)
     }
-    // 随机金币掉落 10~50
     const goldDrop = Math.floor(Math.random() * 41) + 10
     addGold(goldDrop)
-    // 追踪捕获产出
     economy.trackEarn(goldDrop, 'capture', `捕获 ${entry.no}`)
-    // 升级奖励追踪
     if (result.leveledUp) {
       economy.trackEarn(result.rewardGold, 'levelup', `升级至 Lv.${result.newLevel}`)
     }
 
-    // 感冒判定：雨雪天捕获的宠物有概率自带感冒
     const coldRisk = weatherCtx.getColdRisk()
     if (coldRisk.isRisky && Math.random() < coldRisk.probability) {
       statusCtx.applyCold(entry.id, 'capture')
     }
 
-    // 检查成就
     achievement.checkAchievements(buildStats())
 
     setPendingPhoto(null)
     setActiveTab('collection')
   }, [addAnimal, addCapture, addGold, economy, statusCtx, weatherCtx, achievement, buildStats])
 
-  // CaptureScreen 捕获失败 → 留在捕获屏，可重试
   const handleCaptureFail = useCallback(() => {
     // 留在 fight tab，不做切换
   }, [])
 
   const renderContent = () => {
     if (mapOpen) {
-      return <MapScreen entries={mapEntries} focusEntry={mapFocus} onBack={handleMapClose} />
+      return (
+        <ScreenErrorBoundary screenName="地图">
+          <MapScreen entries={mapEntries} focusEntry={mapFocus} onBack={handleMapClose} />
+        </ScreenErrorBoundary>
+      )
     }
     switch (activeTab) {
       case 'profile':
         return <PlaceholderScreen icon="👤" title="Profile" subtitle="个人主页 · 开发中" />
       case 'collection':
-        return <CollectScreen onMapOpen={handleMapOpen} />
+        return (
+          <ScreenErrorBoundary screenName="图鉴">
+            <CollectScreen onMapOpen={handleMapOpen} />
+          </ScreenErrorBoundary>
+        )
       case 'camera':
-        return <DiscoverScreen onConfirm={handlePhotoConfirm} />
+        return (
+          <ScreenErrorBoundary screenName="发现">
+            <DiscoverScreen onConfirm={handlePhotoConfirm} />
+          </ScreenErrorBoundary>
+        )
       case 'fight':
         if (pendingPhoto) {
           return (
-            <CaptureScreen
-              targetSpecies={pendingSpecies}
-              onCaptureSuccess={handleCaptureSuccess}
-              onCaptureFail={handleCaptureFail}
-            />
+            <ScreenErrorBoundary screenName="捕获">
+              <CaptureScreen
+                targetSpecies={pendingSpecies}
+                onCaptureSuccess={handleCaptureSuccess}
+                onCaptureFail={handleCaptureFail}
+              />
+            </ScreenErrorBoundary>
           )
         }
-        return <BattleScreen />
+        return (
+          <ScreenErrorBoundary screenName="战斗">
+            <BattleScreen />
+          </ScreenErrorBoundary>
+        )
       case 'store':
-        return <StoreScreen />
+        return (
+          <ScreenErrorBoundary screenName="商店">
+            <StoreScreen />
+          </ScreenErrorBoundary>
+        )
       case 'dispatch':
-        return <DispatchScreen />
+        return (
+          <ScreenErrorBoundary screenName="派遣">
+            <DispatchScreen />
+          </ScreenErrorBoundary>
+        )
       case 'achievement':
-        return <AchievementScreen />
+        return (
+          <ScreenErrorBoundary screenName="成就">
+            <AchievementScreen />
+          </ScreenErrorBoundary>
+        )
     }
   }
 
@@ -186,26 +207,44 @@ const AppInner: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <LbsProvider>
-      <StaminaProvider>
-        <EconomyProvider>
-          <WeatherProvider>
-            <ShopProvider>
-              <StatusProvider>
-                <DispatchProvider>
-                  <BattleProvider>
-                    <AchievementProvider>
-                      <AppInner />
-                    </AchievementProvider>
-                  </BattleProvider>
-                </DispatchProvider>
-              </StatusProvider>
-            </ShopProvider>
-          </WeatherProvider>
-        </EconomyProvider>
-      </StaminaProvider>
-    </LbsProvider>
+    <ProviderErrorBoundary providerName="Lbs">
+      <LbsProvider>
+        <ProviderErrorBoundary providerName="Stamina">
+          <StaminaProvider>
+            <ProviderErrorBoundary providerName="Economy">
+              <EconomyProvider>
+                <ProviderErrorBoundary providerName="Weather">
+                  <WeatherProvider>
+                    <ProviderErrorBoundary providerName="Shop">
+                      <ShopProvider>
+                        <ProviderErrorBoundary providerName="Status">
+                          <StatusProvider>
+                            <ProviderErrorBoundary providerName="Dispatch">
+                              <DispatchProvider>
+                                <ProviderErrorBoundary providerName="Battle">
+                                  <BattleProvider>
+                                    <ProviderErrorBoundary providerName="Achievement">
+                                      <AchievementProvider>
+                                        <AppInner />
+                                      </AchievementProvider>
+                                    </ProviderErrorBoundary>
+                                  </BattleProvider>
+                                </ProviderErrorBoundary>
+                              </DispatchProvider>
+                            </ProviderErrorBoundary>
+                          </StatusProvider>
+                        </ProviderErrorBoundary>
+                      </ShopProvider>
+                    </ProviderErrorBoundary>
+                  </WeatherProvider>
+                </ProviderErrorBoundary>
+              </EconomyProvider>
+            </ProviderErrorBoundary>
+          </StaminaProvider>
+        </ProviderErrorBoundary>
+      </LbsProvider>
+    </ProviderErrorBoundary>
   )
 }
 
-export default App
+export default React.memo(App)
