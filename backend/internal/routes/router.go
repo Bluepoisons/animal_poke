@@ -28,8 +28,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	thirdParty := &cfg.ThirdParty
 	geoService := services.NewGeoService(thirdParty)
 	weatherService := services.NewWeatherService(thirdParty)
-	visionService := services.NewVisionService(thirdParty)
-	llmService := services.NewLLMService(thirdParty)
+	aiService := services.NewAIService(thirdParty)
 
 	var deviceRepo *repo.DeviceRepo
 	var animalRepo *repo.AnimalRepo
@@ -72,8 +71,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			ai := auth.Group("")
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
 			{
-				visionHandler := handlers.NewVisionHandler(visionService)
-				valueHandler := handlers.NewValueHandler(llmService)
+				visionHandler := handlers.NewVisionHandler(aiService)
+				valueHandler := handlers.NewValueHandler(aiService)
 				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
 				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
 				ai.POST("/value/generate", middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)

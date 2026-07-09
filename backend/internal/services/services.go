@@ -1,4 +1,4 @@
-// Package services 联网服务实现层(MB2 腾讯地图/彩云天气, MB3 VLM/LLM 编排)。
+// Package services 联网服务实现层(MB2 腾讯地图/彩云天气, MB3 AI 编排)。
 // F6 仅建立目录与结构, 具体实现见对应后端任务。
 //
 // 第三方 Key 已集中在 config.ThirdPartyConfig, 经后端代理调用, 客户端永不含第三方 Key。
@@ -27,22 +27,12 @@ func NewWeatherService(cfg *config.ThirdPartyConfig) *WeatherService {
 	return &WeatherService{cfg: cfg}
 }
 
-// VisionService 云端 VLM 编排(检测 / 深度分析)。MB3 实现。
-type VisionService struct {
+// AIService 统一 AI 编排(视觉检测/深度分析/数值生成), 共用同一 LLM 端点与模型。
+type AIService struct {
 	cfg *config.ThirdPartyConfig
 }
 
-// NewVisionService 构造 VisionService。
-func NewVisionService(cfg *config.ThirdPartyConfig) *VisionService {
-	return &VisionService{cfg: cfg}
-}
-
-// LLMService 云端 LLM 编排(数值 / 叙事生成)。MB3 实现。
-type LLMService struct {
-	cfg *config.ThirdPartyConfig
-}
-
-// NewLLMService 构造 LLMService。
-func NewLLMService(cfg *config.ThirdPartyConfig) *LLMService {
-	return &LLMService{cfg: cfg}
+// NewAIService 构造 AIService。
+func NewAIService(cfg *config.ThirdPartyConfig) *AIService {
+	return &AIService{cfg: cfg}
 }

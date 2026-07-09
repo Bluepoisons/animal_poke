@@ -13,25 +13,25 @@ import (
 
 // ValueHandler LLM 数值生成处理器。
 type ValueHandler struct {
-	llmService *services.LLMService
+	aiService *services.AIService
 }
 
 // NewValueHandler 构造 ValueHandler。
-func NewValueHandler(llmService *services.LLMService) *ValueHandler {
-	return &ValueHandler{llmService: llmService}
+func NewValueHandler(aiService *services.AIService) *ValueHandler {
+	return &ValueHandler{aiService: aiService}
 }
 
 type valueRequest struct {
-	Species            string `json:"species" binding:"required"`
-	Breed              string `json:"breed"`
-	Color              string `json:"color"`
-	BodyType           string `json:"body_type"`
-	SubjectCompleteness int   `json:"subject_completeness"`
-	Clarity            int    `json:"clarity"`
-	Lighting           int    `json:"lighting"`
-	Composition        int    `json:"composition"`
-	Pose               int    `json:"pose"`
-	Angle              int    `json:"angle"`
+	Species             string `json:"species" binding:"required"`
+	Breed               string `json:"breed"`
+	Color               string `json:"color"`
+	BodyType            string `json:"body_type"`
+	SubjectCompleteness int    `json:"subject_completeness"`
+	Clarity             int    `json:"clarity"`
+	Lighting            int    `json:"lighting"`
+	Composition         int    `json:"composition"`
+	Pose                int    `json:"pose"`
+	Angle               int    `json:"angle"`
 }
 
 // Generate POST /value/generate 调 LLM 生成稀有度/六维属性/叙事。
@@ -43,7 +43,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 	}
 
 	deviceID := middleware.GetDeviceID(c)
-	slog.Info("LLM 数值生成请求", "device_id", deviceID, "species", req.Species)
+	slog.Info("AI 数值生成请求", "device_id", deviceID, "species", req.Species)
 
 	input := services.ValueInput{
 		Species:             req.Species,
@@ -58,9 +58,9 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		Angle:               req.Angle,
 	}
 
-	result, err := h.llmService.GenerateValue(input)
+	result, err := h.aiService.GenerateValue(input)
 	if err != nil {
-		slog.Error("LLM 数值生成失败", "device_id", deviceID, "err", err)
+		slog.Error("AI 数值生成失败", "device_id", deviceID, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "value generation failed"})
 		return
 	}

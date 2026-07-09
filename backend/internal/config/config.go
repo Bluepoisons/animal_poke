@@ -34,8 +34,6 @@ func (d DatabaseConfig) DSN() string {
 type ThirdPartyConfig struct {
 	TencentMapKey    string
 	CaiyunWeatherKey string
-	VLMEndpoint      string
-	VLMKey           string
 	LLMEndpoint      string
 	LLMKey           string
 	LLMModel         string
@@ -57,8 +55,6 @@ func Load() *Config {
 		ThirdParty: ThirdPartyConfig{
 			TencentMapKey:    getEnv("TENCENT_MAP_KEY", ""),
 			CaiyunWeatherKey: getEnv("CAIYUN_WEATHER_KEY", ""),
-			VLMEndpoint:      getEnv("VLM_ENDPOINT", ""),
-			VLMKey:           getEnv("VLM_KEY", ""),
 			LLMEndpoint:      getEnv("LLM_ENDPOINT", ""),
 			LLMKey:           getEnv("LLM_KEY", ""),
 			LLMModel:         getEnv("LLM_MODEL", ""),
