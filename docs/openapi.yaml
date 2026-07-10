@@ -184,6 +184,9 @@ paths:
     post:
       tags: [Auth]
       summary: Register device and issue JWT
+      description: |
+        First registration generates an `installation_secret` (returned once).
+        Subsequent token refresh must include the secret; knowing only `device_id` is insufficient.
       operationId: authDevice
       security: []
       requestBody:
@@ -201,6 +204,8 @@ paths:
                 $ref: "#/components/schemas/AuthDeviceResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "503":
@@ -1132,6 +1137,9 @@ components:
         device_id:
           type: string
           description: UUID or 8-64 alphanumeric/_-
+        installation_secret:
+          type: string
+          description: Required after first registration; proves device ownership
     AuthDeviceResponse:
       type: object
       required: [token, expires_at, token_type]
@@ -1143,6 +1151,9 @@ components:
         token_type:
           type: string
           example: Bearer
+        installation_secret:
+          type: string
+          description: Present only on first successful registration; store securely client-side
     CityResponse:
       type: object
       additionalProperties: true

@@ -33,6 +33,7 @@ describe('deviceAuth', () => {
         token: 'tok-1',
         expires_at: new Date(Date.now() + 3600_000).toISOString(),
         token_type: 'Bearer',
+        installation_secret: 'inst-secret-hex-64chars-minimum-padding-aaaaaaaaaaaa',
       }),
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -40,6 +41,7 @@ describe('deviceAuth', () => {
     const auth = await ensureAuth()
     expect(auth.token).toBe('tok-1')
     expect(readStoredAuth()?.token).toBe('tok-1')
+    expect(localStorage.getItem('ap_installation_secret')).toContain('inst-secret')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0]
     expect(init.method).toBe('POST')

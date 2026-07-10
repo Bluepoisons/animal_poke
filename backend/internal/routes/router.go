@@ -48,6 +48,16 @@ func unavailable(reason string) gin.HandlerFunc {
 // 所有业务路由始终注册；依赖缺失时返回 503 而非 404。
 func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r := gin.New()
+	// 可信代理：仅信任配置的上游，防止伪造 X-Forwarded-For 绕过 IP 限流
+	if len(cfg.TrustedProxies) > 0 {
+		if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+			// 配置错误不应静默吞掉；开发可继续，生产启动前应校验
+			_ = r.SetTrustedProxies(nil)
+		}
+	} else {
+		// 未配置时不信任任何代理头，ClientIP 使用直连地址
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
@@ -139,7 +149,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			checker = deviceChecker{repo: deviceRepo}
 		}
 		auth := api.Group("")
-		auth.Use(middleware.JWTAuthWithChecker(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, checker))
+		auth.Use(middleware.JWTAuthWithConfig(middleware.JWTAuthConfig{
+			Secret:         cfg.JWTSecret,
+			PreviousSecret: cfg.JWTSecretPrevious,
+			Issuer:         cfg.JWTIssuer,
+			Audience:       cfg.JWTAudience,
+			Checker:        checker,
+		}))
 		{
 			geoHandler := handlers.NewGeoHandler(geoService)
 			weatherHandler := handlers.NewWeatherHandler(weatherService)

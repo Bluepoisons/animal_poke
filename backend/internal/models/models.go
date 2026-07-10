@@ -11,6 +11,10 @@ type Device struct {
 	DeviceID     string `gorm:"uniqueIndex;size:64;not null" json:"device_id"`
 	TokenVersion int    `gorm:"not null;default:1" json:"token_version"`
 	Disabled     bool   `gorm:"not null;default:false" json:"disabled"`
+	// InstallationSecretHash 安装密钥哈希（sha256 hex），明文仅首次注册返回一次。
+	InstallationSecretHash string `gorm:"size:128" json:"-"`
+	// InstallationSecretSalt 可选盐（hex），为空时直接 sha256(secret)。
+	InstallationSecretSalt string `gorm:"size:64" json:"-"`
 	// 授权
 	ConsentVersion string     `gorm:"size:32" json:"consent_version"`
 	ConsentAt      *time.Time `json:"consent_at,omitempty"`
