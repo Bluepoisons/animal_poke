@@ -3,6 +3,7 @@ package repo
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"animalpoke/backend/internal/models"
@@ -105,7 +106,17 @@ func (r *DeviceRepo) UpdateConsent(deviceID, version, scope string, revoked bool
 	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).Updates(updates).Error
 }
 
-// HasValidConsent 是否具备有效授权。
+// ConsentHasScope 检查 scope 列表是否包含目标（逗号分隔）。
+func ConsentHasScope(scopeCSV, want string) bool {
+	for _, p := range strings.Split(scopeCSV, ",") {
+		if strings.TrimSpace(p) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// HasValidConsent 是否具备有效授权（版本匹配 + 未撤销 + 含 photo）。
 func (r *DeviceRepo) HasValidConsent(deviceID, requiredVersion string) (bool, error) {
 	dev, err := r.Find(deviceID)
 	if err != nil {
@@ -118,8 +129,38 @@ func (r *DeviceRepo) HasValidConsent(deviceID, requiredVersion string) (bool, er
 		return false, nil
 	}
 	if requiredVersion != "" && dev.ConsentVersion != requiredVersion {
-		// 允许更高/当前版本：简单相等校验；版本演进可扩展
-		return dev.ConsentVersion == requiredVersion, nil
+		return false, nil
+	}
+	// Vision 等敏感能力要求 photo scope；空 scope 视为旧数据不合格
+	if !ConsentHasScope(dev.ConsentScope, "photo") {
+		return false, nil
 	}
 	return true, nil
+}
+
+// HasConsentScope 任意 scope 查询。
+func (r *DeviceRepo) HasConsentScope(deviceID, requiredVersion, scope string) (bool, error) {
+	ok, err := r.HasValidConsent(deviceID, requiredVersion)
+	if err != nil || !ok {
+		// photo 失败时仍可能有 location；单独查
+		dev, err2 := r.Find(deviceID)
+		if err2 != nil {
+			return false, err2
+		}
+		if dev.ConsentRevoked != nil {
+			return false, nil
+		}
+		if requiredVersion != "" && dev.ConsentVersion != requiredVersion {
+			return false, nil
+		}
+		return ConsentHasScope(dev.ConsentScope, scope), nil
+	}
+	if scope == "photo" {
+		return true, nil
+	}
+	dev, err := r.Find(deviceID)
+	if err != nil {
+		return false, err
+	}
+	return ConsentHasScope(dev.ConsentScope, scope), nil
 }
