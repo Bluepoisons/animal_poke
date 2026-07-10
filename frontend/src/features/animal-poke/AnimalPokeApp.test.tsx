@@ -1,3 +1,4 @@
+import { AppProviders } from '../../providers/AppProviders'
 /**
  * AnimalPokeApp entry smoke tests (#137)
  * 覆盖生产入口主路径：渲染六屏导航、toast、状态切换。
@@ -16,7 +17,7 @@ describe('AnimalPokeApp production entry', () => {
   })
 
   it('renders discover screen by default with energy and coins', () => {
-    render(<AnimalPokeApp />)
+    render(<AppProviders><AnimalPokeApp /></AppProviders>)
     // 发现页应可见（具体文案依赖屏幕实现，至少不崩溃）
     expect(document.body).toBeTruthy()
     // PhoneFrame / tab bar 存在
@@ -24,7 +25,7 @@ describe('AnimalPokeApp production entry', () => {
   })
 
   it('navigates between tabs without crashing', () => {
-    render(<AnimalPokeApp />)
+    render(<AppProviders><AnimalPokeApp /></AppProviders>)
     // 底部 Tab 按钮
     const buttons = screen.queryAllByRole('button')
     // 至少有导航按钮
@@ -36,7 +37,7 @@ describe('AnimalPokeApp production entry', () => {
   })
 
   it('shows achievement toast placeholder', () => {
-    render(<AnimalPokeApp />)
+    render(<AppProviders><AnimalPokeApp /></AppProviders>)
     // 成就按钮可能在 tab bar
     const achievement = screen.queryByText(/成就/)
     if (achievement) {

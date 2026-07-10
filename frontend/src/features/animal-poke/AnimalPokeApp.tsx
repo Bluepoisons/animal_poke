@@ -8,46 +8,41 @@ import CaptureScreen from './screens/CaptureScreen'
 import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
+import { useStamina } from '../../stamina/useStamina'
 
 import './animalPoke.css'
 
 export default function AnimalPokeApp() {
   const [screen, setScreen] = useState<ScreenId>('discover')
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
-  const [coins, setCoins] = useState(1260)
-  const [energy] = useState(84)
+  const { currentStamina, gold, addGold } = useStamina()
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message)
-    if (toastTimer.current) {
-      window.clearTimeout(toastTimer.current)
-    }
-    toastTimer.current = window.setTimeout(() => {
-      setToastMessage(null)
-    }, 1500)
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToastMessage(null), 1500)
   }, [])
 
-  const handleStartCapture = useCallback(() => {
-    setScreen('capture')
-  }, [])
-
-  const handleNavigate = useCallback((nextScreen: ScreenId) => {
-    setScreen(nextScreen)
-  }, [])
-
-  const handleAchievement = useCallback(() => {
-    showToast('成就暂未开放')
-  }, [showToast])
+  const handleStartCapture = useCallback(() => setScreen('capture'), [])
+  const handleNavigate = useCallback((nextScreen: ScreenId) => setScreen(nextScreen), [])
+  const handleAchievement = useCallback(() => showToast('成就暂未开放'), [showToast])
+  const handleCoinsChange = useCallback(
+    (next: number) => {
+      const delta = next - gold
+      if (delta > 0) addGold(delta)
+    },
+    [gold, addGold],
+  )
 
   const renderScreen = () => {
     switch (screen) {
       case 'discover':
         return (
           <DiscoverScreen
-            energy={energy}
-            coins={coins}
+            energy={currentStamina}
+            coins={gold}
             onStartCapture={handleStartCapture}
             onNavigate={handleNavigate}
           />
@@ -67,13 +62,7 @@ export default function AnimalPokeApp() {
       case 'battle':
         return <BattleArenaScreen />
       case 'store':
-        return (
-          <StoreScreen
-            coins={coins}
-            onCoinsChange={setCoins}
-            onToast={showToast}
-          />
-        )
+        return <StoreScreen coins={gold} onCoinsChange={handleCoinsChange} onToast={showToast} />
       default:
         return null
     }
@@ -84,17 +73,9 @@ export default function AnimalPokeApp() {
       <PhoneFrame variant={screen}>
         {renderScreen()}
         {screen !== 'map' && (
-          <BottomTabBar
-            active={screen}
-            onChange={setScreen}
-            onAchievement={handleAchievement}
-          />
+          <BottomTabBar active={screen} onChange={setScreen} onAchievement={handleAchievement} />
         )}
-        <div
-          className={`ap-toast ${toastMessage ? 'is-visible' : ''}`}
-          role="status"
-          aria-live="polite"
-        >
+        <div className={`ap-toast ${toastMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {toastMessage}
         </div>
       </PhoneFrame>
