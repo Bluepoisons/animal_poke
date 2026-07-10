@@ -33,6 +33,9 @@
   <a href="docs/游戏开发计划.md">📖 设计文档</a> ·
   <a href="docs/openapi.yaml">🔌 OpenAPI</a> ·
   <a href="docs/ui_design_m1.html">🎨 UI 设计稿</a> ·
+  <a href="docs/legal/privacy-policy.md">🔏 隐私政策</a> ·
+  <a href="docs/legal/terms-of-service.md">📜 用户协议</a> ·
+  <a href="docs/legal/README.md">⚖️ 法律合规</a> ·
   <a href="CONTRIBUTING.md">🤝 贡献指南</a> ·
   <a href="SECURITY.md">🔐 安全披露</a>
 </p>
@@ -345,6 +348,30 @@ GitHub Actions 覆盖：
 | API 契约 | [`docs/openapi.yaml`](docs/openapi.yaml) |
 | 无障碍基线 | [`docs/a11y-baseline.md`](docs/a11y-baseline.md) |
 | 后端说明 | [`backend/README.md`](backend/README.md) |
+| **法律合规全文** | [`docs/legal/`](docs/legal/README.md) |
+| 隐私政策 | [`docs/legal/privacy-policy.md`](docs/legal/privacy-policy.md) |
+| 用户协议 | [`docs/legal/terms-of-service.md`](docs/legal/terms-of-service.md) |
+| 未成年人保护 | [`docs/legal/minors-protection.md`](docs/legal/minors-protection.md) |
+| 个人信息收集清单 | [`docs/legal/personal-info-collection-list.md`](docs/legal/personal-info-collection-list.md) |
+| 第三方共享清单 | [`docs/legal/third-party-sharing-list.md`](docs/legal/third-party-sharing-list.md) |
+| 应用权限说明 | [`docs/legal/permissions-notice.md`](docs/legal/permissions-notice.md) |
+
+---
+
+## ⚖️ 法律与合规（中国大陆）
+
+面向正式上线准备的合规模板，存放于 [`docs/legal/`](docs/legal/README.md)，主要包括：
+
+| 文档 | 要点 |
+|------|------|
+| [隐私政策](docs/legal/privacy-policy.md) | 个保法告知—同意、照片即时销毁、位置敏感信息、权利行使 |
+| [用户协议](docs/legal/terms-of-service.md) | 服务条款、行为规范、虚拟物品、责任限制 |
+| [未成年人保护与防沉迷](docs/legal/minors-protection.md) | 年龄门槛、时段时长、消费限制、监护人权利 |
+| [个人信息收集清单](docs/legal/personal-info-collection-list.md) | 收集目的 / 场景一览 |
+| [第三方共享清单](docs/legal/third-party-sharing-list.md) | 地图 / 天气 / VLM / LLM 委托处理 |
+| [应用权限说明](docs/legal/permissions-notice.md) | 相机、定位等最小必要说明 |
+
+> ⚠️ 文本中含「运营主体 / 邮箱」等占位，**上线前须由律师结合 ICP、版号、实名防沉迷与真实数据处理活动审定**。产品内 ConsentGate 应链到上述全文。
 
 ---
 
