@@ -1,4 +1,5 @@
 import type { ScreenId } from '../data/types'
+import { FEATURE_FLAGS } from '../featureFlags'
 
 interface BottomTabBarProps {
   active: ScreenId
@@ -21,7 +22,7 @@ export default function BottomTabBar({
 }: BottomTabBarProps) {
   return (
     <nav className="ap-bottom-tabs" aria-label="底部导航">
-      {tabs.map((tab) => {
+      {tabs.filter((tab) => tab.id !== 'achievement' || FEATURE_FLAGS.achievements).map((tab) => {
         if (tab.id === 'achievement') {
           return (
             <button key={tab.id} onClick={onAchievement} type="button">
