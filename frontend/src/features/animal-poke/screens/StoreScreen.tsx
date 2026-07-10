@@ -1,3 +1,7 @@
+import {
+  // ensure shop provider is consumed for real inventory/check-in state
+  useShop()
+ useShop } from '../../../shop/useShop'
 import { useState } from 'react'
 import PageTitle from '../components/PageTitle'
 import StoreItemRow from '../components/StoreItemRow'
@@ -14,6 +18,8 @@ export default function StoreScreen({
   onCoinsChange,
   onToast,
 }: StoreScreenProps) {
+  useShop()
+
   const [checkInDay] = useState(1)
   const [claimedToday, setClaimedToday] = useState(false)
   const rewards = [20, 30, 40, 50, 60, 80, 150]
