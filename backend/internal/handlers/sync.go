@@ -11,6 +11,7 @@ import (
 	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
 	"animalpoke/backend/internal/services"
+	"animalpoke/backend/internal/taxonomy"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -72,6 +73,13 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: uuid, species, rarity, generated_at are required"})
 		return
 	}
+
+	normSpecies, _ := taxonomy.Normalize(req.Species)
+	if !taxonomy.Capturable(normSpecies) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "species not capturable", "reason_code": "species_unsupported", "species": normSpecies})
+		return
+	}
+	req.Species = normSpecies
 
 	deviceID := middleware.GetDeviceID(c)
 

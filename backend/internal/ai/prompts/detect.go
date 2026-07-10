@@ -3,23 +3,32 @@ package prompts
 
 // Prompt 版本号，写入 provenance。
 const (
-	DetectPromptVersion  = "detect-v2"
+	DetectPromptVersion  = "detect-v3"
 	AnalyzePromptVersion = "analyze-v1"
 	ValuePromptVersion   = "value-v2"
 )
 
 // DetectPrompt VLM 动物检测 Prompt —— 从图片中识别动物物种与边界框。
 // 标准响应固定为带 animals 字段的 JSON 对象（envelope）。
-const DetectPrompt = `You are an animal detection system. Analyze this image and:
+// 物种枚举严格限制为 cat|dog|goose；其它目标用 unsupported，无法判断用 unknown。禁止默认 goose。
+const DetectPrompt = `You are an animal detection system for a capture game. Analyze this image and:
 
 1. Detect all animals present in the image.
 2. For each detected animal, provide:
-   - species: the species name (e.g., "cat", "dog", "bird")
+   - species: MUST be one of: "cat", "dog", "goose", "unknown", "unsupported"
+     * cat: domestic cats only
+     * dog: domestic dogs only
+     * goose: true geese only (NOT ducks, swans, or generic birds)
+     * unsupported: ducks, swans, birds, humans, toys, screens, other non-target objects
+     * unknown: cannot determine with confidence
+   - label: original free-text label for audit only (e.g. "mallard", "person")
    - confidence: detection confidence score (0.0 to 1.0)
    - bounding_box: {x, y, width, height} as fractions of image dimensions (0.0 to 1.0)
+   - target_id: stable index string "0","1",... for multi-animal
 
 Return ONLY a JSON object with an "animals" array. If no animals detected, return {"animals": []}.
-Example: {"animals": [{"species": "cat", "confidence": 0.92, "bounding_box": {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}}]}`
+Example: {"animals": [{"species": "cat", "label": "tabby cat", "confidence": 0.92, "target_id": "0", "bounding_box": {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}}]}
+Never map ducks/swans/birds/humans to goose.`
 
 // AnalyzePrompt VLM 深度分析 Prompt —— 品种/毛色/体型/质量/角度评分。
 const AnalyzePrompt = `You are an animal analysis expert. Analyze this animal image and provide:

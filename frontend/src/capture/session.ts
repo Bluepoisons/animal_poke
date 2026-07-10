@@ -41,7 +41,7 @@ export function createCaptureSession(input: {
     id,
     idempotencyKey: `capture-${id}`,
     phase: 'armed',
-    species: input.detection?.species || input.species || 'goose',
+    species: input.detection?.species || input.species || (() => { throw new Error('species_required') })(),
     detection: input.detection,
     power: input.power ?? 55,
     settled: false,
