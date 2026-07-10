@@ -1213,30 +1213,42 @@ components:
   schemas:
     Error:
       type: object
+      required: [error, reason_code, retryable]
       properties:
         error:
           type: string
+          description: Human-readable error message (safe for clients)
+          example: invalid JSON body
         reason_code:
           type: string
-        retryable:
-          type: boolean
-          description: Whether the client may retry the request
+          description: Machine-readable reason code
+          example: bad_request
         request_id:
           type: string
+          description: Correlation ID (also returned as X-Request-ID)
+        retryable:
+          type: boolean
+          description: Whether the client may safely retry
+          example: false
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional structured details (never internal stack traces)
     ServiceUnavailableError:
-      type: object
-      required: [error, reason_code]
-      properties:
-        error:
-          type: string
-          example: service unavailable
-        reason_code:
-          type: string
-          example: db_unavailable
-        retryable:
-          type: boolean
-        request_id:
-          type: string
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          required: [error, reason_code, retryable]
+          properties:
+            error:
+              type: string
+              example: service unavailable
+            reason_code:
+              type: string
+              example: db_unavailable
+            retryable:
+              type: boolean
+              example: true
     HealthResponse:
       type: object
       required: [status, time]

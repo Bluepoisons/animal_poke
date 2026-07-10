@@ -1372,68 +1372,139 @@
   }
 }
 
-/* Account settings (AP-055) */
-.ap-discover__eyebrow-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+/* ===== Progression goals (AP-050) ===== */
+.ap-goals {
+  margin: 8px 14px 16px;
+  padding: 12px 14px 14px;
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.92);
+  border: 2px solid rgba(43, 43, 43, 0.1);
+  box-shadow: 0 6px 0 rgba(43, 43, 43, 0.06);
 }
-.ap-account-entry {
-  border: 2px solid rgba(43, 43, 43, 0.2);
-  background: #fffdf8;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.ap-account-panel .ap-account-card {
-  border: 2px solid rgba(43, 43, 43, 0.12);
-  border-radius: 16px;
-  padding: 12px;
-  margin-bottom: 12px;
-  background: rgba(255, 253, 248, 0.9);
-}
-.ap-account-panel label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
+.ap-goals__header {
   margin-bottom: 8px;
 }
-.ap-account-panel input {
-  border: 2px solid rgba(43, 43, 43, 0.15);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 14px;
+.ap-goals__eyebrow {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #8a7a6a;
+  font-weight: 700;
 }
-.ap-account-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+.ap-goals__title {
+  margin: 2px 0 0;
+  font-size: 16px;
+  color: #2b2b2b;
 }
-.ap-account-tabs button {
-  border: 2px solid rgba(43, 43, 43, 0.15);
-  background: #fff;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-weight: 600;
+.ap-goals__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #c45c26;
 }
-.ap-account-tabs button.is-active {
-  background: #f2e66b;
-}
-.ap-device-list {
+.ap-goals__list {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
 }
-.ap-device-list li {
+.ap-goals__item {
+ margin: 0;
+}
+.ap-goals__btn {
+  width: 100%;
+  text-align: left;
+  border: 2px solid rgba(43, 43, 43, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  position: relative;
+}
+.ap-goals__btn:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+.ap-goals__item.is-done .ap-goals__btn {
+  background: rgba(140, 200, 140, 0.18);
+}
+.ap-goals__item.is-exec .ap-goals__btn {
+  border-color: rgba(111, 163, 210, 0.55);
+}
+.ap-goals__row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(43, 43, 43, 0.08);
+  font-weight: 700;
   font-size: 13px;
+}
+.ap-goals__desc {
+ margin: 4px 0 6px;
+ font-size: 11px;
+ color: #6a5a4a;
+ line-height: 1.35;
+}
+.ap-goals__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(43, 43, 43, 0.08);
+  overflow: hidden;
+}
+.ap-goals__bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff9ec6, #6fa3d2);
+  border-radius: 999px;
+}
+.ap-goals__free {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #2f7d4a;
+  background: rgba(120, 200, 140, 0.25);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.ap-goals__return {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 158, 198, 0.22), rgba(111, 163, 210, 0.18));
+  border: 1.5px solid rgba(43, 43, 43, 0.08);
+}
+.ap-goals__return-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+.ap-goals__dismiss {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #5a4a3a;
+  min-width: 32px;
+  min-height: 32px;
+}
+.ap-goals__return-lines {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #4a3a2a;
+}
+.ap-goals__next {
+  width: 100%;
+  border: 2px solid rgba(43, 43, 43, 0.12);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #fffdf8;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
 }

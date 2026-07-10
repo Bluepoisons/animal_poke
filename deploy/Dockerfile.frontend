@@ -8,8 +8,9 @@
 # syntax=docker/dockerfile:1.6
 FROM node:22.14.0-alpine AS builder
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json* frontend/pnpm-lock.yaml* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# AP-041: npm only — require package-lock.json
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ ./
 # 生产默认空：同域 /api（勿在镜像构建时写死跨域 API host）
 ARG VITE_API_BASE_URL=

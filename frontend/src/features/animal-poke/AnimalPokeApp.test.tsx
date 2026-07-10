@@ -38,6 +38,7 @@ function mockCameraReady() {
 
 describe('AnimalPokeApp production entry', () => {
   beforeEach(() => {
+    localStorage.clear()
     grantConsent()
     mockCameraReady()
     location.hash = ''

@@ -1,12 +1,13 @@
-.PHONY: run build tidy db-up db-down db-logs test test-integration test-cover test-vision-golden vision-golden-stub
+.PHONY: run build tidy db-up db-down db-logs test test-integration test-integration-ci test-cover migrate-up migrate-status
 
 # 本地启动后端(需先起 MySQL)
 run:
 	go run ./cmd
 
-# 编译为 bin/server
+# 编译 API + migrate CLI
 build:
 	go build -o bin/server ./cmd
+	go build -o bin/migrate ./cmd/migrate
 
 # 拉取/整理依赖
 tidy:
@@ -31,6 +32,17 @@ test:
 # 集成测试(需先 make db-up 起 MySQL)
 test-integration:
 	go test -tags=integration ./...
+
+# Schema 迁移 CLI（需 DB 可达）
+migrate-up:
+	go run ./cmd/migrate up
+
+migrate-status:
+	go run ./cmd/migrate status
+
+# CI 强制 MySQL 集成（不可达则 fail）
+test-integration-ci:
+	RUN_MYSQL_TESTS=1 go test -tags=integration ./...
 
 # 覆盖率报告
 test-cover:

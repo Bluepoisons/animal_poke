@@ -17,6 +17,9 @@ permissions:
 env:
   GO_VERSION: "1.25.12"
   NODE_VERSION: "22"
+  # Pin security / analysis tools — never use @latest in CI (AP-041)
+  GOVULNCHECK_VERSION: "v1.1.4"
+  STATICCHECK_VERSION: "2026.1"
 
 jobs:
   backend:
@@ -41,27 +44,49 @@ jobs:
         run: go test -race ./...
       - name: Staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2026.1
+          go install honnef.co/go/tools/cmd/staticcheck@${{ env.STATICCHECK_VERSION }}
           staticcheck ./...
       - name: Govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           govulncheck ./...
 
-  vision-golden-stub:
-    name: vision-golden-stub
+  backend-mysql:
+    name: Backend MySQL integration
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: animal_poke
+          MYSQL_USER: animal_poke
+          MYSQL_PASSWORD: animal_poke
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      RUN_MYSQL_TESTS: "1"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: animal_poke
+      DB_PASSWORD: animal_poke
+      DB_NAME: animal_poke
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
-      - name: Vision golden set (stub provider)
-        run: make vision-golden-stub
+      - name: Integration tests (fail if MySQL unreachable)
+        run: go test -tags=integration ./...
 
   frontend:
     name: Frontend
@@ -76,9 +101,26 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install
+      - name: Assert npm lockfile (single package manager)
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          set -euo pipefail
+          test -f package-lock.json
+          if [ -f pnpm-lock.yaml ] || [ -f yarn.lock ]; then
+            echo "Only npm is supported; remove pnpm-lock.yaml / yarn.lock (AP-041)"
+            exit 1
+          fi
+      - name: Install
+        run: npm ci
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+      - name: Generate SBOM (CycloneDX)
+        run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom
+          path: frontend/sbom.cdx.json
+          if-no-files-found: error
       - name: Typecheck & build
         run: npm run build
         env:
@@ -225,7 +267,13 @@ jobs:
           set -euo pipefail
           chmod +x deploy/k8s/scripts/assert-manifests.sh
           # Build both overlays with immutable commit SHA and fail on any isolation/tag violation.
+          # Also enforces AP-015 backup artifacts (S3 SSE checksum CronJob, runbook, drill script).
           deploy/k8s/scripts/assert-manifests.sh
+      - name: AP-015 backup restore drill dry-run
+        run: |
+          set -euo pipefail
+          chmod +x deploy/scripts/backup-restore-drill.sh
+          ./deploy/scripts/backup-restore-drill.sh --dry-run
       - name: Extra staging isolation grep (belt-and-suspenders)
         env:
           IMAGE_TAG: ${{ github.sha }}
@@ -246,7 +294,9 @@ jobs:
           grep -q "backend:${IMAGE_TAG}" /tmp/staging.yaml
           grep -q "frontend:${IMAGE_TAG}" /tmp/staging.yaml
           grep -q 'staging-backend-secrets' /tmp/staging.yaml
-      - name: Assert frontend BACKEND_UPSTREAM in production overlay
+          # AP-015: staging must never ship production backup CronJob
+          ! grep -E 'kind:[[:space:]]*CronJob|mysql-backup' /tmp/staging.yaml
+      - name: Assert frontend BACKEND_UPSTREAM + AP-015 backup in production overlay
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -262,6 +312,14 @@ jobs:
           )
           grep -q 'BACKEND_UPSTREAM' /tmp/prod.yaml
           grep -q 'animal-poke-backend:80' /tmp/prod.yaml
+          # AP-015 durable encrypted backup path
+          grep -q 'kind: CronJob' /tmp/prod.yaml
+          grep -q 'mysql-backup' /tmp/prod.yaml
+          grep -q 'aws s3 cp' /tmp/prod.yaml
+          grep -q 'AES256' /tmp/prod.yaml
+          grep -q 'BACKUP_OK' /tmp/prod.yaml
+          grep -q 'S3_BUCKET' /tmp/prod.yaml
+          ! grep -E 'TODO: aws s3|TODO:.*rclone' /tmp/prod.yaml
 
   secret-scan:
     name: Secret scan
