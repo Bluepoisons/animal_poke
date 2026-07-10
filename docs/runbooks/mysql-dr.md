@@ -20,7 +20,7 @@
    - binlog / PITR
    - 存储加密 + 备份加密
    - 跨可用区保留 ≥ 7 天
-2. 应用侧：`AUTO_MIGRATE=false`，迁移 Job 与备份解耦。
+2. 应用侧：`AUTO_MIGRATE=false`，迁移 Job 与备份解耦（见 `schema-migrate.md`）。
 3. 备份账号最小权限；凭据只在 Secret Manager。
 4. **禁止**仅把备份写在 Pod `emptyDir`：必须上传到版本化、SSE 加密的对象存储。
 

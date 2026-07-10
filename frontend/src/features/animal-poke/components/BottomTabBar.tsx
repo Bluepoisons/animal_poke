@@ -1,31 +1,40 @@
 import type { ScreenId } from '../data/types'
 import { FEATURE_FLAGS } from '../featureFlags'
-import { useI18n } from '../../../i18n'
+import type { FeatureId } from '../../../progression'
 
 interface BottomTabBarProps {
   active: ScreenId
   onChange: (screen: ScreenId) => void
   onAchievement?: () => void
+  /** When provided, locked features are omitted (no toast spam) */
+  unlockedFeatures?: Set<FeatureId>
 }
+
+const tabs: { id: ScreenId | 'achievement'; feature: FeatureId; label: string; icon: string }[] = [
+  { id: 'discover', feature: 'discover', label: '发现', icon: '◎' },
+  { id: 'pokedex', feature: 'pokedex', label: '图鉴', icon: '▣' },
+  { id: 'battle', feature: 'battle', label: '战斗', icon: '✦' },
+  { id: 'store', feature: 'store', label: '商店', icon: '◇' },
+  { id: 'achievement', feature: 'achievement', label: '成就', icon: '☆' },
+]
 
 export default function BottomTabBar({
   active,
   onChange,
   onAchievement,
+  unlockedFeatures,
 }: BottomTabBarProps) {
-  const { t } = useI18n()
-  const tabs: { id: ScreenId | 'achievement'; label: string; icon: string }[] = [
-    { id: 'discover', label: t('tab.camera'), icon: '◎' },
-    { id: 'pokedex', label: t('tab.collection'), icon: '▣' },
-    { id: 'battle', label: t('tab.fight'), icon: '✦' },
-    { id: 'store', label: t('tab.store'), icon: '◇' },
-    { id: 'settings', label: t('tab.settings'), icon: '⚙' },
-  ]
+  const visible = tabs.filter((tab) => {
+    if (tab.id === 'achievement' && !FEATURE_FLAGS.achievements) return false
+    if (!unlockedFeatures) return true
+    return unlockedFeatures.has(tab.feature)
+  })
 
   return (
-    <nav className="ap-bottom-tabs" aria-label="bottom navigation">
-      {tabs.filter((tab) => tab.id !== 'achievement' || FEATURE_FLAGS.achievements).map((tab) => {
+    <nav className="ap-bottom-tabs" aria-label="底部导航">
+      {visible.map((tab) => {
         if (tab.id === 'achievement') {
+          if (!onAchievement) return null
           return (
             <button key={tab.id} onClick={onAchievement} type="button">
               <span className="ap-tab-icon" aria-hidden="true">

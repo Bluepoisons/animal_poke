@@ -19,6 +19,7 @@ interface DiscoverScreenProps {
   dispatch: (event: CaptureFlowEvent) => void
   onNavigate: (screen: ScreenId) => void
   onEnterCapture: () => void
+  onOpenAccount?: () => void
   city?: string
   weather?: string
 }
@@ -77,6 +78,7 @@ export default function DiscoverScreen({
   dispatch,
   onNavigate,
   onEnterCapture,
+  onOpenAccount,
   city = '定位中',
   weather = '—',
 }: DiscoverScreenProps) {
@@ -186,7 +188,7 @@ export default function DiscoverScreen({
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
         ...a,
-        id: `det-${i}-${a.species}`,
+        id: a.targetId || `det-${i}-${a.species}`,
       }))
       dispatch({
         type: 'DETECT_SUCCESS',
@@ -254,7 +256,14 @@ export default function DiscoverScreen({
       <TopResourceBar city={city} weather={weather} energy={energy} coins={coins} />
 
       <div className="ap-discover__hero">
-        <div className="ap-discover__eyebrow">DISCOVER MODE</div>
+        <div className="ap-discover__eyebrow-row">
+          <div className="ap-discover__eyebrow">DISCOVER MODE</div>
+          {onOpenAccount ? (
+            <button type="button" className="ap-account-entry" onClick={onOpenAccount} data-testid="open-account">
+              账号
+            </button>
+          ) : null}
+        </div>
         <h1 className="ap-discover__title">
           <span className="ap-highlight ap-highlight--pink">真实识别</span>
           <br />

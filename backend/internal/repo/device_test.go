@@ -63,3 +63,31 @@ func TestDeviceRepo_MultipleDevices(t *testing.T) {
 		assert.True(t, repo.Exists(id))
 	}
 }
+
+func TestDeviceRepo_InstallationSecret(t *testing.T) {
+	r := setupDeviceRepo(t)
+	dev, err := r.FindOrCreate("sec-device")
+	assert.NoError(t, err)
+	assert.Empty(t, dev.InstallationSecretHash)
+
+	secret, salt, err := GenerateInstallationSecret()
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(secret), 64)
+
+	claimed, err := r.SetInstallationSecret("sec-device", secret, salt)
+	assert.NoError(t, err)
+	assert.True(t, claimed)
+
+	// 二次写入应失败占用
+	claimed2, err := r.SetInstallationSecret("sec-device", "other", salt)
+	assert.NoError(t, err)
+	assert.False(t, claimed2)
+
+	ok, err := r.VerifyInstallationSecret("sec-device", secret)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = r.VerifyInstallationSecret("sec-device", "wrong-secret")
+	assert.NoError(t, err)
+	assert.False(t, ok)
+}

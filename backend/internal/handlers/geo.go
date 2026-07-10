@@ -46,10 +46,10 @@ func (h *GeoHandler) GetCity(c *gin.Context) {
 		return
 	}
 
-	result, err := h.geoService.GetCity(lat, lng)
+	result, err := h.geoService.GetCityContext(c.Request.Context(), lat, lng)
 	if err != nil {
 		slog.Error("地级市查询失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "geo lookup failed"})
+		WriteProviderError(c, err, "geo lookup failed")
 		return
 	}
 
