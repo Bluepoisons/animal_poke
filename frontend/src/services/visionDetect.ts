@@ -10,11 +10,25 @@ export interface DetectionResult {
   confidence: number
   /** 归一化检测框 [x, y, width, height]，值范围 0~1 */
   boundingBox: [number, number, number, number]
+  /** 服务端 inference id（若有） */
+  inferenceId?: string
+  /** 原始 label */
+  label?: string
+}
+
+/** 多目标检测响应 */
+export interface MultiDetectionResult {
+  animals: DetectionResult[]
+  inferenceId: string
+  degraded?: boolean
+  source?: string
 }
 
 export interface VisionDetector {
-  /** 对单帧照片进行动物检测 */
+  /** 对单帧照片进行动物检测（取置信度最高的一只，兼容旧调用） */
   detect: (photoData: string | Blob) => Promise<DetectionResult>
+  /** 返回全部候选 + inferenceId */
+  detectAll?: (photoData: string | Blob) => Promise<MultiDetectionResult>
 }
 
 // ===== 物种差异化置信度阈值 =====
@@ -47,16 +61,27 @@ function randomBoundingBox(): [number, number, number, number] {
 
 /** Mock 视觉检测器 —— 仅测试/显式开发开关 */
 export const mockVisionDetector: VisionDetector = {
-  async detect(_photoData: string | Blob): Promise<DetectionResult> {
+  async detectAll(_photoData: string | Blob): Promise<MultiDetectionResult> {
     const latency = MOCK_LATENCY[0] + Math.random() * (MOCK_LATENCY[1] - MOCK_LATENCY[0])
     await new Promise((resolve) => setTimeout(resolve, latency))
     const species = SPECIES_POOL[Math.floor(Math.random() * SPECIES_POOL.length)]
     const confidence = MOCK_CONFIDENCE[0] + Math.random() * (MOCK_CONFIDENCE[1] - MOCK_CONFIDENCE[0])
-    return {
+    const animal: DetectionResult = {
       species,
       confidence: Math.round(confidence * 100) / 100,
       boundingBox: randomBoundingBox(),
+      inferenceId: `mock-inf-${Date.now()}`,
     }
+    return {
+      animals: [animal],
+      inferenceId: animal.inferenceId!,
+      source: 'mock',
+    }
+  },
+  async detect(photoData: string | Blob): Promise<DetectionResult> {
+    const all = await this.detectAll!(photoData)
+    if (!all.animals.length) throw new Error('no_animals_detected')
+    return { ...all.animals[0], inferenceId: all.inferenceId }
   },
 }
 
@@ -91,6 +116,11 @@ type BackendDetectResponse = {
       height?: number
     }
   }>
+  inference_id?: string
+  inferenceId?: string
+  request_id?: string
+  degraded?: boolean
+  source?: string
 }
 
 function mapSpecies(raw?: string): SpeciesType {
@@ -100,9 +130,35 @@ function mapSpecies(raw?: string): SpeciesType {
   return 'goose'
 }
 
+function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
+  const inferenceId =
+    data.inference_id ||
+    data.inferenceId ||
+    data.request_id ||
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `detect-${Date.now()}`)
+  const animals: DetectionResult[] = (data.animals || []).map((a) => {
+    const bb = a.bounding_box || {}
+    return {
+      species: mapSpecies(a.species || a.label),
+      confidence: Math.round((a.confidence || 0) * 1000) / 1000,
+      boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
+      label: a.label || a.species,
+      inferenceId,
+    }
+  })
+  return {
+    animals,
+    inferenceId,
+    degraded: data.degraded,
+    source: data.source,
+  }
+}
+
 /** 真实 /api/v1/vision/detect（multipart field: image） */
 export const apiVisionDetector: VisionDetector = {
-  async detect(photoData: string | Blob): Promise<DetectionResult> {
+  async detectAll(photoData: string | Blob): Promise<MultiDetectionResult> {
     const blob = await blobOrDataToImageFile(photoData)
     const form = new FormData()
     form.append('image', blob, 'frame.jpg')
@@ -117,18 +173,31 @@ export const apiVisionDetector: VisionDetector = {
           ? `vision-detect-${crypto.randomUUID()}`
           : `vision-detect-${Date.now()}`,
     })
-    const animals = data.animals || []
-    if (animals.length === 0) {
+    const mapped = mapBackendAnimals(data)
+    if (mapped.animals.length === 0) {
       throw new Error('no_animals_detected')
     }
-    const best = [...animals].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
-    const bb = best.bounding_box || {}
-    return {
-      species: mapSpecies(best.species || best.label),
-      confidence: Math.round((best.confidence || 0) * 1000) / 1000,
-      boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
-    }
+    return mapped
   },
+  async detect(photoData: string | Blob): Promise<DetectionResult> {
+    const all = await this.detectAll!(photoData)
+    const best = [...all.animals].sort((a, b) => b.confidence - a.confidence)[0]
+    return { ...best, inferenceId: all.inferenceId }
+  },
+}
+
+/** 统一多目标检测入口 */
+export async function detectAnimals(
+  photoData: string | Blob,
+  preferMock = import.meta.env.MODE === 'test' || import.meta.env.VITE_VISION_MOCK === '1',
+): Promise<MultiDetectionResult> {
+  const detector = getVisionDetector(preferMock)
+  if (detector.detectAll) return detector.detectAll(photoData)
+  const one = await detector.detect(photoData)
+  return {
+    animals: [one],
+    inferenceId: one.inferenceId || `legacy-${Date.now()}`,
+  }
 }
 
 /**
