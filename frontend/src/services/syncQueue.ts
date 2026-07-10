@@ -2,7 +2,7 @@
  * 可靠同步队列：IndexedDB pending → POST /sync/animal
  * - 稳定 Idempotency-Key
  * - 指数退避
- * - 409 视为已同步
+ * - 409 按 reason_code 分类：duplicate/idempotency→synced；inference_*→永久失败
  * - 刷新不丢队列
  */
 
@@ -11,6 +11,7 @@ import type { AnimalSyncPayload, SyncQueueItem } from '../db/types'
 import { ApiError } from '../api/client'
 import { authedRequest } from '../auth/deviceAuth'
 import type { GeneratedAnimal } from './capturePipeline'
+import { classifySync409, extractReasonCode } from './syncConflict'
 
 const MAX_ATTEMPTS = 8
 const BASE_DELAY_MS = 1000
@@ -50,7 +51,8 @@ export function generatedAnimalToPayload(
     latitude: coords?.lat,
     longitude: coords?.lng,
     generated_at: new Date().toISOString(),
-    inference_request_id: animal.inferenceRequestId,
+    // 只传 value 阶段服务端 inference_id
+    inference_request_id: animal.valueInferenceId || animal.inferenceRequestId,
     narrative: animal.value.narrative,
   }
 }
@@ -152,16 +154,46 @@ async function processQueueItem(item: SyncQueueItem): Promise<boolean> {
     await SyncQueueRepository.put(done)
     return true
   } catch (err) {
-    // 409 已存在 → 视为成功（幂等）
     if (err instanceof ApiError && err.status === 409) {
-      const done: SyncQueueItem = {
-        ...working,
-        status: 'synced',
-        updatedAt: Date.now(),
-        lastError: undefined,
+      const reason = extractReasonCode(
+        { reason_code: err.reasonCode, error: err.message },
+        err.message,
+      )
+      const disposition = classifySync409(reason)
+      if (disposition === 'treat_synced') {
+        const done: SyncQueueItem = {
+          ...working,
+          status: 'synced',
+          updatedAt: Date.now(),
+          lastError: undefined,
+        }
+        await SyncQueueRepository.put(done)
+        return true
       }
-      await SyncQueueRepository.put(done)
-      return true
+      if (disposition === 'permanent_fail') {
+        const permanent: SyncQueueItem = {
+          ...working,
+          attempts: working.attempts + 1,
+          status: 'failed',
+          lastError: `${reason}: ${err.message}`,
+          nextAttemptAt: Number.MAX_SAFE_INTEGER,
+          updatedAt: Date.now(),
+        }
+        await SyncQueueRepository.put(permanent)
+        return false
+      }
+      // unknown_conflict → 可重试
+      const attempts = working.attempts + 1
+      const next: SyncQueueItem = {
+        ...working,
+        attempts,
+        status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
+        lastError: `${reason}: ${err.message}`,
+        nextAttemptAt: Date.now() + backoffMs(attempts),
+        updatedAt: Date.now(),
+      }
+      await SyncQueueRepository.put(next)
+      return false
     }
 
     const attempts = working.attempts + 1

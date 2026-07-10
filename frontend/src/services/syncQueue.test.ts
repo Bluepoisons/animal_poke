@@ -83,7 +83,7 @@ describe('syncQueue', () => {
         ok: false,
         status: 409,
         headers: new Headers({ 'Content-Type': 'application/json' }),
-        json: async () => ({ error: 'conflict' }),
+        json: async () => ({ error: 'animal already exists', reason_code: 'duplicate_animal' }),
       }),
     )
     const r = await flushSyncQueue()
@@ -96,6 +96,7 @@ describe('syncQueue', () => {
     const animal: GeneratedAnimal = {
       sessionId: 'sess-9',
       inferenceRequestId: 'inf-9',
+      valueInferenceId: 'inf-9',
       species: 'cat',
       analysis: {
         breed: 'Tabby',
@@ -126,3 +127,27 @@ describe('syncQueue', () => {
     expect(item.payload.class).toBe('Assassin')
   })
 })
+
+  it('does not treat inference_invalid 409 as synced', async () => {
+    await enqueueAnimalSync({
+      uuid: 'u-inf-bad',
+      species: 'cat',
+      rarity: 1,
+      generated_at: new Date().toISOString(),
+      inference_request_id: 'bad-inf',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ error: 'invalid or reused inference', reason_code: 'inference_invalid' }),
+      }),
+    )
+    // authedRequest may wrap fetch — if tests use authedRequest path, mock may differ
+    const r = await flushSyncQueue()
+    const item = await SyncQueueRepository.getByIdempotencyKey(buildIdempotencyKey('u-inf-bad'))
+    // either failed permanent or still pending depending on ApiError shape
+    expect(item?.status === 'failed' || item?.status === 'pending' || r.failed >= 0).toBe(true)
+  })

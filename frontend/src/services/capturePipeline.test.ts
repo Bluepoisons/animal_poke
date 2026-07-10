@@ -55,6 +55,7 @@ describe('capturePipeline', () => {
             color: 'blue',
             body_type: 'stocky',
             quality_score: 8,
+            inference_id: 'inf-analyze-1',
             subject_completeness: 9,
             clarity: 8,
             lighting: 7,
@@ -78,6 +79,7 @@ describe('capturePipeline', () => {
             class: 'Ranger',
             element: 'Wind',
             narrative: 'swift and alert',
+            inference_id: 'inf-value-1',
           }),
         }
       }
@@ -128,6 +130,7 @@ describe('capturePipeline', () => {
             class: 'Tank',
             element: 'Earth',
             narrative: 'steady',
+            inference_id: 'inf-value-2',
           }),
         }
       }
