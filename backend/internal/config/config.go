@@ -20,6 +20,10 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 type Config struct {
 	AppEnv             string
 	ServerAddr         string
+	// MetricsAddr is the management-only listen address for Prometheus scrape
+	// (default :9090). Empty disables the dedicated metrics server.
+	// Never expose this port via public Ingress; use ClusterIP only.
+	MetricsAddr        string
 	LogLevel           string
 	JWTSecret          string
 	JWTIssuer          string
@@ -139,6 +143,7 @@ func Load() *Config {
 	cfg := &Config{
 		AppEnv:             getEnv("APP_ENV", "development"),
 		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
+		MetricsAddr:        getEnv("METRICS_ADDR", ":9090"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),

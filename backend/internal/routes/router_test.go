@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"animalpoke/backend/internal/config"
+	"animalpoke/backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -136,17 +138,44 @@ func TestGeoCityRoute_RequiresAuth(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestMetricsRoute(t *testing.T) {
+func TestMetricsRoute_PublicReturns404(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := NewRouter(testConfig(), nil)
 
-	// 触发一次请求
+	// Public engine must not expose Prometheus (AP-036).
 	w0 := httptest.NewRecorder()
 	r.ServeHTTP(w0, httptest.NewRequest(http.MethodGet, "/health", nil))
+	assert.Equal(t, http.StatusOK, w0.Code)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NotContains(t, w.Body.String(), "http_requests_total")
+}
+
+func TestMetricsSeriesBoundedViaPublicRouter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware.ResetMetrics()
+	t.Cleanup(middleware.ResetMetrics)
+
+	r := NewRouter(testConfig(), nil)
+	// 1k random unmatched paths → single "unknown" series, not unbounded growth.
+	for i := 0; i < 1000; i++ {
+		w := httptest.NewRecorder()
+		path := "/no-such/" + strconv.Itoa(i)
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	}
+	// Known route still records its template
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "http_requests_total")
+
+	assert.LessOrEqual(t, middleware.HTTPSeriesCount(), 16)
+	body := middleware.RenderMetrics()
+	assert.Contains(t, body, `path="unknown"`)
+	assert.Contains(t, body, `path="/health"`)
+	// Must not contain random path fragments as labels
+	assert.NotContains(t, body, "/no-such/999")
 }

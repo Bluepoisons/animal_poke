@@ -9,6 +9,8 @@ metadata:
 data:
   APP_ENV: "production"
   SERVER_ADDR: ":8080"
+  # AP-036: management-only metrics listen address (ClusterIP Service, never Ingress)
+  METRICS_ADDR: ":9090"
   GIN_MODE: "release"
   LOG_LEVEL: "INFO"
   JWT_ISSUER: "animal-poke"

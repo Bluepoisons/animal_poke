@@ -120,16 +120,30 @@ paths:
   /metrics:
     get:
       tags: [Observability]
-      summary: Prometheus metrics
+      summary: Prometheus metrics (management plane only)
+      description: |
+        **AP-036**: Metrics are NOT available on the public API / Ingress port.
+        Public `GET /metrics` on the main server returns **404**.
+
+        Scrape the dedicated management listener instead:
+        - Env: `METRICS_ADDR` (default `:9090`)
+        - Path: `GET /metrics` on that address only
+        - Kubernetes: ClusterIP Service `animal-poke-backend-metrics:9090`
+          (never attach this Service to Ingress)
+
+        Label set is fixed-cardinality: Gin route templates via `c.FullPath()`,
+        unmatched routes use path=`unknown`, status is bucketed (`2xx`/`4xx`/…).
       operationId: getMetrics
       security: []
       responses:
         "200":
-          description: Prometheus text exposition
+          description: Prometheus text exposition (management port only)
           content:
             text/plain:
               schema:
                 type: string
+        "404":
+          description: Public API port deliberately does not expose metrics
         "400":
           $ref: "#/components/responses/BadRequest"
 
