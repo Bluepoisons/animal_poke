@@ -81,7 +81,6 @@ func TestRenderValuePrompt_Complete(t *testing.T) {
 	assert.NotContains(t, p, "{{")
 }
 
-
 func TestValidateDetectResult_NoSilentGoose(t *testing.T) {
 	mk := func(species string, conf float64) DetectBox {
 		var b DetectBox
