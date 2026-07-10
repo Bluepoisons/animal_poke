@@ -1,0 +1,34 @@
+name: economy-monte-carlo
+
+on:
+  push:
+    paths:
+      - 'frontend/src/economy/**'
+      - 'frontend/src/stamina/constants.ts'
+      - 'frontend/src/shop/constants.ts'
+      - 'frontend/src/battle/constants.ts'
+      - 'frontend/scripts/economy-monte-carlo-gate.mjs'
+  pull_request:
+    paths:
+      - 'frontend/src/economy/**'
+      - 'frontend/src/stamina/constants.ts'
+      - 'frontend/src/shop/constants.ts'
+      - 'frontend/src/battle/constants.ts'
+      - 'frontend/scripts/economy-monte-carlo-gate.mjs'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Economy Monte Carlo invariant gate
+        run: npm run economy:gate
