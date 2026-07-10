@@ -1,24 +1,51 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import PageTitle from '../components/PageTitle'
 import AnimalIcon from '../components/AnimalIcon'
 import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
+import { useStamina } from '../../../stamina/useStamina'
+import { createCaptureSession, settleCapture, BEST_MIN, BEST_MAX } from '../../../capture/session'
 
 interface CaptureScreenProps {
   onToast: (message: string) => void
+  species?: 'cat' | 'goose' | 'dog'
 }
 
-export default function CaptureScreen({ onToast }: CaptureScreenProps) {
+export default function CaptureScreen({ onToast, species = 'goose' }: CaptureScreenProps) {
+  const { currentStamina, consumeStamina } = useStamina()
   const [power] = useState(55)
-  const bestMin = 35
-  const bestMax = 75
-  const captureRate = 0.78
+  const sessionRef = useRef(createCaptureSession({ species, power }))
+  const session = sessionRef.current
+  const captureRate = useMemo(() => {
+    if (power >= BEST_MIN && power <= BEST_MAX) return 0.78
+    return 0.45
+  }, [power])
 
   const handleCapture = () => {
-    if (power >= bestMin && power <= bestMax) {
-      onToast('捕获成功：鹅已加入图鉴')
-    } else {
-      onToast('捕获失败，再试一次')
+    const online = typeof navigator === 'undefined' ? true : navigator.onLine
+    const result = settleCapture({
+      session: sessionRef.current,
+      online,
+      stamina: currentStamina,
+      consumeStamina: (n) => consumeStamina(n),
+    })
+    sessionRef.current = result.session
+    if (result.ok) {
+      onToast(`捕获成功：${result.session.species} 已加入图鉴`)
+      return
     }
+    if (result.reason === 'already_settled') {
+      onToast('本轮已结算')
+      return
+    }
+    if (result.reason === 'offline') {
+      onToast('离线无法捕获')
+      return
+    }
+    if (result.reason === 'no_stamina') {
+      onToast('体力不足')
+      return
+    }
+    onToast('捕获失败，再试一次')
   }
 
   return (
@@ -26,7 +53,7 @@ export default function CaptureScreen({ onToast }: CaptureScreenProps) {
       <PageTitle
         title="CAPTURE"
         subtitle="点击画面投掷 · 手账捕捉页"
-        rightText="体力 -20"
+        rightText={`体力 -20 · 余 ${currentStamina}`}
         rightTone="pink"
       />
 
@@ -41,31 +68,10 @@ export default function CaptureScreen({ onToast }: CaptureScreenProps) {
         }}
         role="button"
         tabIndex={0}
-        aria-label="投掷捕获"
       >
-        <div className="ap-capture-target">
-          <div className="ap-animal-badge ap-animal-badge--yellow" style={{ width: 148, height: 148 }}>
-            <AnimalIcon species="goose" size={112} />
-          </div>
-        </div>
-        <div className="ap-throw-line" aria-hidden="true" />
-        <div className="ap-capture-item" aria-hidden="true">
-          <svg width="34" height="34" viewBox="0 0 80 80">
-            <circle cx="40" cy="40" r="28" fill="#FFFDF8" stroke="#2B2B2B" strokeWidth="5" />
-            <path d="M12 40h56" stroke="#2B2B2B" strokeWidth="5" />
-            <circle cx="40" cy="40" r="10" fill="#FF9EC6" stroke="#2B2B2B" strokeWidth="4" />
-          </svg>
-        </div>
+        <AnimalIcon species={session.species} size={120} />
+        <CaptureProbabilityBar rate={captureRate} power={power} bestMin={BEST_MIN} bestMax={BEST_MAX} />
       </div>
-
-      <CaptureProbabilityBar
-        title="鹅 · 面包屑球 · 弹跳略强"
-        successRate={captureRate}
-        bestMin={bestMin}
-        bestMax={bestMax}
-      />
-
-      <p className="ap-capture-hint">轻点画面投出贴纸球</p>
     </div>
   )
 }
