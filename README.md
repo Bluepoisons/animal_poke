@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/Node-22_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="node" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="ts" />
   <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="vite" />
-  <img src="https://img.shields.io/badge/Go-1.23-00ADD8?style=flat-square&logo=go&logoColor=white" alt="go" />
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="go" />
   <img src="https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="mysql" />
   <img src="https://img.shields.io/badge/PWA-Ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="pwa" />
   <img src="https://img.shields.io/badge/License-Private-lightgrey?style=flat-square" alt="license" />
@@ -126,7 +126,7 @@
                             │ HTTPS + Bearer + X-Request-ID
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  🦫 Go 1.23 后端（Gin · Gorm · MySQL）                        │
+│  🦫 Go 1.25 后端（Gin · Gorm · MySQL）                        │
 │  鉴权 · Geo · Weather · Vision · Value · Sync · Privacy     │
 │  CORS 白名单 · /livez · /readyz · /metrics · 审计 RBAC       │
 └───────┬─────────────┬─────────────┬─────────────┬───────────┘
@@ -150,7 +150,7 @@
 | 前端 | React 18 · Vite 6 · TypeScript 5.6 · PWA |
 | 状态 / 存储 | Context Providers · IndexedDB · localStorage |
 | 网络 | `fetchWithRetry` · 设备 Token 自动续签 · Idempotency-Key |
-| 后端 | Go 1.23 · Gin · Gorm · MySQL 8 |
+| 后端 | Go 1.25 · Gin · Gorm · MySQL 8 |
 | AI | 云端 VLM + LLM（双 Provider，可 Mock） |
 | 可观测 | Request-ID · JSON 日志 · Prometheus `/metrics` |
 | 交付 | Docker · Kustomize · GitHub Actions · gitleaks |
@@ -163,7 +163,7 @@
 ### 环境要求
 
 - **Node.js 22 LTS** + npm 10+
-- **Go 1.23.x**
+- **Go 1.25.x**
 - Docker（可选：本地 MySQL / 镜像）
 
 ### 1. 启动后端
