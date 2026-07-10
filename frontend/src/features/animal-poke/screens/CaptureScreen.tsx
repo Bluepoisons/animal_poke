@@ -5,6 +5,7 @@ import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
 import { useStamina } from '../../../stamina/useStamina'
 import type { DetectionResult } from '../../../services/visionDetect'
 import type { SpeciesType } from '../../../types'
+import WelfareNotice from '../components/WelfareNotice'
 import {
   BEST_MAX,
   BEST_MIN,
@@ -202,6 +203,7 @@ export default function CaptureScreen({
           </div>
         )}
       </div>
+      <WelfareNotice />
     </div>
   )
 }
