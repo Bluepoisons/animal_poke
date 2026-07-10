@@ -7,6 +7,7 @@ import { visualizer } from 'rollup-plugin-visualizer'
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0-dev'),
+    __RELEASE_SHA__: JSON.stringify(process.env.VITE_RELEASE || process.env.GITHUB_SHA || process.env.RELEASE_SHA || 'dev'),
   },
   plugins: [
     react(),
@@ -97,7 +98,7 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: true,
     minify: 'esbuild',
-    sourcemap: false,
+    sourcemap: 'hidden' // AP-037: private maps for error platform; not referenced in browser,
     rollupOptions: {
       output: {
         manualChunks: {
