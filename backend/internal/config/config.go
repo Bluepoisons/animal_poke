@@ -18,10 +18,12 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv             string
-	ServerAddr         string
-	LogLevel           string
-	JWTSecret          string
+	AppEnv     string
+	ServerAddr string
+	LogLevel   string
+	JWTSecret  string
+	// JWTSecretPrevious 可选：密钥轮换窗口内用于校验旧 Token 的上一版密钥；签发始终用 JWTSecret。
+	JWTSecretPrevious  string
 	JWTIssuer          string
 	JWTAudience        string
 	JWTAccessTTL       time.Duration
@@ -31,9 +33,12 @@ type Config struct {
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string
-	Database           DatabaseConfig
-	ThirdParty         ThirdPartyConfig
-	Server             ServerTimeouts
+	// TrustedProxies 可信反向代理 CIDR/IP 列表（TRUSTED_PROXIES CSV）。
+	// 用于正确解析 ClientIP（X-Forwarded-For），防止伪造头绕过 IP 限流。
+	TrustedProxies []string
+	Database       DatabaseConfig
+	ThirdParty     ThirdPartyConfig
+	Server         ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -135,6 +140,7 @@ func Load() *Config {
 		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
+		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
 		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
@@ -144,6 +150,7 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		TrustedProxies:     splitCSV(getEnv("TRUSTED_PROXIES", "")),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),

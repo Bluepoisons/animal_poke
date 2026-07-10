@@ -132,7 +132,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register device and issue JWT */
+        /**
+         * Register device and issue JWT
+         * @description First registration generates an `installation_secret` (returned once).
+         *     Subsequent token refresh must include the secret; knowing only `device_id` is insufficient.
+         */
         post: operations["authDevice"];
         delete?: never;
         options?: never;
@@ -505,12 +509,16 @@ export interface components {
         AuthDeviceRequest: {
             /** @description UUID or 8-64 alphanumeric/_- */
             device_id: string;
+            /** @description Required after first registration; proves device ownership */
+            installation_secret?: string;
         };
         AuthDeviceResponse: {
             token: string;
             expires_at: string;
             /** @example Bearer */
             token_type: string;
+            /** @description Present only on first successful registration; store securely client-side */
+            installation_secret?: string;
         };
         CityResponse: {
             city?: string;
@@ -818,6 +826,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["ServiceUnavailable"];
         };
