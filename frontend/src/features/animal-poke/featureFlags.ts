@@ -20,14 +20,6 @@ const DEFAULT_FLAGS: FeatureFlagState = {
   ops: false,
 }
 
-declare global {
-  interface Window {
-    __AP_CONFIG__?: {
-      apiBaseUrl?: string
-      features?: Partial<Record<FeatureKey, boolean>>
-    }
-  }
-}
 
 function envBool(key: string): boolean | undefined {
   const v = (import.meta.env as Record<string, string | undefined>)[key]
