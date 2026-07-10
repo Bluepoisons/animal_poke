@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ConsentGate } from '../compliance/ConsentGate'
 import { I18nProvider } from '../i18n'
 import { LbsProvider } from '../lbs/LbsContext'
 import { WeatherProvider } from '../weather/WeatherContext'
@@ -13,21 +14,23 @@ import { DispatchProvider } from '../economy/DispatchContext'
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <I18nProvider>
-      <LbsProvider>
-        <WeatherProvider>
-          <StaminaProvider>
-            <EconomyProvider>
-              <ShopProvider>
-                <StatusProvider>
-                  <BattleProvider>
-                    <DispatchProvider>{children}</DispatchProvider>
-                  </BattleProvider>
-                </StatusProvider>
-              </ShopProvider>
-            </EconomyProvider>
-          </StaminaProvider>
-        </WeatherProvider>
-      </LbsProvider>
+      <ConsentGate>
+        <LbsProvider>
+          <WeatherProvider>
+            <StaminaProvider>
+              <EconomyProvider>
+                <ShopProvider>
+                  <StatusProvider>
+                    <BattleProvider>
+                      <DispatchProvider>{children}</DispatchProvider>
+                    </BattleProvider>
+                  </StatusProvider>
+                </ShopProvider>
+              </EconomyProvider>
+            </StaminaProvider>
+          </WeatherProvider>
+        </LbsProvider>
+      </ConsentGate>
     </I18nProvider>
   )
 }
