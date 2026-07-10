@@ -45,7 +45,7 @@ type valueRequest struct {
 	Pose                int    `json:"pose"`
 	Angle               int    `json:"angle"`
 	// ParentInferenceID 应为 analyze 推理 ID（生产链路）；可选兼容旧客户端
-	ParentInferenceID string `json:"parent_inference_id"`
+	ParentInferenceID  string `json:"parent_inference_id"`
 	AnalyzeInferenceID string `json:"analyze_inference_id"`
 }
 

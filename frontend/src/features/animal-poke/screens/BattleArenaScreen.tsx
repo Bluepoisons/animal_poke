@@ -37,7 +37,7 @@ export default function BattleArenaScreen() {
   }, [state.phase, battle])
 
   useEffect(() => {
-    if (state.phase === 'select' && !state.playerPet) {
+    if (state.phase === 'selecting' && !state.playerPet) {
       battle.selectPet(DEMO_PET)
       battle.startMatching()
     }
@@ -60,7 +60,7 @@ export default function BattleArenaScreen() {
   const phaseLabel =
     state.phase === 'idle'
       ? '准备'
-      : state.phase === 'select'
+      : state.phase === 'selecting'
         ? '选宠'
         : state.phase === 'matching'
           ? '匹配中'
