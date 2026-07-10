@@ -18,12 +18,14 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv     string
-	ServerAddr string
-	LogLevel   string
-	JWTSecret  string
-	// JWTSecretPrevious 可选：密钥轮换窗口内用于校验旧 Token 的上一版密钥；签发始终用 JWTSecret。
-	JWTSecretPrevious  string
+	AppEnv             string
+	ServerAddr         string
+	// MetricsAddr is the management-only listen address for Prometheus scrape
+	// (default :9090). Empty disables the dedicated metrics server.
+	// Never expose this port via public Ingress; use ClusterIP only.
+	MetricsAddr        string
+	LogLevel           string
+	JWTSecret          string
 	JWTIssuer          string
 	JWTAudience        string
 	JWTAccessTTL       time.Duration
@@ -139,6 +141,7 @@ func Load() *Config {
 	cfg := &Config{
 		AppEnv:             getEnv("APP_ENV", "development"),
 		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
+		MetricsAddr:        getEnv("METRICS_ADDR", ":9090"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
 		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),

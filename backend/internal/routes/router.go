@@ -73,7 +73,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	})
 	r.GET("/ready", handlers.Readyz(readyChecker))
 	r.GET("/readyz", handlers.Readyz(readyChecker))
-	r.GET("/metrics", middleware.MetricsHandler())
+	// AP-036: /metrics is NOT on the public Ingress-facing engine.
+	// Scrape the dedicated metrics server on METRICS_ADDR (default :9090).
+	// Explicit 404 keeps probes/scanners from learning a 200 endpoint.
+	r.GET("/metrics", func(c *gin.Context) {
+		c.Status(http.StatusNotFound)
+	})
 
 	mockAllowed := cfg.MockAllowed()
 	geoProvider, weatherProvider, visionProvider, llmProvider := services.NewProvidersFromConfig(cfg.Upstream)
