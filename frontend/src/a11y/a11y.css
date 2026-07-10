@@ -1,0 +1,23 @@
+:focus-visible {
+  outline: 3px solid #E67300;
+  outline-offset: 2px;
+}
+.ap-skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: #FF8C42;
+  color: #fff;
+  padding: 8px 12px;
+  z-index: 10000;
+}
+.ap-skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+@media (pointer: coarse) {
+  button, [role="button"], .ap-map-chip, .ap-check-card {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
