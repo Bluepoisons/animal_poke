@@ -20,6 +20,7 @@ import {
 } from './captureFlow'
 
 import './animalPoke.css'
+import OnboardingOverlay from './components/OnboardingOverlay'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store']
 
@@ -229,6 +230,7 @@ export default function AnimalPokeApp() {
 
   return (
     <div className="ap-root">
+      <OnboardingOverlay />
       <a className="ap-skip-link" href="#ap-main-content">
         跳到主要内容
       </a>
