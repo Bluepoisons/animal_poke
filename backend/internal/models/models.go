@@ -286,27 +286,3 @@ type DeviceAccount struct {
 
 // TableName 明确表名。
 func (DeviceAccount) TableName() string { return "device_accounts" }
-<<<<<<< HEAD
-=======
-
-// IdempotencyRecord 服务端幂等键（device_id + route + key 唯一）。
-// 补齐 AP-006 模型，避免 services/repo 包在 main 上无法编译（AP-059 验证依赖）。
-type IdempotencyRecord struct {
-	ID           uint       `gorm:"primaryKey" json:"id"`
-	DeviceID     string     `gorm:"uniqueIndex:idx_idem_device_route_key,priority:1;size:64;not null" json:"device_id"`
-	Route        string     `gorm:"uniqueIndex:idx_idem_device_route_key,priority:2;size:128;not null" json:"route"`
-	Key          string     `gorm:"column:key_name;uniqueIndex:idx_idem_device_route_key,priority:3;size:128;not null" json:"key"`
-	RequestHash  string     `gorm:"size:64;not null" json:"request_hash"`
-	Status       string     `gorm:"size:32;not null" json:"status"` // processing|completed|failed
-	HTTPStatus   int        `json:"http_status"`
-	ResponseBody string     `gorm:"type:longtext" json:"response_body,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	ExpiresAt    time.Time  `gorm:"index" json:"expires_at"`
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`
-}
-
-// TableName 明确表名。
-func (IdempotencyRecord) TableName() string { return "idempotency_records" }
-
->>>>>>> 7feaa77 (feat(AP-059): versioned game config, hard bounds, and ops rollback)
