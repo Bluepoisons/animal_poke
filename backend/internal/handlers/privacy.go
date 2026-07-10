@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"animalpoke/backend/internal/middleware"
@@ -43,6 +44,43 @@ type consentRequest struct {
 	Revoke  bool   `json:"revoke"`
 }
 
+var allowedConsentScopes = map[string]struct{}{
+	"photo": {}, "location": {}, "precise_location": {},
+}
+
+func normalizeConsentScope(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "photo,location", nil
+	}
+	parts := strings.Split(raw, ",")
+	seen := map[string]struct{}{}
+	var out []string
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s == "" {
+			continue
+		}
+		if _, ok := allowedConsentScopes[s]; !ok {
+			return "", errInvalidScope
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		return "photo,location", nil
+	}
+	return strings.Join(out, ","), nil
+}
+
+var errInvalidScope = errScope{}
+
+type errScope struct{}
+
+func (errScope) Error() string { return "invalid scope" }
+
 // PutConsent POST /privacy/consent
 func (h *PrivacyHandler) PutConsent(c *gin.Context) {
 	var req consentRequest
@@ -50,16 +88,23 @@ func (h *PrivacyHandler) PutConsent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "version required"})
 		return
 	}
-	deviceID := middleware.GetDeviceID(c)
-	scope := req.Scope
-	if scope == "" {
-		scope = "photo,location"
-	}
-	if err := h.deviceRepo.UpdateConsent(deviceID, req.Version, scope, req.Revoke); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
+	if h.consentVersion != "" && req.Version != h.consentVersion {
+		// 仅接受当前服务端版本；升级时客户端需重弹
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported consent version", "required_version": h.consentVersion})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": req.Version, "revoked": req.Revoke})
+	deviceID := middleware.GetDeviceID(c)
+	scope, err := normalizeConsentScope(req.Scope)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope", "allowed": []string{"photo", "location", "precise_location"}})
+		return
+	}
+	if err := h.deviceRepo.UpdateConsent(deviceID, req.Version, scope, req.Revoke); err != nil {
+		// DB 不可用 fail-closed
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "update failed", "reason_code": "db_unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": req.Version, "scope": scope, "revoked": req.Revoke})
 }
 
 // ExportData POST /privacy/export

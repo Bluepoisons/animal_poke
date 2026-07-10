@@ -41,6 +41,22 @@ describe('compliance', () => {
       expect(getConsent().status).toBe('granted')
       expect(getConsent().grantedAt).toBeGreaterThan(0)
     })
+
+    it('stores photo and location scopes by default', () => {
+      const r = grantConsent()
+      expect(r.scopes).toEqual(expect.arrayContaining(['photo', 'location']))
+      expect(r.version).toBe('v1')
+      expect(r.serverSynced).toBe(true)
+    })
+
+    it('normalizes legacy local records without scopes', () => {
+      localStorage.setItem(
+        'animal-poke-consent',
+        JSON.stringify({ status: 'granted', grantedAt: 1, version: 'v1' }),
+      )
+      const r = getConsent()
+      expect(r.scopes).toEqual(expect.arrayContaining(['photo', 'location']))
+    })
   })
 
   describe('age verification', () => {
