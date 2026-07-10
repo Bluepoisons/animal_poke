@@ -1,3 +1,4 @@
+import { useBattle } from '../../../battle/useBattle'
 import { useState } from 'react'
 import type { Strategy } from '../data/types'
 import PageTitle from '../components/PageTitle'
@@ -33,6 +34,8 @@ const strategies: Record<Strategy, StrategyConfig> = {
 }
 
 export default function BattleArenaScreen() {
+  useBattle()
+
   const [playerHp, setPlayerHp] = useState(100)
   const [enemyHp, setEnemyHp] = useState(100)
   const [activeStrategy, setActiveStrategy] = useState<Strategy>('aggressive')
