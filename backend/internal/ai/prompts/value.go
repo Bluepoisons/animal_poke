@@ -1,8 +1,7 @@
 package prompts
 
-// AnalyzePrompt VLM 深度分析 Prompt 已在 detect.go 中定义。
-
 // ValuePrompt LLM 数值生成 Prompt —— 稀有度编排 + 六维属性 + 叙事。
+// 使用 text/template 占位符，由服务端完整渲染。
 const ValuePrompt = `You are a game mechanics designer for a pet collection game. Based on the following animal analysis data,
 generate the animal's game stats. The system uses a 5-tier rarity system with 6-dimensional battle attributes.
 

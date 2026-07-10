@@ -43,6 +43,7 @@ func TestLLMService_GenerateValue_Mock(t *testing.T) {
 	assert.NotEmpty(t, result.Class)
 	assert.NotEmpty(t, result.Element)
 	assert.NotEmpty(t, result.Narrative)
+	assert.Equal(t, "mock", result.Source)
 }
 
 func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
@@ -86,14 +87,56 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	assert.Equal(t, "qwen3.6-flash", requestBody.Model)
 	assert.NotEmpty(t, requestBody.Messages)
 	assert.Equal(t, 3, result.Rarity)
+	assert.Equal(t, "real", result.Source)
+	// 完整渲染后不应残留模板
+	assert.Contains(t, requestBody.Messages[0].Content, "completeness=8")
+}
+
+func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
+	var visionModel, textModel string
+	visionSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		visionModel = body.Model
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"animals\":[]}"}}]}`))
+	}))
+	defer visionSrv.Close()
+	textSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		textModel = body.Model
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"rarity\":2,\"hp\":40,\"atk\":15,\"def\":12,\"spd\":20,\"class\":\"Tank\",\"element\":\"Earth\",\"narrative\":\"sturdy\"}"}}]}`))
+	}))
+	defer textSrv.Close()
+
+	cfg := &config.ThirdPartyConfig{
+		VisionEndpoint: visionSrv.URL,
+		VisionKey:      "vk",
+		VisionModel:    "vision-x",
+		LLMEndpoint:    textSrv.URL,
+		LLMKey:         "lk",
+		LLMModel:       "text-y",
+	}
+	svc := NewAIService(cfg)
+
+	// minimal JPEG magic so DetectContentType returns image/jpeg
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xD9}
+	_, err := svc.Detect(jpeg, "t.jpg")
+	assert.NoError(t, err)
+	assert.Equal(t, "vision-x", visionModel)
+
+	_, err = svc.GenerateValue(ValueInput{Species: "cat", SubjectCompleteness: 5, Clarity: 5, Lighting: 5, Composition: 5, Pose: 5, Angle: 5})
+	assert.NoError(t, err)
+	assert.Equal(t, "text-y", textModel)
 }
 
 func TestWeightedRarity_Distribution(t *testing.T) {
 	counts := map[int]int{}
-	rng := &struct{}{}
-	_ = rng
 
-	// 使用固定种子验证分布
 	for i := 0; i < 1000; i++ {
 		mockResult := mockValue(ValueInput{
 			Species:             "cat",
@@ -110,11 +153,9 @@ func TestWeightedRarity_Distribution(t *testing.T) {
 		counts[mockResult.Rarity]++
 	}
 
-	// 验证各稀有度都有产出(宽松: 至少都有 1 次)
 	for r := 1; r <= 5; r++ {
 		assert.Greater(t, counts[r], 0, "rarity %d should appear at least once", r)
 	}
-	// 低稀有度应多于高稀有度
 	assert.Greater(t, counts[1], counts[5], "common should be more than legendary")
 }
 
@@ -151,11 +192,20 @@ func TestExtractJSON(t *testing.T) {
 		{"plain", `{"key": "value"}`, `{"key": "value"}`},
 		{"markdown_json", "```json\n{\"key\": \"value\"}\n```", `{"key": "value"}`},
 		{"markdown_no_lang", "```\n{\"key\": \"value\"}\n```", `{"key": "value"}`},
-		{"whitespace", "  {\"key\": \"value\"}  ", `{"key": "value"}`},
+		{"whitespace", "  " + `{"key": "value"}` + "  ", `{"key": "value"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, extractJSON(tt.input))
 		})
 	}
+}
+
+func TestValueInputValidate(t *testing.T) {
+	err := ValueInput{Species: ""}.Validate()
+	assert.Error(t, err)
+	err = ValueInput{Species: "cat", Clarity: 11}.Validate()
+	assert.Error(t, err)
+	err = ValueInput{Species: "cat", Clarity: 5}.Validate()
+	assert.NoError(t, err)
 }

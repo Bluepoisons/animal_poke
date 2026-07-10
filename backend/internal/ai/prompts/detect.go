@@ -1,7 +1,15 @@
 // Package prompts MB3: AI 推理 Prompt 模板集中管理, 支持版本控制与 A/B 迭代。
 package prompts
 
+// Prompt 版本号，写入 provenance。
+const (
+	DetectPromptVersion  = "detect-v2"
+	AnalyzePromptVersion = "analyze-v1"
+	ValuePromptVersion   = "value-v2"
+)
+
 // DetectPrompt VLM 动物检测 Prompt —— 从图片中识别动物物种与边界框。
+// 标准响应固定为带 animals 字段的 JSON 对象（envelope）。
 const DetectPrompt = `You are an animal detection system. Analyze this image and:
 
 1. Detect all animals present in the image.
@@ -10,8 +18,8 @@ const DetectPrompt = `You are an animal detection system. Analyze this image and
    - confidence: detection confidence score (0.0 to 1.0)
    - bounding_box: {x, y, width, height} as fractions of image dimensions (0.0 to 1.0)
 
-Return ONLY a JSON array of detected animals. If no animals detected, return empty array [].
-Example: [{"species": "cat", "confidence": 0.92, "bounding_box": {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}}]`
+Return ONLY a JSON object with an "animals" array. If no animals detected, return {"animals": []}.
+Example: {"animals": [{"species": "cat", "confidence": 0.92, "bounding_box": {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}}]}`
 
 // AnalyzePrompt VLM 深度分析 Prompt —— 品种/毛色/体型/质量/角度评分。
 const AnalyzePrompt = `You are an animal analysis expert. Analyze this animal image and provide:

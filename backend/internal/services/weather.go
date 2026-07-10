@@ -2,6 +2,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,23 +14,29 @@ import (
 
 // WeatherDay 单日天气数据。
 type WeatherDay struct {
-	Date    string `json:"date"`
-	Skycon  string `json:"skycon"`
-	TempMax float64 `json:"temp_max"`
-	TempMin float64 `json:"temp_min"`
+	Date     string  `json:"date"`
+	Skycon   string  `json:"skycon"`
+	Weather  string  `json:"weather"` // 前端友好枚举
+	DayLabel string  `json:"day_label,omitempty"`
+	TempMax  float64 `json:"temp_max"`
+	TempMin  float64 `json:"temp_min"`
 }
 
 // WeatherWeekResult 一周天气结果。
 type WeatherWeekResult struct {
-	Days   []WeatherDay `json:"days"`
-	Cached bool         `json:"cached"`
+	Days       []WeatherDay `json:"days"`
+	Week       []WeatherDay `json:"week"` // 与前端契约对齐
+	Cached     bool         `json:"cached"`
+	Source     string       `json:"source"` // real|cache|random|mock
+	Degraded   bool         `json:"degraded,omitempty"`
+	ReasonCode string       `json:"reason_code,omitempty"`
 }
 
 // caiyunDailyResponse 彩云天气天级预报响应。
 type caiyunDailyResponse struct {
-	Status  string `json:"status"`
+	Status     string `json:"status"`
 	APIVersion string `json:"api_version"`
-	Result struct {
+	Result     struct {
 		Daily struct {
 			Temperature []struct {
 				Max float64 `json:"max"`
@@ -45,60 +52,93 @@ type caiyunDailyResponse struct {
 }
 
 // GetWeekWeather 获取未来一周天气。
-// 先查内存缓存, 未命中调彩云 API; API 不可用时生成随机天气兜底。
 func (s *WeatherService) GetWeekWeather(lat, lng float64) (*WeatherWeekResult, error) {
+	return s.GetWeekWeatherContext(context.Background(), lat, lng)
+}
+
+// GetWeekWeatherContext 带 context 的一周天气。
+func (s *WeatherService) GetWeekWeatherContext(ctx context.Context, lat, lng float64) (*WeatherWeekResult, error) {
 	cacheKey := weatherCacheKey(lat, lng)
 	if result, ok := weatherCache.Get(cacheKey); ok {
 		result.Cached = true
+		if result.Source == "" {
+			result.Source = "cache"
+		}
+		result.Week = result.Days
 		return &result, nil
 	}
 
 	if s.cfg.CaiyunWeatherKey == "" {
+		if !s.mock {
+			return nil, fmt.Errorf("weather provider not configured")
+		}
 		slog.Debug("彩云天气 Key 未配置, 使用随机天气")
 		result := randomWeather()
-		weatherCache.Set(cacheKey, result, time.Hour) // 随机天气缓存 1 小时
+		result.Source = "random"
+		result.Degraded = true
+		result.ReasonCode = "provider_not_configured"
+		result.Week = result.Days
+		weatherCache.Set(cacheKey, result, time.Hour)
 		return &result, nil
 	}
 
-	result, err := s.callCaiyun(lat, lng)
+	result, err := s.callCaiyun(ctx, lat, lng)
 	if err != nil {
+		if !s.mock {
+			return nil, err
+		}
 		slog.Warn("彩云天气 API 调用失败, 降级为随机天气", "err", err)
 		result = randomWeather()
+		result.Source = "random"
+		result.Degraded = true
+		result.ReasonCode = "provider_error"
+	} else {
+		result.Source = "real"
 	}
 
-	weatherCache.Set(cacheKey, result, 3*time.Hour)
+	result.Week = result.Days
+	// TTL jitter ~10%
+	ttl := 3*time.Hour + time.Duration(rand.Intn(18))*time.Minute
+	weatherCache.Set(cacheKey, result, ttl)
 	return &result, nil
 }
 
-func (s *WeatherService) callCaiyun(lat, lng float64) (WeatherWeekResult, error) {
+func (s *WeatherService) callCaiyun(ctx context.Context, lat, lng float64) (WeatherWeekResult, error) {
 	url := fmt.Sprintf("https://api.caiyunapp.com/v2.5/%s/%f,%f/daily.json",
 		s.cfg.CaiyunWeatherKey, lng, lat)
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return WeatherWeekResult{}, err
+	}
+	client := s.client
+	if client == nil {
+		client = DefaultHTTPClient(5 * time.Second)
+	}
+	resp, body, err := DoWithRetry(ctx, client, req, 1, 1<<20)
 	if err != nil {
 		return WeatherWeekResult{}, fmt.Errorf("http request failed: %w", err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return WeatherWeekResult{}, fmt.Errorf("caiyun returned status %d", resp.StatusCode)
 	}
 
 	var cr caiyunDailyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
+	if err := json.Unmarshal(body, &cr); err != nil {
 		return WeatherWeekResult{}, fmt.Errorf("json decode failed: %w", err)
 	}
 	if cr.Status != "ok" {
 		return WeatherWeekResult{}, fmt.Errorf("caiyun status: %s", cr.Status)
 	}
 
-	// skycon 映射到游戏天气: CLEAR_DAY/CLOUDY/RAIN/SNOW/WIND/HAZE 等
 	days := make([]WeatherDay, 0, len(cr.Result.Daily.Skycon))
 	for i, sk := range cr.Result.Daily.Skycon {
+		gameW := skyconToGameWeather(sk.Value)
 		day := WeatherDay{
-			Date:   sk.Date,
-			Skycon: skyconToGameWeather(sk.Value),
+			Date:     sk.Date,
+			Skycon:   gameW,
+			Weather:  mapGameWeatherToFrontend(gameW),
+			DayLabel: weekdayLabel(sk.Date, i),
 		}
 		if i < len(cr.Result.Daily.Temperature) {
 			day.TempMax = cr.Result.Daily.Temperature[i].Max
@@ -109,14 +149,6 @@ func (s *WeatherService) callCaiyun(lat, lng float64) (WeatherWeekResult, error)
 	return WeatherWeekResult{Days: days}, nil
 }
 
-// skyconToGameWeather 将彩云 skycon 值映射到游戏内天气类型。
-// 参考 3.5 天气概率表:
-// 晴天类: CLEAR_DAY/CLEAR_NIGHT → CLEAR
-// 多云类: PARTLY_CLOUDY_DAY/PARTLY_CLOUDY_NIGHT/CLOUDY → CLOUDY
-// 雨天类: LIGHT_RAIN/MODERATE_RAIN/HEAVY_RAIN/STORM_RAIN → RAIN
-// 雪天类: LIGHT_SNOW/MODERATE_SNOW/HEAVY_SNOW → SNOW
-// 雾霾类: FOG/HAZE/SAND → HAZE
-// 风天类: WIND → WIND
 func skyconToGameWeather(skycon string) string {
 	switch skycon {
 	case "CLEAR_DAY", "CLEAR_NIGHT":
@@ -136,17 +168,48 @@ func skyconToGameWeather(skycon string) string {
 	}
 }
 
-// randomWeather 生成一周随机天气(兜底)。
+// mapGameWeatherToFrontend 映射到前端 WeatherType。
+func mapGameWeatherToFrontend(game string) string {
+	switch game {
+	case "CLEAR":
+		return "sunny"
+	case "CLOUDY":
+		return "cloudy"
+	case "RAIN":
+		return "rainy"
+	case "SNOW":
+		return "snowy"
+	case "HAZE":
+		return "foggy"
+	case "WIND":
+		return "overcast"
+	default:
+		return "sunny"
+	}
+}
+
+func weekdayLabel(date string, fallbackIdx int) string {
+	labels := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
+	if t, err := time.Parse("2006-01-02", date); err == nil {
+		return labels[int(t.Weekday())]
+	}
+	// 尝试带时间
+	if t, err := time.Parse(time.RFC3339, date); err == nil {
+		return labels[int(t.Weekday())]
+	}
+	return labels[fallbackIdx%7]
+}
+
 func randomWeather() WeatherWeekResult {
 	weathers := []string{"CLEAR", "CLOUDY", "RAIN", "SNOW", "HAZE", "WIND"}
-	weights := []int{35, 25, 15, 5, 10, 10} // 加权随机
+	weights := []int{35, 25, 15, 5, 10, 10}
 	total := 0
 	for _, w := range weights {
 		total += w
 	}
 
 	days := make([]WeatherDay, 7)
-	now := time.Now()
+	now := time.Now().UTC()
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for i := 0; i < 7; i++ {
@@ -157,18 +220,23 @@ func randomWeather() WeatherWeekResult {
 			idx++
 			cum += weights[idx]
 		}
+		date := now.AddDate(0, 0, i).Format("2006-01-02")
+		gw := weathers[idx]
 		days[i] = WeatherDay{
-			Date:    now.AddDate(0, 0, i).Format("2006-01-02"),
-			Skycon:  weathers[idx],
-			TempMax: 20 + float64(rng.Intn(15)),
-			TempMin: 10 + float64(rng.Intn(10)),
+			Date:     date,
+			Skycon:   gw,
+			Weather:  mapGameWeatherToFrontend(gw),
+			DayLabel: weekdayLabel(date, i),
+			TempMax:  20 + float64(rng.Intn(15)),
+			TempMin:  10 + float64(rng.Intn(10)),
 		}
 	}
-	return WeatherWeekResult{Days: days}
+	return WeatherWeekResult{Days: days, Week: days}
 }
 
 func weatherCacheKey(lat, lng float64) string {
+	// geohash 级精度（约 1.1km）降低基数
 	return fmt.Sprintf("weather:%.2f,%.2f", math.Floor(lat*100)/100, math.Floor(lng*100)/100)
 }
 
-var weatherCache = NewTTLCache[WeatherWeekResult](5 * time.Minute)
+var weatherCache = NewBoundedTTLCache[WeatherWeekResult](5*time.Minute, 2048)

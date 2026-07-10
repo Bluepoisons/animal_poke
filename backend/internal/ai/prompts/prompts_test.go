@@ -3,8 +3,10 @@ package prompts
 import (
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDetectPrompt_NotEmpty(t *testing.T) {
@@ -12,6 +14,8 @@ func TestDetectPrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, DetectPrompt, "species")
 	assert.Contains(t, DetectPrompt, "bounding_box")
 	assert.Contains(t, DetectPrompt, "JSON")
+	assert.Contains(t, DetectPrompt, `"animals"`)
+	assert.NotContains(t, DetectPrompt, "Return ONLY a JSON array")
 }
 
 func TestAnalyzePrompt_NotEmpty(t *testing.T) {
@@ -31,6 +35,7 @@ func TestValuePrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, ValuePrompt, "{{.Species}}")
 	assert.Contains(t, ValuePrompt, "{{.Breed}}")
 	assert.Contains(t, ValuePrompt, "{{.Color}}")
+	assert.Contains(t, ValuePrompt, "{{.SubjectCompleteness}}")
 	assert.Contains(t, ValuePrompt, "rarity")
 	assert.Contains(t, ValuePrompt, "hp")
 	assert.Contains(t, ValuePrompt, "atk")
@@ -42,15 +47,27 @@ func TestValuePrompt_NotEmpty(t *testing.T) {
 }
 
 func TestValuePrompt_Render(t *testing.T) {
-	p := ValuePrompt
-	p = strings.ReplaceAll(p, "{{.Species}}", "cat")
-	p = strings.ReplaceAll(p, "{{.Breed}}", "British Shorthair")
-	p = strings.ReplaceAll(p, "{{.Color}}", "blue-gray")
-	p = strings.ReplaceAll(p, "{{.BodyType}}", "sturdy")
-
+	tmpl, err := template.New("value").Parse(ValuePrompt)
+	require.NoError(t, err)
+	var buf strings.Builder
+	err = tmpl.Execute(&buf, map[string]interface{}{
+		"Species":             "cat",
+		"Breed":               "British Shorthair",
+		"Color":               "blue-gray",
+		"BodyType":            "sturdy",
+		"SubjectCompleteness": 9,
+		"Clarity":             8,
+		"Lighting":            7,
+		"Composition":         8,
+		"Pose":                7,
+		"Angle":               9,
+	})
+	require.NoError(t, err)
+	p := buf.String()
 	assert.Contains(t, p, "cat")
 	assert.Contains(t, p, "British Shorthair")
 	assert.Contains(t, p, "blue-gray")
 	assert.Contains(t, p, "sturdy")
-	assert.NotContains(t, p, "{{.Species}}")
+	assert.Contains(t, p, "completeness=9")
+	assert.NotContains(t, p, "{{.")
 }

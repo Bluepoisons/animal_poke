@@ -3,6 +3,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"animalpoke/backend/internal/ai/prompts"
@@ -20,8 +23,8 @@ import (
 
 // DetectBox 检测框。
 type DetectBox struct {
-	Species    string  `json:"species"`
-	Confidence float64 `json:"confidence"`
+	Species     string  `json:"species"`
+	Confidence  float64 `json:"confidence"`
 	BoundingBox struct {
 		X      float64 `json:"x"`
 		Y      float64 `json:"y"`
@@ -30,9 +33,15 @@ type DetectBox struct {
 	} `json:"bounding_box"`
 }
 
-// DetectResult VLM 检测结果。
+// DetectResult VLM 检测结果（标准 envelope）。
 type DetectResult struct {
-	Animals []DetectBox `json:"animals"`
+	Animals           []DetectBox `json:"animals"`
+	Source            string      `json:"source,omitempty"` // real|mock|cache
+	Degraded          bool        `json:"degraded,omitempty"`
+	ReasonCode        string      `json:"reason_code,omitempty"`
+	InferenceID       string      `json:"inference_id,omitempty"`
+	Model             string      `json:"model,omitempty"`
+	PromptVersion     string      `json:"prompt_version,omitempty"`
 }
 
 // AnalysisResult 深度分析结果。
@@ -47,20 +56,32 @@ type AnalysisResult struct {
 	Composition         int    `json:"composition"`
 	Pose                int    `json:"pose"`
 	Angle               int    `json:"angle"`
+	Source              string `json:"source,omitempty"`
+	Degraded            bool   `json:"degraded,omitempty"`
+	ReasonCode          string `json:"reason_code,omitempty"`
+	InferenceID         string `json:"inference_id,omitempty"`
+	Model               string `json:"model,omitempty"`
+	PromptVersion       string `json:"prompt_version,omitempty"`
 }
 
 // ---------- LLM 相关类型 ----------
 
 // ValueResult LLM 数值生成结果。
 type ValueResult struct {
-	Rarity    int    `json:"rarity"`    // 1-5 星级
-	HP        int    `json:"hp"`        // 10-100
-	ATK       int    `json:"atk"`       // 5-50
-	DEF       int    `json:"def"`       // 5-50
-	SPD       int    `json:"spd"`       // 5-50
-	Class     string `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
-	Element   string `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
-	Narrative string `json:"narrative"` // 2-3 句叙事
+	Rarity        int    `json:"rarity"`    // 1-5 星级
+	HP            int    `json:"hp"`        // 10-100
+	ATK           int    `json:"atk"`       // 5-50
+	DEF           int    `json:"def"`       // 5-50
+	SPD           int    `json:"spd"`       // 5-50
+	Class         string `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
+	Element       string `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
+	Narrative     string `json:"narrative"` // 2-3 句叙事
+	Source        string `json:"source,omitempty"`
+	Degraded      bool   `json:"degraded,omitempty"`
+	ReasonCode    string `json:"reason_code,omitempty"`
+	InferenceID   string `json:"inference_id,omitempty"`
+	Model         string `json:"model,omitempty"`
+	PromptVersion string `json:"prompt_version,omitempty"`
 }
 
 // ValueInput LLM 输入参数。
@@ -77,39 +98,109 @@ type ValueInput struct {
 	Angle               int
 }
 
+// Validate 校验 Value 输入边界。
+func (in ValueInput) Validate() error {
+	if strings.TrimSpace(in.Species) == "" {
+		return fmt.Errorf("species is required")
+	}
+	if len(in.Species) > 64 || len(in.Breed) > 64 || len(in.Color) > 64 || len(in.BodyType) > 64 {
+		return fmt.Errorf("string fields exceed max length 64")
+	}
+	for _, v := range []int{in.SubjectCompleteness, in.Clarity, in.Lighting, in.Composition, in.Pose, in.Angle} {
+		if v != 0 && (v < 1 || v > 10) {
+			return fmt.Errorf("quality scores must be 1-10")
+		}
+	}
+	return nil
+}
+
+// Validate 校验 Value 输出边界。
+func (v *ValueResult) Validate() error {
+	if v.Rarity < 1 || v.Rarity > 5 {
+		return fmt.Errorf("rarity out of range")
+	}
+	if v.HP < 10 || v.HP > 100 || v.ATK < 5 || v.ATK > 50 || v.DEF < 5 || v.DEF > 50 || v.SPD < 5 || v.SPD > 50 {
+		return fmt.Errorf("stats out of range")
+	}
+	validClass := map[string]bool{"Warrior": true, "Mage": true, "Ranger": true, "Tank": true, "Support": true, "Assassin": true}
+	validElement := map[string]bool{"Fire": true, "Water": true, "Grass": true, "Electric": true, "Ice": true, "Dark": true, "Light": true, "Earth": true, "Wind": true}
+	if !validClass[v.Class] {
+		return fmt.Errorf("invalid class")
+	}
+	if !validElement[v.Element] {
+		return fmt.Errorf("invalid element")
+	}
+	if len(v.Narrative) > 2000 {
+		return fmt.Errorf("narrative too long")
+	}
+	return nil
+}
+
 // ---------- 视觉方法 ----------
 
-// Detect 调用 AI 进行动物检测。imageData 为图片字节数据, 推理后不落盘。
+// Detect 调用 Vision 进行动物检测。imageData 为图片字节数据, 推理后不落盘。
 func (s *AIService) Detect(imageData []byte, filename string) (*DetectResult, error) {
-	if s.cfg.LLMKey == "" || s.cfg.LLMEndpoint == "" || s.cfg.LLMModel == "" {
-		slog.Debug("AI 未配置, 返回 mock 检测结果")
-		return mockDetect(), nil
+	return s.DetectContext(context.Background(), imageData, filename)
+}
+
+// DetectContext 带 context 的检测。
+func (s *AIService) DetectContext(ctx context.Context, imageData []byte, filename string) (*DetectResult, error) {
+	if !s.cfg.VisionConfigured() {
+		if !s.mock {
+			return nil, fmt.Errorf("vision provider not configured")
+		}
+		slog.Debug("Vision 未配置, 返回 mock 检测结果")
+		r := mockDetect()
+		r.Source = "mock"
+		r.Degraded = true
+		r.ReasonCode = "provider_not_configured"
+		r.PromptVersion = prompts.DetectPromptVersion
+		return r, nil
 	}
 
-	body, err := s.callVision(imageData, filename, prompts.DetectPrompt)
+	body, model, err := s.callVision(ctx, imageData, filename, prompts.DetectPrompt)
 	if err != nil {
 		return nil, err
 	}
 
-	var result DetectResult
 	jsonStr, err := s.parseChatResponse(body)
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return nil, fmt.Errorf("json unmarshal: %w", err)
+	result, err := parseDetectJSON(jsonStr)
+	if err != nil {
+		return nil, err
 	}
-	return &result, nil
+	if err := validateDetectResult(result); err != nil {
+		return nil, err
+	}
+	result.Source = "real"
+	result.Model = model
+	result.PromptVersion = prompts.DetectPromptVersion
+	return result, nil
 }
 
-// Analyze 调用 AI 进行动物深度分析。
+// Analyze 调用 Vision 进行动物深度分析。
 func (s *AIService) Analyze(imageData []byte, filename string) (*AnalysisResult, error) {
-	if s.cfg.LLMKey == "" || s.cfg.LLMEndpoint == "" || s.cfg.LLMModel == "" {
-		slog.Debug("AI 未配置, 返回 mock 分析结果")
-		return mockAnalyze(), nil
+	return s.AnalyzeContext(context.Background(), imageData, filename)
+}
+
+// AnalyzeContext 带 context 的分析。
+func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filename string) (*AnalysisResult, error) {
+	if !s.cfg.VisionConfigured() {
+		if !s.mock {
+			return nil, fmt.Errorf("vision provider not configured")
+		}
+		slog.Debug("Vision 未配置, 返回 mock 分析结果")
+		r := mockAnalyze()
+		r.Source = "mock"
+		r.Degraded = true
+		r.ReasonCode = "provider_not_configured"
+		r.PromptVersion = prompts.AnalyzePromptVersion
+		return r, nil
 	}
 
-	body, err := s.callVision(imageData, filename, prompts.AnalyzePrompt)
+	body, model, err := s.callVision(ctx, imageData, filename, prompts.AnalyzePrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +213,9 @@ func (s *AIService) Analyze(imageData []byte, filename string) (*AnalysisResult,
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		return nil, fmt.Errorf("json unmarshal: %w", err)
 	}
+	result.Source = "real"
+	result.Model = model
+	result.PromptVersion = prompts.AnalyzePromptVersion
 	return &result, nil
 }
 
@@ -129,13 +223,37 @@ func (s *AIService) Analyze(imageData []byte, filename string) (*AnalysisResult,
 
 // GenerateValue 调用 LLM 生成稀有度/六维属性/叙事。
 func (s *AIService) GenerateValue(input ValueInput) (*ValueResult, error) {
-	if s.cfg.LLMKey == "" || s.cfg.LLMEndpoint == "" || s.cfg.LLMModel == "" {
-		slog.Debug("AI 未配置, 返回 mock 数值")
-		return mockValue(input), nil
+	return s.GenerateValueContext(context.Background(), input)
+}
+
+// GenerateValueContext 带 context 的数值生成。
+func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) (*ValueResult, error) {
+	if err := input.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
-	prompt := renderValuePrompt(input)
-	body, err := s.callText(prompt)
+	if !s.cfg.LLMConfigured() {
+		if !s.mock {
+			return nil, fmt.Errorf("llm provider not configured")
+		}
+		slog.Debug("LLM 未配置, 返回 mock 数值")
+		r := mockValue(input)
+		r.Source = "mock"
+		r.Degraded = true
+		r.ReasonCode = "provider_not_configured"
+		r.PromptVersion = prompts.ValuePromptVersion
+		return r, nil
+	}
+
+	prompt, err := renderValuePrompt(input)
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(prompt, "{{") {
+		return nil, fmt.Errorf("prompt render incomplete")
+	}
+
+	body, model, err := s.callText(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -148,16 +266,25 @@ func (s *AIService) GenerateValue(input ValueInput) (*ValueResult, error) {
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		return nil, fmt.Errorf("unmarshal value result: %w", err)
 	}
+	if err := result.Validate(); err != nil {
+		// 一次受控修复：clamp 非法字段后重验
+		clampValueResult(&result)
+		if err2 := result.Validate(); err2 != nil {
+			return nil, fmt.Errorf("invalid model output: %w", err)
+		}
+	}
+	result.Source = "real"
+	result.Model = model
+	result.PromptVersion = prompts.ValuePromptVersion
 	return &result, nil
 }
 
 // ---------- 统一 HTTP 调用 ----------
 
-// callVision 发送图片 + 文本 prompt, 使用 OpenAI vision 格式(base64 图片)。
-func (s *AIService) callVision(imageData []byte, filename, prompt string) ([]byte, error) {
+func (s *AIService) callVision(ctx context.Context, imageData []byte, filename, prompt string) ([]byte, string, error) {
 	mimeType := http.DetectContentType(imageData)
 	if !strings.HasPrefix(mimeType, "image/") {
-		mimeType = "image/jpeg"
+		return nil, "", fmt.Errorf("unsupported content type: %s", mimeType)
 	}
 	b64 := base64.StdEncoding.EncodeToString(imageData)
 	dataURL := "data:" + mimeType + ";base64," + b64
@@ -166,19 +293,17 @@ func (s *AIService) callVision(imageData []byte, filename, prompt string) ([]byt
 		{"type": "image_url", "image_url": map[string]string{"url": dataURL}},
 		{"type": "text", "text": prompt},
 	}
-
-	return s.call(content)
+	_ = filename
+	return s.callProvider(ctx, s.cfg.VisionEndpoint, s.cfg.VisionKey, s.cfg.VisionModel, content)
 }
 
-// callText 发送纯文本 prompt(OpenAI chat 格式)。
-func (s *AIService) callText(prompt string) ([]byte, error) {
-	return s.call(prompt)
+func (s *AIService) callText(ctx context.Context, prompt string) ([]byte, string, error) {
+	return s.callProvider(ctx, s.cfg.LLMEndpoint, s.cfg.LLMKey, s.cfg.LLMModel, prompt)
 }
 
-// call 统一 HTTP 调用: 构建 OpenAI-compatible chat request, 发送并返回 body。
-func (s *AIService) call(content interface{}) ([]byte, error) {
+func (s *AIService) callProvider(ctx context.Context, endpoint, key, model string, content interface{}) ([]byte, string, error) {
 	body := map[string]interface{}{
-		"model": s.cfg.LLMModel,
+		"model": model,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": content},
 		},
@@ -186,36 +311,33 @@ func (s *AIService) call(content interface{}) ([]byte, error) {
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("marshal body: %w", err)
+		return nil, "", fmt.Errorf("marshal body: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", s.cfg.LLMEndpoint, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.LLMKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("ai request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
 	}
 
+	client := s.client
+	if client == nil {
+		client = DefaultHTTPClient(30 * time.Second)
+	}
+	resp, respBody, err := DoWithRetry(ctx, client, req, defaultMaxRetries, defaultMaxResponseBytes)
+	if err != nil {
+		return nil, "", err
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ai returned status %d: %s", resp.StatusCode, string(respBody))
+		return nil, "", fmt.Errorf("ai returned status %d: %s", resp.StatusCode, truncate(string(respBody), 200))
 	}
-
-	return respBody, nil
+	return respBody, model, nil
 }
 
-// parseChatResponse 解析 OpenAI chat completion 响应, 提取 content 文本并尝试剥离 markdown 代码块。
 func (s *AIService) parseChatResponse(body []byte) (string, error) {
 	var chatResp struct {
 		Choices []struct {
@@ -234,15 +356,56 @@ func (s *AIService) parseChatResponse(body []byte) (string, error) {
 	return extractJSON(content), nil
 }
 
+// parseDetectJSON 兼容 envelope 与裸数组。
+func parseDetectJSON(jsonStr string) (*DetectResult, error) {
+	jsonStr = strings.TrimSpace(jsonStr)
+	if jsonStr == "" {
+		return nil, fmt.Errorf("empty detect json")
+	}
+	// 标准 envelope
+	var env DetectResult
+	if err := json.Unmarshal([]byte(jsonStr), &env); err == nil && (env.Animals != nil || strings.HasPrefix(jsonStr, "{")) {
+		if env.Animals == nil {
+			env.Animals = []DetectBox{}
+		}
+		return &env, nil
+	}
+	// 兼容裸数组
+	var arr []DetectBox
+	if err := json.Unmarshal([]byte(jsonStr), &arr); err == nil {
+		return &DetectResult{Animals: arr}, nil
+	}
+	return nil, fmt.Errorf("unable to parse detect json")
+}
+
+func validateDetectResult(r *DetectResult) error {
+	for i, a := range r.Animals {
+		if a.Species == "" {
+			return fmt.Errorf("animal[%d] missing species", i)
+		}
+		if a.Confidence < 0 || a.Confidence > 1 {
+			return fmt.Errorf("animal[%d] confidence out of range", i)
+		}
+		bb := a.BoundingBox
+		if bb.X < 0 || bb.Y < 0 || bb.Width < 0 || bb.Height < 0 ||
+			bb.X > 1 || bb.Y > 1 || bb.Width > 1 || bb.Height > 1 ||
+			bb.X+bb.Width > 1.0001 || bb.Y+bb.Height > 1.0001 {
+			return fmt.Errorf("animal[%d] bounding_box out of range", i)
+		}
+	}
+	return nil
+}
+
 // ---------- Prompt 渲染 ----------
 
-func renderValuePrompt(input ValueInput) string {
-	p := prompts.ValuePrompt
-	p = strings.ReplaceAll(p, "{{.Species}}", input.Species)
-	p = strings.ReplaceAll(p, "{{.Breed}}", input.Breed)
-	p = strings.ReplaceAll(p, "{{.Color}}", input.Color)
-	p = strings.ReplaceAll(p, "{{.BodyType}}", input.BodyType)
-	return p
+var valuePromptTmpl = template.Must(template.New("value").Parse(prompts.ValuePrompt))
+
+func renderValuePrompt(input ValueInput) (string, error) {
+	var buf bytes.Buffer
+	if err := valuePromptTmpl.Execute(&buf, input); err != nil {
+		return "", fmt.Errorf("render value prompt: %w", err)
+	}
+	return buf.String(), nil
 }
 
 // ---------- JSON 提取 ----------
@@ -258,6 +421,45 @@ func extractJSON(s string) string {
 		s = s[:idx]
 	}
 	return strings.TrimSpace(s)
+}
+
+func clampValueResult(v *ValueResult) {
+	if v.Rarity < 1 {
+		v.Rarity = 1
+	}
+	if v.Rarity > 5 {
+		v.Rarity = 5
+	}
+	v.HP = clampInt(v.HP, 10, 100)
+	v.ATK = clampInt(v.ATK, 5, 50)
+	v.DEF = clampInt(v.DEF, 5, 50)
+	v.SPD = clampInt(v.SPD, 5, 50)
+	if v.Class == "" {
+		v.Class = "Ranger"
+	}
+	if v.Element == "" {
+		v.Element = "Wind"
+	}
+	if len(v.Narrative) > 2000 {
+		v.Narrative = v.Narrative[:2000]
+	}
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
 
 // ---------- Mock 函数(开发/测试用) ----------
@@ -301,6 +503,9 @@ func mockValue(input ValueInput) *ValueResult {
 
 	rarity := weightedRarity(rng)
 	qualityAvg := (input.SubjectCompleteness + input.Clarity + input.Lighting + input.Composition + input.Pose + input.Angle) / 6
+	if qualityAvg == 0 {
+		qualityAvg = 5
+	}
 
 	return &ValueResult{
 		Rarity:    rarity,
@@ -328,4 +533,9 @@ func weightedRarity(rng *rand.Rand) int {
 	default:
 		return 5
 	}
+}
+
+// ScoreString 用于日志脱敏，不输出敏感内容。
+func ScoreString(n int) string {
+	return strconv.Itoa(n)
 }

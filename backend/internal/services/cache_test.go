@@ -65,3 +65,27 @@ func TestTTLCache_IntType(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 42, v)
 }
+
+func TestTTLCache_BoundedEviction(t *testing.T) {
+	c := NewBoundedTTLCache[int](time.Minute, 2)
+	defer c.Stop()
+	c.Set("a", 1, time.Hour)
+	c.Set("b", 2, time.Hour)
+	c.Set("c", 3, time.Hour)
+	assert.LessOrEqual(t, c.Len(), 2)
+	_, ok := c.Get("a")
+	assert.False(t, ok, "LRU 应淘汰最旧 a")
+}
+
+func TestTTLCache_DoSingleflight(t *testing.T) {
+	c := NewTTLCache[string](time.Minute)
+	defer c.Stop()
+	calls := 0
+	v, err := c.Do("k", func() (string, error) {
+		calls++
+		return "ok", nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "ok", v)
+	assert.Equal(t, 1, calls)
+}

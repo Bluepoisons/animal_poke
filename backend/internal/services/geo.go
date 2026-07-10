@@ -2,6 +2,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -12,10 +13,13 @@ import (
 
 // GeoCityResult 地级市查询结果。
 type GeoCityResult struct {
-	City     string `json:"city"`
-	District string `json:"district"`
-	Province string `json:"province"`
-	Cached   bool   `json:"cached"`
+	City       string `json:"city"`
+	District   string `json:"district"`
+	Province   string `json:"province"`
+	Cached     bool   `json:"cached"`
+	Source     string `json:"source,omitempty"`
+	Degraded   bool   `json:"degraded,omitempty"`
+	ReasonCode string `json:"reason_code,omitempty"`
 }
 
 // tencentGeoResponse 腾讯地图逆地理编码响应结构。
@@ -32,48 +36,58 @@ type tencentGeoResponse struct {
 }
 
 // GetCity 根据 GPS 坐标获取地级市名称。
-// 先查内存缓存(地级市精度), 未命中再调腾讯地图 API。
 func (s *GeoService) GetCity(lat, lng float64) (*GeoCityResult, error) {
+	return s.GetCityContext(context.Background(), lat, lng)
+}
+
+// GetCityContext 带 context 的城市查询。
+func (s *GeoService) GetCityContext(ctx context.Context, lat, lng float64) (*GeoCityResult, error) {
 	cacheKey := cityCacheKey(lat, lng)
 	if result, ok := geoCache.Get(cacheKey); ok {
 		result.Cached = true
+		if result.Source == "" {
+			result.Source = "cache"
+		}
 		return &result, nil
 	}
 
 	if s.cfg.TencentMapKey == "" {
 		slog.Debug("腾讯地图 Key 未配置, 返回空城市")
-		return &GeoCityResult{}, nil
+		return &GeoCityResult{Source: "mock", Degraded: true, ReasonCode: "provider_not_configured"}, nil
 	}
 
-	result, err := s.callTencentMap(lat, lng)
+	result, err := s.callTencentMap(ctx, lat, lng)
 	if err != nil {
 		slog.Warn("腾讯地图 API 调用失败", "err", err)
-		// 降级: 返回空城市
-		return &GeoCityResult{}, nil
+		return &GeoCityResult{Source: "mock", Degraded: true, ReasonCode: "provider_error"}, nil
 	}
-
-	// 缓存以城市级别精度(6 小时 TTL)
+	result.Source = "real"
 	geoCache.Set(cacheKey, *result, 6*time.Hour)
 	return result, nil
 }
 
-func (s *GeoService) callTencentMap(lat, lng float64) (*GeoCityResult, error) {
+func (s *GeoService) callTencentMap(ctx context.Context, lat, lng float64) (*GeoCityResult, error) {
 	url := fmt.Sprintf("https://apis.map.qq.com/ws/geocoder/v1/?location=%f,%f&key=%s",
 		lat, lng, s.cfg.TencentMapKey)
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := s.client
+	if client == nil {
+		client = DefaultHTTPClient(5 * time.Second)
+	}
+	resp, body, err := DoWithRetry(ctx, client, req, 1, 1<<20)
 	if err != nil {
 		return nil, fmt.Errorf("http request failed: %w", err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tencent map returned status %d", resp.StatusCode)
 	}
 
 	var geoResp tencentGeoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&geoResp); err != nil {
+	if err := json.Unmarshal(body, &geoResp); err != nil {
 		return nil, fmt.Errorf("json decode failed: %w", err)
 	}
 	if geoResp.Status != 0 {
@@ -87,10 +101,18 @@ func (s *GeoService) callTencentMap(lat, lng float64) (*GeoCityResult, error) {
 	}, nil
 }
 
-// cityCacheKey 按城市级精度(保留 2 位小数)生成缓存 key。
 func cityCacheKey(lat, lng float64) string {
 	return fmt.Sprintf("city:%.2f,%.2f", math.Floor(lat*100)/100, math.Floor(lng*100)/100)
 }
 
-// geoCache 地级市缓存(单例, 6h TTL)。
-var geoCache = NewTTLCache[GeoCityResult](5 * time.Minute)
+var geoCache = NewBoundedTTLCache[GeoCityResult](5*time.Minute, 2048)
+
+// RoundCoord 粗化坐标到约 1.1km 精度（隐私最小化）。
+func RoundCoord(v float64) float64 {
+	return math.Floor(v*100) / 100
+}
+
+// EncodeGeoHash 简易 geohash 近似（两位小数网格）。
+func EncodeGeoHash(lat, lng float64) string {
+	return fmt.Sprintf("%.2f,%.2f", RoundCoord(lat), RoundCoord(lng))
+}

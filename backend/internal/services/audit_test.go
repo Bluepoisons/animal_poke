@@ -35,8 +35,8 @@ func TestAuditService_NoAnomaly_NormalAnimal(t *testing.T) {
 		InferenceRequestID: "request-1",
 	}
 
-	alerts := svc.CheckAnomaly("device-1", animal)
-	assert.Empty(t, alerts) // 正常行为不应告警
+	result := svc.CheckAnomaly("device-1", animal)
+	assert.Empty(t, result.InternalAlerts) // 正常行为不应告警
 }
 
 func TestAuditService_NoAnomaly_SingleLegendary(t *testing.T) {
@@ -50,8 +50,8 @@ func TestAuditService_NoAnomaly_SingleLegendary(t *testing.T) {
 		InferenceRequestID: "request-2",
 	}
 
-	alerts := svc.CheckAnomaly("device-2", animal)
-	assert.Empty(t, alerts) // 单只传说级不告警(需要 >=3)
+	result := svc.CheckAnomaly("device-2", animal)
+	assert.Empty(t, result.InternalAlerts) // 单只传说级不告警(需要 >=3)
 }
 
 func TestAuditService_Anomaly_ManyLegendary(t *testing.T) {
@@ -77,8 +77,8 @@ func TestAuditService_Anomaly_ManyLegendary(t *testing.T) {
 		GeneratedAt:        time.Now(),
 		InferenceRequestID: "req-c",
 	}
-	alerts := svc.CheckAnomaly("device-3", animal)
-	assert.NotEmpty(t, alerts)
+	result := svc.CheckAnomaly("device-3", animal)
+	assert.NotEmpty(t, result.InternalAlerts)
 }
 
 func TestAuditService_Anomaly_RequestIDReuse(t *testing.T) {
@@ -102,8 +102,8 @@ func TestAuditService_Anomaly_RequestIDReuse(t *testing.T) {
 		GeneratedAt:        time.Now(),
 		InferenceRequestID: "same-request-id",
 	}
-	alerts := svc.CheckAnomaly("device-4", animal)
-	assert.NotEmpty(t, alerts)
+	result := svc.CheckAnomaly("device-4", animal)
+	assert.NotEmpty(t, result.InternalAlerts)
 }
 
 func TestAuditService_LogSync(t *testing.T) {
@@ -117,6 +117,6 @@ func TestAuditService_LogSync(t *testing.T) {
 	svc.LogSync("device-5", animal)
 
 	// 验证审计日志已写入
-	logs, _ := svc.animalRepo.FindByInferenceRequestID("request-log")
+	logs, _ := svc.animalRepo.FindByInferenceRequestID("device-5", "request-log")
 	assert.Empty(t, logs) // animal 未落库(只是 LogSync 写 audit_log)
 }
