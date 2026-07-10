@@ -204,7 +204,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Analyze animal image */
+        /** Analyze selected animal target from a prior detect */
         post: operations["visionAnalyze"];
         delete?: never;
         options?: never;
@@ -563,11 +563,54 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        VisionDetectBox: {
+            /** @enum {string} */
+            species: "cat" | "dog" | "goose";
+            label?: string;
+            target_id: string;
+            confidence: number;
+            bounding_box: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
+        };
         VisionDetectResponse: {
-            animals?: {
-                [key: string]: unknown;
-            }[];
+            /** @description Backward-compatible alias of targets */
+            animals?: components["schemas"]["VisionDetectBox"][];
+            /** @description Multi-animal targets with stable target_id */
+            targets?: components["schemas"]["VisionDetectBox"][];
             inference_id?: string;
+            source?: string;
+            degraded?: boolean;
+            reason_code?: string;
+            model?: string;
+            prompt_version?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        VisionAnalyzeResponse: {
+            breed?: string;
+            color?: string;
+            body_type?: string;
+            quality_score?: number;
+            subject_completeness?: number;
+            clarity?: number;
+            lighting?: number;
+            composition?: number;
+            pose?: number;
+            angle?: number;
+            species?: string;
+            target_id?: string;
+            detect_inference_id?: string;
+            inference_id?: string;
+            box?: {
+                x?: number;
+                y?: number;
+                width?: number;
+                height?: number;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -1005,43 +1048,46 @@ export interface operations {
                      * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
                      */
                     image: string;
-                    /** @description Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region. */
-                    crop_x?: number;
-                    /** @description Optional normalized crop origin Y (0..1). */
-                    crop_y?: number;
-                    /** @description Optional normalized crop width (0..1). */
-                    crop_w?: number;
-                    /** @description Optional normalized crop height (0..1). */
-                    crop_h?: number;
-                    /** @description Optional parent detect inference id for audit linkage. */
-                    parent_inference_id?: string;
-                    /** @description Alias of parent_inference_id. */
+                    /** @description Parent detect inference id (required when provenance is enabled) */
                     detect_inference_id?: string;
+                    /** @description Alias of detect_inference_id */
+                    parent_inference_id?: string;
+                    /** @description Stable target id from detect.targets */
+                    target_id?: string;
+                    /** @description Claimed species; must match locked detect target */
+                    species?: string;
+                    /** @description JSON bounding box {x,y,width,height} fractions 0-1 */
+                    box?: string;
+                    box_x?: number;
+                    box_y?: number;
+                    box_width?: number;
+                    box_height?: number;
                 };
             };
         };
         responses: {
-            /** @description Analysis result */
+            /** @description Analysis result for the locked target */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VisionAnalyzeResponse"];
                 };
             };
-            /** @description Invalid image or crop box */
-            400: {
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            /** @description Invalid model analysis output */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
-            401: components["responses"]["Unauthorized"];
-            413: components["responses"]["PayloadTooLarge"];
-            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
         };
     };

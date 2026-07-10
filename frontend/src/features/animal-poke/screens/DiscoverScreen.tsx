@@ -186,7 +186,7 @@ export default function DiscoverScreen({
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
         ...a,
-        id: `det-${i}-${a.species}`,
+        id: a.targetId || `det-${i}-${a.species}`,
       }))
       dispatch({
         type: 'DETECT_SUCCESS',

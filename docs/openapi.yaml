@@ -294,7 +294,7 @@ paths:
   /api/v1/vision/analyze:
     post:
       tags: [Vision]
-      summary: Analyze animal image
+      summary: Analyze selected animal target from a prior detect
       operationId: visionAnalyze
       security:
         - bearerAuth: []
@@ -309,49 +309,50 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
-                crop_x:
-                  type: number
-                  minimum: 0
-                  maximum: 1
-                  description: Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region.
-                crop_y:
-                  type: number
-                  minimum: 0
-                  maximum: 1
-                  description: Optional normalized crop origin Y (0..1).
-                crop_w:
-                  type: number
-                  exclusiveMinimum: 0
-                  maximum: 1
-                  description: Optional normalized crop width (0..1).
-                crop_h:
-                  type: number
-                  exclusiveMinimum: 0
-                  maximum: 1
-                  description: Optional normalized crop height (0..1).
-                parent_inference_id:
-                  type: string
-                  description: Optional parent detect inference id for audit linkage.
                 detect_inference_id:
                   type: string
-                  description: Alias of parent_inference_id.
+                  description: Parent detect inference id (required when provenance is enabled)
+                parent_inference_id:
+                  type: string
+                  description: Alias of detect_inference_id
+                target_id:
+                  type: string
+                  description: Stable target id from detect.targets
+                species:
+                  type: string
+                  description: Claimed species; must match locked detect target
+                box:
+                  type: string
+                  description: JSON bounding box {x,y,width,height} fractions 0-1
+                box_x:
+                  type: number
+                box_y:
+                  type: number
+                box_width:
+                  type: number
+                box_height:
+                  type: number
       responses:
         "200":
-          description: Analysis result
+          description: Analysis result for the locked target
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/VisionAnalyzeResponse"
         "400":
-          description: Invalid image or crop box
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
-        "415":
-          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: Invalid model analysis output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -1203,6 +1204,29 @@ components:
             additionalProperties: true
         source:
           type: string
+    VisionDetectBox:
+      type: object
+      required: [species, confidence, target_id, bounding_box]
+      properties:
+        species:
+          type: string
+          enum: [cat, dog, goose]
+        label:
+          type: string
+        target_id:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        bounding_box:
+          type: object
+          required: [x, y, width, height]
+          properties:
+            x: { type: number, minimum: 0, maximum: 1 }
+            y: { type: number, minimum: 0, maximum: 1 }
+            width: { type: number, minimum: 0, maximum: 1 }
+            height: { type: number, minimum: 0, maximum: 1 }
     VisionDetectResponse:
       type: object
       additionalProperties: true
@@ -1210,113 +1234,47 @@ components:
         animals:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/VisionDetectBox"
+          description: Backward-compatible alias of targets
+        targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/VisionDetectBox"
+          description: Multi-animal targets with stable target_id
         inference_id:
           type: string
-    SyncAnimalRequest:
-      type: object
-      required: [uuid, species, rarity, generated_at]
-      properties:
-        uuid:
+        source:
           type: string
-          format: uuid
-        species:
-          type: string
-          description: capturable species (cat|dog|goose after normalize)
-        breed:
-          type: string
-          maxLength: 64
-        rarity:
-          type: integer
-          minimum: 1
-          maximum: 5
-        hp:
-          type: integer
-          minimum: 10
-          maximum: 100
-        atk:
-          type: integer
-          minimum: 5
-          maximum: 50
-        def:
-          type: integer
-          minimum: 5
-          maximum: 50
-        spd:
-          type: integer
-          minimum: 5
-          maximum: 50
-        class:
-          type: string
-          enum: [Warrior, Mage, Ranger, Tank, Support, Assassin]
-        element:
-          type: string
-          enum: [Fire, Water, Grass, Electric, Ice, Dark, Light, Earth, Wind]
-        latitude:
-          type: number
-          minimum: -90
-          maximum: 90
-        longitude:
-          type: number
-          minimum: -180
-          maximum: 180
-        city:
-          type: string
-          maxLength: 64
-        generated_at:
-          type: string
-          format: date-time
-        inference_request_id:
-          type: string
-          maxLength: 128
-        keep_precise_location:
+        degraded:
           type: boolean
-    SyncAnimalResponse:
-      type: object
-      required: [status, uuid]
-      properties:
-        status:
-          type: string
-          example: synced
-        uuid:
-          type: string
-          format: uuid
-        review_status:
-          type: string
-    BatchSyncRequest:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          minItems: 1
-          maxItems: 100
-          items:
-            $ref: "#/components/schemas/SyncAnimalRequest"
-    BatchSyncItemResult:
-      type: object
-      required: [uuid, status]
-      properties:
-        uuid:
-          type: string
-        status:
-          type: string
-          enum: [synced, conflict, error]
-        error:
-          type: string
         reason_code:
           type: string
-          description: |
-            Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
-            invalid_class, invalid_element, invalid_coords, invalid_time,
-            invalid_string_length, species_unsupported, duplicate_animal,
-            batch_duplicate, inference_*, sync_failed, batch_too_large
-    BatchSyncResponse:
+        model:
+          type: string
+        prompt_version:
+          type: string
+    VisionAnalyzeResponse:
       type: object
-      required: [results]
+      additionalProperties: true
       properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/BatchSyncItemResult"
+        breed: { type: string }
+        color: { type: string }
+        body_type: { type: string }
+        quality_score: { type: integer, minimum: 1, maximum: 10 }
+        subject_completeness: { type: integer, minimum: 1, maximum: 10 }
+        clarity: { type: integer, minimum: 1, maximum: 10 }
+        lighting: { type: integer, minimum: 1, maximum: 10 }
+        composition: { type: integer, minimum: 1, maximum: 10 }
+        pose: { type: integer, minimum: 1, maximum: 10 }
+        angle: { type: integer, minimum: 1, maximum: 10 }
+        species: { type: string }
+        target_id: { type: string }
+        detect_inference_id: { type: string }
+        inference_id: { type: string }
+        box:
+          type: object
+          properties:
+            x: { type: number }
+            y: { type: number }
+            width: { type: number }
+            height: { type: number }
