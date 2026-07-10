@@ -1,6 +1,5 @@
 import type { SpeciesType } from '../types'
-import { getApiBaseUrl } from '../api/client'
-import { getAccessToken } from '../auth/deviceAuth'
+import { authedRequest } from '../auth/deviceAuth'
 
 // ===== 检测结果类型 =====
 
@@ -107,23 +106,17 @@ export const apiVisionDetector: VisionDetector = {
     const blob = await blobOrDataToImageFile(photoData)
     const form = new FormData()
     form.append('image', blob, 'frame.jpg')
-    const token = await getAccessToken()
-    const base = getApiBaseUrl()
-    const res = await fetch(`${base}/api/v1/vision/detect`, {
+    const data = await authedRequest<BackendDetectResponse>({
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Request-ID':
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `vis-${Date.now()}`,
-      },
+      path: '/api/v1/vision/detect',
       body: form,
+      timeoutMs: 30_000,
+      allowRetry: true,
+      idempotencyKey:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? `vision-detect-${crypto.randomUUID()}`
+          : `vision-detect-${Date.now()}`,
     })
-    if (!res.ok) {
-      throw new Error(`Vision detect failed: ${res.status}`)
-    }
-    const data = (await res.json()) as BackendDetectResponse
     const animals = data.animals || []
     if (animals.length === 0) {
       throw new Error('no_animals_detected')
