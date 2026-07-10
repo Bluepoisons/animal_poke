@@ -61,16 +61,19 @@ export default function AnimalPokeApp() {
     toastTimer.current = window.setTimeout(() => setToastMessage(null), 1800)
   }, [])
 
-  const navigate = useCallback((nextScreen: ScreenId) => {
+  const navigate = useCallback((nextScreen: ScreenId, opts?: { replace?: boolean }) => {
     setScreen(nextScreen)
-    if (typeof history !== 'undefined') history.replaceState(null, '', `#${nextScreen}`)
+    if (typeof history === 'undefined') return
+    const url = `#${nextScreen}`
+    if (opts?.replace) history.replaceState({ screen: nextScreen }, '', url)
+    else history.pushState({ screen: nextScreen }, '', url)
   }, [])
 
   const handleEnterCapture = useCallback(() => {
     const f = flowRef.current
     if (!f.selectedBox || !f.detectInferenceId || !f.photoBlob) {
       showToast('识别数据不完整')
-      navigate('discover')
+      navigate('discover', { replace: true })
       return
     }
     if (!canEnterCapture(f) && f.phase !== 'target_confirmed') {
@@ -84,13 +87,12 @@ export default function AnimalPokeApp() {
 
   // 路由守卫：#capture 必须有确认目标
   useEffect(() => {
-    const onHash = () => {
-      const h = parseHashScreen()
+    const applyRoute = (h: ScreenId) => {
       if (h === 'capture') {
         const f = flowRef.current
-        if (!canEnterCapture(f) && f.phase !== 'capturing') {
+        if (!canEnterCapture(f) && f.phase !== 'capturing' && f.phase !== 'completed') {
           showToast('请先完成发现与识别')
-          navigate('discover')
+          navigate('discover', { replace: true })
           return
         }
       }
@@ -98,8 +100,18 @@ export default function AnimalPokeApp() {
         setScreen(h)
       }
     }
+    const onHash = () => applyRoute(parseHashScreen())
+    const onPop = () => applyRoute(parseHashScreen())
     window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
+    window.addEventListener('popstate', onPop)
+    // 初始 deep link 规范化
+    if (typeof location !== 'undefined' && !location.hash) {
+      history.replaceState({ screen: 'discover' }, '', '#discover')
+    }
+    return () => {
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('popstate', onPop)
+    }
   }, [navigate, showToast])
 
   // 切走 capture 时若未完成，不保留默认鹅会话：离开 capture 且非 capturing 完成则保持 flow
@@ -111,7 +123,7 @@ export default function AnimalPokeApp() {
 
   const handleInvalidCapture = useCallback(() => {
     dispatch({ type: 'RESET' })
-    navigate('discover')
+    navigate('discover', { replace: true })
     showToast('捕获会话无效，已返回发现')
   }, [dispatch, navigate, showToast])
 
@@ -159,7 +171,7 @@ export default function AnimalPokeApp() {
           <HuntMapScreen
             selectedTargetId={selectedTargetId}
             onSelectTarget={setSelectedTargetId}
-            onBack={() => navigate('discover')}
+            onBack={() => navigate('discover', { replace: true })}
           />
         )
       case 'capture': {
