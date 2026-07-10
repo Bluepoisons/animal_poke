@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../
+namespace: production
+patches:
+  - target:
+      kind: ConfigMap
+      name: backend-config
+    patch: |-
+      - op: replace
+        path: /data/CORS_ALLOWED_ORIGINS
+        value: "https://app.animal-poke.example.com"
+  - target:
+      kind: Ingress
+      name: animal-poke-api
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.animal-poke.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.animal-poke.example.com
+  - target:
+      kind: Ingress
+      name: animal-poke-web
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: app.animal-poke.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.animal-poke.example.com
