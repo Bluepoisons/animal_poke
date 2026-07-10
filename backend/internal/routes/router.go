@@ -1,7 +1,8 @@
 package routes
 
 import (
-	"time"
+	"log/slog"
+	"net/http"
 
 	"animalpoke/backend/internal/config"
 	"animalpoke/backend/internal/handlers"
@@ -148,6 +149,17 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			)
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
+		}
+		if deviceRepo != nil && accountRepo != nil {
+			accountHandler = handlers.NewAccountHandler(
+				deviceRepo, accountRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
+			)
+			api.POST("/auth/login",
+				middleware.RateLimitByIP(ipLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.Login,
+			)
+		} else {
 			api.POST("/auth/login", unavailable("db_unavailable"))
 		}
 
@@ -172,6 +184,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 			errHandler := handlers.NewErrorReportHandler()
 			auth.POST("/errors/report", middleware.BodyLimit(middleware.MaxBodyErrorReport), errHandler.Report)
+
+			// Analytics funnel ingest (privacy-safe; no photos/tokens/precise coords)
+			analyticsHandler := handlers.NewAnalyticsHandler()
+			auth.POST("/analytics/events", middleware.BodyLimit(middleware.MaxBodyDefault), analyticsHandler.Ingest)
 
 			// 账号绑定 / 设备管理
 			if accountHandler != nil {
@@ -239,6 +255,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			// 隐私 / 安全 / 商业化 / 内容审核
 			safetyH := handlers.NewSafetyHandler(db, cfg.StrictMinorDefaults)
 			auth.GET("/account/defaults", safetyH.AccountDefaults)
+			// safety report only needs structured metadata; always registered
+			auth.POST("/safety/report", middleware.BodyLimit(middleware.MaxBodyDefault), safetyH.Report)
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
 				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
@@ -246,7 +264,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
-				sec := handlers.NewSecurityHandler(db, auditRepo)
+				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
 				auth.POST("/security/report", middleware.BodyLimit(middleware.MaxBodyDefault), sec.Report)
 
 				commerce := handlers.NewCommerceHandler(db)
@@ -261,7 +279,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", unavailable("db_unavailable"))
 				auth.GET("/privacy/requests/:id", unavailable("db_unavailable"))
 				auth.POST("/security/report", unavailable("db_unavailable"))
-				auth.POST("/safety/report", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/fulfill", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/refund", unavailable("db_unavailable"))

@@ -169,17 +169,27 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Validate OpenAPI 3.1
         run: npx --yes @redocly/cli@1 lint docs/openapi.yaml
-      - name: Check generated TS client is fresh
+      - name: Bidirectional Gin ↔ OpenAPI contract gate (AP-033)
         run: |
-          npx --yes openapi-typescript@7 docs/openapi.yaml -o /tmp/api.d.ts
-          # 若仓库已提交生成物则 diff；否则仅确保生成成功
-          if [ -f frontend/src/api/generated/schema.d.ts ]; then
-            diff -u frontend/src/api/generated/schema.d.ts /tmp/api.d.ts
-          else
-            mkdir -p frontend/src/api/generated
-            cp /tmp/api.d.ts frontend/src/api/generated/schema.d.ts
-            echo "generated client written for first-time baseline"
+          # Fails when /api/v1 METHOD+path sets diverge between router.go and openapi.yaml
+          node scripts/openapi-contract-gate.mjs
+      - name: Require committed schema.d.ts matches OpenAPI
+        run: |
+          set -euo pipefail
+          # AP-033: generated client must be committed and fresh.
+          # Never auto-copy generated output to pass CI.
+          if [ ! -f frontend/src/api/generated/schema.d.ts ]; then
+            echo "FATAL: frontend/src/api/generated/schema.d.ts is missing."
+            echo "Run: (cd frontend && npm run openapi:gen) and commit the result."
+            exit 1
           fi
+          npx --yes openapi-typescript@7 docs/openapi.yaml -o /tmp/api.d.ts
+          if ! diff -u frontend/src/api/generated/schema.d.ts /tmp/api.d.ts; then
+            echo "FATAL: schema.d.ts is stale relative to docs/openapi.yaml"
+            echo "Run: (cd frontend && npm run openapi:gen) and commit the result."
+            exit 1
+          fi
+          echo "schema.d.ts matches openapi.yaml"
 
   container:
     name: Container

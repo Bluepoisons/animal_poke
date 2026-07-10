@@ -26,6 +26,8 @@ type Config struct {
 	MetricsAddr        string
 	LogLevel           string
 	JWTSecret          string
+	// JWTSecretPrevious optional previous secret for rotation window.
+	JWTSecretPrevious  string
 	JWTIssuer          string
 	JWTAudience        string
 	JWTAccessTTL       time.Duration
@@ -45,9 +47,17 @@ type Config struct {
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string
-	Database           DatabaseConfig
-	ThirdParty         ThirdPartyConfig
-	Server             ServerTimeouts
+	// TrustedProxies trusted reverse-proxy CIDRs/IPs (empty = distrust XFF).
+	TrustedProxies []string
+	// StrictMinorDefaults stricter privacy/social defaults for minors.
+	StrictMinorDefaults bool
+	// ProviderNoTrainPolicy audit that upstream vision/LLM is no-train.
+	ProviderNoTrainPolicy bool
+	Database              DatabaseConfig
+	ThirdParty            ThirdPartyConfig
+	Server                ServerTimeouts
+	// Upstream HTTP budgets / circuit breaker settings.
+	Upstream UpstreamConfig
 }
 
 // FeatureFlags Ranking / PvP / Social / Ops 产品能力开关（AP-042）。
@@ -58,6 +68,58 @@ type FeatureFlags struct {
 	PvP     bool
 	Social  bool
 	Ops     bool
+}
+
+// ProviderBudget per-upstream timeout/retry/concurrency budget.
+type ProviderBudget struct {
+	TotalDeadline time.Duration
+	Timeout       time.Duration
+	MaxRetries    int
+	MaxConcurrent int
+}
+
+// UpstreamConfig global upstream budgets and circuit breaker.
+type UpstreamConfig struct {
+	Geo                     ProviderBudget
+	Weather                 ProviderBudget
+	Vision                  ProviderBudget
+	LLM                     ProviderBudget
+	MaxRetryAfter           time.Duration
+	CircuitFailureThreshold int
+	CircuitOpenTimeout      time.Duration
+}
+
+// DefaultUpstreamConfig returns safe defaults (overridable via env).
+func DefaultUpstreamConfig() UpstreamConfig {
+	return UpstreamConfig{
+		Geo: ProviderBudget{
+			TotalDeadline: 8 * time.Second,
+			Timeout:       3 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 32,
+		},
+		Weather: ProviderBudget{
+			TotalDeadline: 8 * time.Second,
+			Timeout:       3 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 32,
+		},
+		Vision: ProviderBudget{
+			TotalDeadline: 45 * time.Second,
+			Timeout:       25 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 8,
+		},
+		LLM: ProviderBudget{
+			TotalDeadline: 45 * time.Second,
+			Timeout:       25 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 8,
+		},
+		MaxRetryAfter:           5 * time.Second,
+		CircuitFailureThreshold: 5,
+		CircuitOpenTimeout:      30 * time.Second,
+	}
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -171,6 +233,7 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		TrustedProxies:     splitCSV(getEnv("TRUSTED_PROXIES", "")),
 		// 默认开启：未成年人严格默认 + Provider 不训练审计
 		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
 		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),

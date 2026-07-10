@@ -79,7 +79,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Prometheus metrics */
+        /**
+         * Prometheus metrics (management plane only)
+         * @description **AP-036**: Metrics are NOT available on the public API / Ingress port.
+         *     Public `GET /metrics` on the main server returns **404**.
+         *
+         *     Scrape the dedicated management listener instead:
+         *     - Env: `METRICS_ADDR` (default `:9090`)
+         *     - Path: `GET /metrics` on that address only
+         *     - Kubernetes: ClusterIP Service `animal-poke-backend-metrics:9090`
+         *       (never attach this Service to Ingress)
+         *
+         *     Label set is fixed-cardinality: Gin route templates via `c.FullPath()`,
+         *     unmatched routes use path=`unknown`, status is bucketed (`2xx`/`4xx`/…).
+         */
         get: operations["getMetrics"];
         put?: never;
         post?: never;
@@ -369,7 +382,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pull animals (cursor) */
+        /**
+         * Pull animals (cursor)
+         * @description Pull animals by server_version cursor (`since_version`).
+         *     Soft-deleted animals are returned as tombstones only
+         *     (`uuid`, `deleted_at`, `server_version`) — never full content or precise coordinates.
+         */
         get: operations["pullAnimals"];
         put?: never;
         /**
@@ -412,7 +430,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request data export */
+        /**
+         * Request data export
+         * @description Default complete export: paginates all animals (beyond 200), consent,
+         *     security report metadata (no raw payloads), data_request history (no nested payloads),
+         *     orders and entitlements when present. Precise coordinates are always redacted.
+         *     Optional `cursor` query returns a single page for large exports.
+         */
         post: operations["exportData"];
         delete?: never;
         options?: never;
@@ -429,7 +453,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request data deletion */
+        /**
+         * Request data deletion
+         * @description Transactional delete: soft-delete animals (tombstone + server_version bump),
+         *     remove inferences and security reports, clear historical export payloads,
+         *     deactivate entitlements, revoke consent, bump token_version.
+         *     Orders are retained for legal/financial audit (not hard-deleted).
+         *     Precise location fields are cleared; expired precise coords cleaned via maintenance hook.
+         */
         post: operations["deleteData"];
         delete?: never;
         options?: never;
@@ -811,6 +842,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/errors/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client error report (redacted)
+         * @description Authenticated client error ingest. Message is required.
+         *     Server redacts tokens/keys and truncates stack/message before logging.
+         *     Never accepts photos or precise coordinates.
+         */
+        post: operations["errorsReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Privacy-safe funnel event ingest
+         * @description Batch ingest of allowed funnel event names only.
+         *     Drops forbidden keys (photos, tokens, precise coords).
+         *     schema_version must be 1 when provided.
+         */
+        post: operations["analyticsIngest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -826,17 +901,7 @@ export interface components {
              * @example bad_request
              */
             reason_code: string;
-            /** @description Correlation ID (also returned as X-Request-ID) */
             request_id?: string;
-            /**
-             * @description Whether the client may safely retry
-             * @example false
-             */
-            retryable: boolean;
-            /** @description Optional structured details (never internal stack traces) */
-            details?: {
-                [key: string]: unknown;
-            };
         };
         FeatureUnavailableError: {
             /** @example feature unavailable */
@@ -847,7 +912,7 @@ export interface components {
             feature?: string;
             request_id?: string;
         };
-        ServiceUnavailableError: {
+        ServiceUnavailableError: components["schemas"]["Error"] & {
             /** @example service unavailable */
             error: string;
             /** @example db_unavailable */
@@ -1037,6 +1102,101 @@ export interface components {
             request_id?: string;
             /** Format: date-time */
             server_time?: string;
+        };
+        VisionAnalyzeResponse: {
+            species?: string;
+            breed?: string;
+            color?: string;
+            body_type?: string;
+            inference_id?: string;
+            parent_inference_id?: string;
+            target_id?: string;
+            source?: string;
+            safety?: components["schemas"]["SafetySummary"];
+        } & {
+            [key: string]: unknown;
+        };
+        SyncAnimalRequest: {
+            /** Format: uuid */
+            uuid: string;
+            species: string;
+            breed?: string;
+            rarity: number;
+            hp?: number;
+            atk?: number;
+            def?: number;
+            spd?: number;
+            class?: string;
+            element?: string;
+            latitude?: number;
+            longitude?: number;
+            city?: string;
+            /** Format: date-time */
+            generated_at: string;
+            inference_request_id?: string;
+            keep_precise_location?: boolean;
+        };
+        SyncAnimalResponse: {
+            /** @example synced */
+            status: string;
+            uuid: string;
+            review_status?: string;
+        };
+        BatchSyncRequest: {
+            items: components["schemas"]["SyncAnimalRequest"][];
+        };
+        BatchSyncResponse: {
+            results: {
+                uuid?: string;
+                status?: string;
+                error?: string;
+                reason_code?: string;
+            }[];
+        };
+        ErrorReportRequest: {
+            message: string;
+            stack?: string;
+            component?: string;
+            route?: string;
+            release?: string;
+            level?: string;
+            extra?: {
+                [key: string]: string;
+            };
+        };
+        ErrorReportResponse: {
+            accepted: boolean;
+            request_id?: string;
+        };
+        AnalyticsIngestRequest: {
+            /** @enum {integer} */
+            schema_version?: 0 | 1;
+            events: components["schemas"]["AnalyticsEvent"][];
+        };
+        AnalyticsEvent: {
+            schema_version?: number;
+            session_id: string;
+            /** @enum {string} */
+            name: "auth" | "camera_ok" | "scan" | "detect_result" | "capture_attempt" | "generate_stage" | "collection_complete" | "trade" | "battle_end";
+            /** Format: int64 */
+            ts?: number;
+            event_id: string;
+            coarse_location?: {
+                city?: string;
+                region?: string;
+                country?: string;
+            };
+            experiment_id?: string;
+            experiment_variant?: string;
+            props?: {
+                [key: string]: unknown;
+            };
+        };
+        AnalyticsIngestResponse: {
+            accepted: number;
+            dropped: number;
+            schema_version: number;
+            request_id?: string;
         };
     };
     responses: {
@@ -1247,7 +1407,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Prometheus text exposition */
+            /** @description Prometheus text exposition (management port only) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1257,6 +1417,13 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            /** @description Public API port deliberately does not expose metrics */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ping: {
@@ -1587,10 +1754,7 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
-                     */
+                    /** Format: binary */
                     image: string;
                     /** @description Parent detect inference id (required when provenance is enabled) */
                     detect_inference_id?: string;
@@ -1736,6 +1900,9 @@ export interface operations {
     pullAnimals: {
         parameters: {
             query?: {
+                /** @description Exclusive lower bound of server_version */
+                since_version?: number;
+                /** @description Deprecated alias; prefer since_version */
                 cursor?: string;
                 limit?: number;
             };
@@ -1745,7 +1912,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Animals page */
+            /** @description Animals page (active rows + tombstones) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1815,14 +1982,17 @@ export interface operations {
     };
     exportData: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional animal id cursor for page-only export */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Export accepted */
+            /** @description Export completed (or page) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2398,6 +2568,58 @@ export interface operations {
                 };
             };
             501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    errorsReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ErrorReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorReportResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    analyticsIngest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted (per-event accept/drop counts) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsIngestResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
         };
     };
 }
