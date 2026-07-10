@@ -22,6 +22,9 @@ const (
 	MaxLatencyKeys = 256
 	// MaxAICostKeys bounds AI call type labels.
 	MaxAICostKeys = 64
+	MaxSyncKeys   = 32
+	MaxFunnelKeys = 128
+	MaxConfKeys   = 8
 	// UnknownPath is the fixed label when FullPath is empty (404 / unmatched).
 	UnknownPath = "unknown"
 )
@@ -32,13 +35,20 @@ var (
 	httpRequests   = make(map[string]*uint64) // method|path|status
 	httpLatencySum = make(map[string]*uint64) // method|path -> ms sum
 	httpLatencyCnt = make(map[string]*uint64) // method|path
-	aiCostCalls    = make(map[string]*uint64) // type
+	aiCostCalls    = make(map[string]*uint64) // type|provider|outcome
+	aiConfidence   = make(map[string]*uint64) // bucket
+	syncOutcomes   = make(map[string]*uint64)
+	funnelStages   = make(map[string]*uint64) // stage|result
+	aiEmptyDetect  atomic.Uint64
 
 	droppedSeries atomic.Uint64
 	rateLimitHits atomic.Uint64
 	nonceReplays  atomic.Uint64
 	cacheHits     atomic.Uint64
 	cacheMisses   atomic.Uint64
+
+	releaseSHA       atomic.Value // string
+	processStartUnix = time.Now().Unix()
 )
 
 // ResetMetrics clears all series (tests only).
@@ -49,6 +59,10 @@ func ResetMetrics() {
 	httpLatencySum = make(map[string]*uint64)
 	httpLatencyCnt = make(map[string]*uint64)
 	aiCostCalls = make(map[string]*uint64)
+	aiConfidence = make(map[string]*uint64)
+	syncOutcomes = make(map[string]*uint64)
+	funnelStages = make(map[string]*uint64)
+	aiEmptyDetect.Store(0)
 	droppedSeries.Store(0)
 	rateLimitHits.Store(0)
 	nonceReplays.Store(0)
@@ -164,14 +178,86 @@ func statusClass(status int) string {
 
 // ObserveAICost records AI provider call counts by type (bounded labels).
 func ObserveAICost(callType string) {
-	t := strings.TrimSpace(callType)
-	if t == "" {
-		t = "unknown"
+	ObserveAI(callType, "unknown", "ok")
+}
+
+// SetReleaseSHA sets process release identity for metrics labels.
+func SetReleaseSHA(sha string) {
+	sha = strings.TrimSpace(sha)
+	if sha == "" {
+		sha = "unknown"
 	}
-	if len(t) > 64 {
-		t = t[:64]
+	if len(sha) > 40 {
+		sha = sha[:40]
 	}
-	incBounded(aiCostCalls, t, MaxAICostKeys)
+	releaseSHA.Store(sha)
+}
+
+// GetReleaseSHA returns release identity.
+func GetReleaseSHA() string {
+	if v := releaseSHA.Load(); v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+func sanitizeMetricLabel(s, fallback string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return fallback
+	}
+	if len(s) > 32 {
+		s = s[:32]
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return fallback
+	}
+	return out
+}
+
+// ObserveAI records AI call with low-cardinality provider/outcome labels.
+func ObserveAI(callType, provider, outcome string) {
+	ct := sanitizeMetricLabel(callType, "unknown")
+	pr := sanitizeMetricLabel(provider, "unknown")
+	oc := sanitizeMetricLabel(outcome, "ok")
+	incBounded(aiCostCalls, ct+"|"+pr+"|"+oc, MaxAICostKeys)
+}
+
+// ObserveDetectEmpty records empty vision detections.
+func ObserveDetectEmpty() { aiEmptyDetect.Add(1) }
+
+// ObserveConfidence records coarse confidence buckets.
+func ObserveConfidence(maxConfidence float64) {
+	bucket := "lt50"
+	switch {
+	case maxConfidence >= 0.8:
+		bucket = "ge80"
+	case maxConfidence >= 0.5:
+		bucket = "50_80"
+	}
+	incBounded(aiConfidence, bucket, MaxConfKeys)
+}
+
+// ObserveSyncOutcome records sync results.
+func ObserveSyncOutcome(outcome string) {
+	incBounded(syncOutcomes, sanitizeMetricLabel(outcome, "unknown"), MaxSyncKeys)
+}
+
+// ObserveFunnel records core-loop funnel stages.
+func ObserveFunnel(stage, result string) {
+	key := sanitizeMetricLabel(stage, "unknown") + "|" + sanitizeMetricLabel(result, "unknown")
+	incBounded(funnelStages, key, MaxFunnelKeys)
 }
 
 // ObserveRateLimit records rate-limit hits.
@@ -214,6 +300,18 @@ func RenderMetrics() string {
 	for k, v := range aiCostCalls {
 		aiSnap[k] = atomic.LoadUint64(v)
 	}
+	confSnap := make(map[string]uint64, len(aiConfidence))
+	for k, v := range aiConfidence {
+		confSnap[k] = atomic.LoadUint64(v)
+	}
+	syncSnap := make(map[string]uint64, len(syncOutcomes))
+	for k, v := range syncOutcomes {
+		syncSnap[k] = atomic.LoadUint64(v)
+	}
+	funnelSnap := make(map[string]uint64, len(funnelStages))
+	for k, v := range funnelStages {
+		funnelSnap[k] = atomic.LoadUint64(v)
+	}
 	metricsMu.RUnlock()
 
 	b.WriteString("# HELP http_requests_total Total HTTP requests\n")
@@ -249,10 +347,41 @@ func RenderMetrics() string {
 			parts[0], parts[1], v)
 	}
 
-	b.WriteString("# HELP ai_calls_total AI provider calls by type\n")
+	b.WriteString("# HELP ai_calls_total AI provider calls by type/provider/outcome\n")
 	b.WriteString("# TYPE ai_calls_total counter\n")
 	for k, v := range aiSnap {
-		fmt.Fprintf(&b, "ai_calls_total{type=%q} %d\n", k, v)
+		parts := strings.SplitN(k, "|", 3)
+		if len(parts) != 3 {
+			fmt.Fprintf(&b, "ai_calls_total{type=%q,provider=%q,outcome=%q} %d\n", k, "unknown", "unknown", v)
+			continue
+		}
+		fmt.Fprintf(&b, "ai_calls_total{type=%q,provider=%q,outcome=%q} %d\n", parts[0], parts[1], parts[2], v)
+	}
+
+	b.WriteString("# HELP ai_detect_empty_total Empty vision detect results\n")
+	b.WriteString("# TYPE ai_detect_empty_total counter\n")
+	fmt.Fprintf(&b, "ai_detect_empty_total %d\n", aiEmptyDetect.Load())
+
+	b.WriteString("# HELP ai_confidence_bucket_total Detection confidence buckets\n")
+	b.WriteString("# TYPE ai_confidence_bucket_total counter\n")
+	for k, v := range confSnap {
+		fmt.Fprintf(&b, "ai_confidence_bucket_total{bucket=%q} %d\n", k, v)
+	}
+
+	b.WriteString("# HELP sync_outcomes_total Sync queue outcomes\n")
+	b.WriteString("# TYPE sync_outcomes_total counter\n")
+	for k, v := range syncSnap {
+		fmt.Fprintf(&b, "sync_outcomes_total{outcome=%q} %d\n", k, v)
+	}
+
+	b.WriteString("# HELP game_funnel_total Core game funnel stages\n")
+	b.WriteString("# TYPE game_funnel_total counter\n")
+	for k, v := range funnelSnap {
+		parts := strings.SplitN(k, "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		fmt.Fprintf(&b, "game_funnel_total{stage=%q,result=%q} %d\n", parts[0], parts[1], v)
 	}
 
 	fmt.Fprintf(&b, "# HELP rate_limit_hits_total Rate limit hits\n# TYPE rate_limit_hits_total counter\nrate_limit_hits_total %d\n", rateLimitHits.Load())
@@ -260,6 +389,8 @@ func RenderMetrics() string {
 	fmt.Fprintf(&b, "# HELP cache_hits_total Cache hits\n# TYPE cache_hits_total counter\ncache_hits_total %d\n", cacheHits.Load())
 	fmt.Fprintf(&b, "# HELP cache_misses_total Cache misses\n# TYPE cache_misses_total counter\ncache_misses_total %d\n", cacheMisses.Load())
 	fmt.Fprintf(&b, "# HELP metrics_series_dropped_total Series dropped after cardinality cap\n# TYPE metrics_series_dropped_total counter\nmetrics_series_dropped_total %d\n", droppedSeries.Load())
+	fmt.Fprintf(&b, "# HELP process_start_time_seconds Process start unix time\n# TYPE process_start_time_seconds gauge\nprocess_start_time_seconds %d\n", processStartUnix)
+	fmt.Fprintf(&b, "# HELP app_info App release identity\n# TYPE app_info gauge\napp_info{release=%q} 1\n", GetReleaseSHA())
 
 	return b.String()
 }

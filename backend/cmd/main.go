@@ -24,6 +24,14 @@ func main() {
 	}
 
 	cfg := config.Load()
+	sha := os.Getenv("RELEASE_SHA")
+	if sha == "" {
+		sha = os.Getenv("GITHUB_SHA")
+	}
+	if sha == "" {
+		sha = os.Getenv("GIT_SHA")
+	}
+	middleware.SetReleaseSHA(sha)
 	config.SetupLogger(cfg.LogLevel)
 
 	if err := cfg.Validate(); err != nil {

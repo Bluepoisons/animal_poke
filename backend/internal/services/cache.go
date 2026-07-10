@@ -5,6 +5,8 @@ import (
 	"container/list"
 	"sync"
 	"time"
+
+	"animalpoke/backend/internal/middleware"
 )
 
 // cacheEntry 缓存条目。
@@ -65,9 +67,11 @@ func (c *TTLCache[T]) Get(key string) (T, bool) {
 			c.removeLocked(entry)
 		}
 		var zero T
+		middleware.ObserveCache(false)
 		return zero, false
 	}
 	c.lru.MoveToFront(entry.element)
+	middleware.ObserveCache(true)
 	return entry.value, true
 }
 
