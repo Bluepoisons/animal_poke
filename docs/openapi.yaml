@@ -353,7 +353,11 @@ paths:
   /api/v1/value/generate:
     post:
       tags: [Value]
-      summary: Generate pet stats/narrative
+      summary: Generate pet stats/narrative (deterministic rarity/stats)
+      description: |
+        Rarity and battle stats are computed server-side via HMAC-seeded algorithm
+        (seed = parent/capture inference id + config_version + server secret).
+        LLM only supplies narrative. Response includes factors for transparency.
       operationId: valueGenerate
       security:
         - bearerAuth: []
@@ -363,14 +367,54 @@ paths:
           application/json:
             schema:
               type: object
+              required: [species]
+              properties:
+                species: { type: string }
+                breed: { type: string }
+                color: { type: string }
+                body_type: { type: string }
+                subject_completeness: { type: integer, minimum: 1, maximum: 10 }
+                clarity: { type: integer, minimum: 1, maximum: 10 }
+                lighting: { type: integer, minimum: 1, maximum: 10 }
+                composition: { type: integer, minimum: 1, maximum: 10 }
+                pose: { type: integer, minimum: 1, maximum: 10 }
+                angle: { type: integer, minimum: 1, maximum: 10 }
+                parent_inference_id: { type: string }
+                analyze_inference_id: { type: string }
+                inference_request_id: { type: string }
+                capture_id: { type: string }
               additionalProperties: true
       responses:
         "200":
-          description: Generated value
+          description: Generated value with deterministic stats and factors
           content:
             application/json:
               schema:
                 type: object
+                properties:
+                  rarity: { type: integer, minimum: 1, maximum: 5 }
+                  hp: { type: integer }
+                  atk: { type: integer }
+                  def: { type: integer }
+                  spd: { type: integer }
+                  class: { type: string }
+                  element: { type: string }
+                  narrative: { type: string }
+                  config_version: { type: string }
+                  seed_id: { type: string }
+                  factors:
+                    type: object
+                    properties:
+                      photo_quality: { type: number }
+                      completeness: { type: number }
+                      species_weight: { type: number }
+                      breed_weight: { type: number }
+                      color_weight: { type: number }
+                      base_score: { type: number }
+                      random_jitter: { type: number }
+                      final_score: { type: number }
+                      quality_band: { type: string }
+                  inference_id: { type: string }
                 additionalProperties: true
         "401":
           $ref: "#/components/responses/Unauthorized"
