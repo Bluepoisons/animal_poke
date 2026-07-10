@@ -22,14 +22,14 @@ func DefaultGameConfig() GameConfig {
 	return GameConfig{
 		Version: "game-config.v1",
 		Economy: map[string]float64{
-			"captureStaminaCost":      20,
-			"dispatchStaminaCost":     20,
-			"battleStaminaCost":       20,
-			"staminaRecoveryPerHour":  10,
-			"potionPrice":             150,
-			"potionRecovery":          3,
-			"toyBallPrice":            50,
-			"premiumToyBallPrice":     120,
+			"captureStaminaCost":     20,
+			"dispatchStaminaCost":    20,
+			"battleStaminaCost":      20,
+			"staminaRecoveryPerHour": 10,
+			"potionPrice":            150,
+			"potionRecovery":         3,
+			"toyBallPrice":           50,
+			"premiumToyBallPrice":    120,
 		},
 		Features: map[string]bool{
 			"achievements": true,
