@@ -74,7 +74,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	thirdParty := &cfg.ThirdParty
 	geoService := services.NewGeoServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
 	weatherService := services.NewWeatherServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
-	aiService := services.NewAIServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
+	aiService := services.NewAIServiceWithOptions(thirdParty, mockAllowed, sharedHTTP).WithStatsSecret(cfg.JWTSecret)
 
 	var deviceRepo *repo.DeviceRepo
 	var animalRepo *repo.AnimalRepo
