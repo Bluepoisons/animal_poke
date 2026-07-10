@@ -1,16 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Animal Poke logo">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FF9A4D"/>
-      <stop offset="100%" stop-color="#E67300"/>
+      <stop offset="0%" stop-color="#FF9A4D">
+        <animate attributeName="stop-color" values="#FF9A4D;#FFB06B;#FF9A4D" dur="4s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="100%" stop-color="#E67300">
+        <animate attributeName="stop-color" values="#E67300;#FF8C42;#E67300" dur="4s" repeatCount="indefinite"/>
+      </stop>
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#g)"/>
-  <ellipse cx="64" cy="78" rx="30" ry="24" fill="#FFF8F0"/>
-  <ellipse cx="36" cy="48" rx="12" ry="15" fill="#FFF8F0"/>
-  <ellipse cx="92" cy="48" rx="12" ry="15" fill="#FFF8F0"/>
-  <circle cx="54" cy="74" r="4" fill="#4A2C1A"/>
-  <circle cx="74" cy="74" r="4" fill="#4A2C1A"/>
-  <path d="M56 86 Q64 94 72 86" stroke="#4A2C1A" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <circle cx="96" cy="30" r="8" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3"/>
+  <!-- soft breathing glow -->
+  <circle cx="64" cy="64" r="52" fill="#FFF8F0" opacity="0.08">
+    <animate attributeName="r" values="48;56;48" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.05;0.14;0.05" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <!-- mascot bob -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0 0;0 -3;0 0" dur="2.4s" repeatCount="indefinite"/>
+    <ellipse cx="64" cy="78" rx="30" ry="24" fill="#FFF8F0"/>
+    <ellipse cx="36" cy="48" rx="12" ry="15" fill="#FFF8F0">
+      <animate attributeName="ry" values="15;16;15" dur="2.4s" repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="92" cy="48" rx="12" ry="15" fill="#FFF8F0">
+      <animate attributeName="ry" values="15;16;15" dur="2.4s" begin="0.2s" repeatCount="indefinite"/>
+    </ellipse>
+    <!-- blink -->
+    <ellipse cx="54" cy="74" rx="4" ry="4" fill="#4A2C1A">
+      <animate attributeName="ry" values="4;4;0.5;4;4" keyTimes="0;0.4;0.45;0.5;1" dur="3.2s" repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="74" cy="74" rx="4" ry="4" fill="#4A2C1A">
+      <animate attributeName="ry" values="4;4;0.5;4;4" keyTimes="0;0.4;0.45;0.5;1" dur="3.2s" repeatCount="indefinite"/>
+    </ellipse>
+    <path d="M56 86 Q64 94 72 86" stroke="#4A2C1A" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="96" cy="30" r="8" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3">
+      <animate attributeName="r" values="7;9;7" dur="1.6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
 </svg>

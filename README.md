@@ -64,6 +64,10 @@
 
 ## 🎮 核心循环
 
+<p align="center">
+  <img src="docs/assets/loop-animated.svg" alt="核心循环：发现 → 捕获 → 收藏 → 战斗" width="100%" />
+</p>
+
 ```text
    ╭──────────╮     ╭──────────╮     ╭──────────╮     ╭──────────╮
    │  🗺️ 发现  │ ──▶ │  🎯 捕获  │ ──▶ │  📒 收藏  │ ──▶ │  ⚔️ 战斗  │
@@ -73,6 +77,7 @@
      相机取帧          体力 -20          IndexedDB         区域排行
      VLM Detect        Analyze→Value     同步队列           赛季长线
 ```
+
 
 ### 玩法亮点
 
@@ -355,6 +360,7 @@ GitHub Actions 覆盖：
 
 | 资源 | 链接 |
 |------|------|
+| 动效横幅 / Logo / 核心循环 | [`docs/assets/`](docs/assets/)（SVG SMIL，GitHub 可播放） |
 | M1 主界面设计 | [`docs/ui_design_m1.html`](docs/ui_design_m1.html) |
 | 图鉴 + 猎取地图 | [`docs/ui_collection_map_design.html`](docs/ui_collection_map_design.html) |
 | API 契约 | [`docs/openapi.yaml`](docs/openapi.yaml) |
@@ -369,6 +375,7 @@ GitHub Actions 覆盖：
 | **SDK 与第三方服务** | [`docs/legal/sdk-and-services.md`](docs/legal/sdk-and-services.md) |
 | 应用权限说明 | [`docs/legal/permissions-notice.md`](docs/legal/permissions-notice.md) |
 | **待补充信息（回填表）** | [`docs/legal/FILL-IN-CHECKLIST.md`](docs/legal/FILL-IN-CHECKLIST.md) |
+
 
 ---
 

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="220" viewBox="0 0 960 220" role="img" aria-label="核心循环动画：发现 → 捕获 → 收藏 → 战斗">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF8F0"/>
+      <stop offset="100%" stop-color="#FFE8D0"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF9A4D"/>
+      <stop offset="100%" stop-color="#E67300"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#E67300" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="960" height="220" rx="24" fill="#FFF8F0"/>
+  <rect x="12" y="12" width="936" height="196" rx="20" fill="none" stroke="#FFD7B0" stroke-width="2" stroke-dasharray="6 8">
+    <animate attributeName="stroke-dashoffset" values="0;28" dur="2s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- stage cards -->
+  <!-- 发现 -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="48" width="160" height="120" rx="20" fill="url(#card)" stroke="#4A2C1A" stroke-width="3">
+      <animate attributeName="stroke" values="#4A2C1A;#FF8C42;#4A2C1A;#4A2C1A" keyTimes="0;0.12;0.25;1" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <text x="128" y="88" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="34">🗺️</text>
+    <text x="128" y="128" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="22" font-weight="700" fill="#4A2C1A">发现</text>
+    <text x="128" y="150" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="12" fill="#7A4A2E">LBS · 相机 · VLM</text>
+  </g>
+
+  <!-- arrow 1 -->
+  <g fill="#FF8C42">
+    <path d="M230 108 H278">
+      <animate attributeName="opacity" values="0.35;1;0.35" dur="1.2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M278 100 L294 108 L278 116 Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;6 0;0 0" dur="1.2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- 捕获 -->
+  <g filter="url(#shadow)">
+    <rect x="308" y="48" width="160" height="120" rx="20" fill="url(#card)" stroke="#4A2C1A" stroke-width="3">
+      <animate attributeName="stroke" values="#4A2C1A;#4A2C1A;#FF8C42;#4A2C1A;#4A2C1A" keyTimes="0;0.25;0.37;0.5;1" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <text x="388" y="88" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="34">🎯</text>
+    <text x="388" y="128" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="22" font-weight="700" fill="#4A2C1A">捕获</text>
+    <text x="388" y="150" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="12" fill="#7A4A2E">投掷 · 体力 -20</text>
+  </g>
+
+  <!-- arrow 2 -->
+  <g fill="#FF8C42">
+    <path d="M490 108 H538">
+      <animate attributeName="opacity" values="0.35;1;0.35" dur="1.2s" begin="0.3s" repeatCount="indefinite"/>
+    </path>
+    <path d="M538 100 L554 108 L538 116 Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;6 0;0 0" dur="1.2s" begin="0.3s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- 收藏 -->
+  <g filter="url(#shadow)">
+    <rect x="568" y="48" width="160" height="120" rx="20" fill="url(#card)" stroke="#4A2C1A" stroke-width="3">
+      <animate attributeName="stroke" values="#4A2C1A;#4A2C1A;#4A2C1A;#FF8C42;#4A2C1A;#4A2C1A" keyTimes="0;0.5;0.5;0.62;0.75;1" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <text x="648" y="88" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="34">📒</text>
+    <text x="648" y="128" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="22" font-weight="700" fill="#4A2C1A">收藏</text>
+    <text x="648" y="150" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="12" fill="#7A4A2E">图鉴 · 同步</text>
+  </g>
+
+  <!-- arrow 3 -->
+  <g fill="#FF8C42">
+    <path d="M750 108 H798">
+      <animate attributeName="opacity" values="0.35;1;0.35" dur="1.2s" begin="0.6s" repeatCount="indefinite"/>
+    </path>
+    <path d="M798 100 L814 108 L798 116 Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;6 0;0 0" dur="1.2s" begin="0.6s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- 战斗 -->
+  <g filter="url(#shadow)">
+    <rect x="828" y="48" width="100" height="120" rx="20" fill="url(#orange)" stroke="#4A2C1A" stroke-width="3">
+      <animate attributeName="opacity" values="0.92;0.92;0.92;1;0.92" keyTimes="0;0.75;0.75;0.9;1" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <text x="878" y="96" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="30">⚔️</text>
+    <text x="878" y="132" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="18" font-weight="700" fill="#FFF8F0">战斗</text>
+    <text x="878" y="152" text-anchor="middle" font-family="Verdana, Geneva, sans-serif" font-size="11" fill="#FFF3E0">半自动</text>
+  </g>
+
+  <!-- traveling token along the loop -->
+  <circle r="8" fill="#FFD23F" stroke="#4A2C1A" stroke-width="2">
+    <animateMotion dur="5s" repeatCount="indefinite" path="M128 40 C 250 20 350 20 388 40 C 520 20 600 20 648 40 C 760 20 840 20 878 40 C 700 10 300 10 128 40"/>
+    <animate attributeName="r" values="7;10;7" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+</svg>
