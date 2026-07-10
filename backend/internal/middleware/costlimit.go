@@ -72,16 +72,17 @@ func (dc *DailyCallCounter) limitOf(callType string) int {
 }
 
 // allow 检查并递增；返回 (allowed, remaining, limit)。
+// Fail-open：shared.Incr 失败时降级本机计数，避免 Redis 抖动导致配额接口全拒。
 func (dc *DailyCallCounter) allow(deviceID, callType string) (bool, int, int) {
 	limit := dc.limitOf(callType)
 	if limit <= 0 {
 		return true, -1, 0
 	}
 	today := time.Now().UTC().Format("2006-01-02")
-	key := fmt.Sprintf("cost:%s:%s:%s", callType, deviceID, today)
+	key := fmt.Sprintf("%s%s:%s:%s", KeyPrefixCost, callType, deviceID, today)
 
 	if dc.shared != nil {
-		// 次日 0 点过期
+		// 次日 0 点过期（略加余量）
 		ttl := 26 * time.Hour
 		n, err := dc.shared.Incr(context.Background(), key, ttl)
 		if err == nil {
@@ -91,6 +92,7 @@ func (dc *DailyCallCounter) allow(deviceID, callType string) (bool, int, int) {
 			}
 			return int(n) <= limit, remaining, limit
 		}
+		// shared 错误：fail-open → 本地
 	}
 
 	dc.mu.Lock()
@@ -125,7 +127,8 @@ func (dc *DailyCallCounter) allow(deviceID, callType string) (bool, int, int) {
 	return true, limit - c.count, limit
 }
 
-// CostLimitByType 按调用类型限流中间件。
+// CostLimitByType 按调用类型限流中间件（device 维度每日配额）。
+// Fail-open：共享计数失败时降级本机（见 allow）。
 func CostLimitByType(counter *DailyCallCounter, callType string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		deviceID := GetDeviceID(c)
@@ -139,6 +142,7 @@ func CostLimitByType(counter *DailyCallCounter, callType string) gin.HandlerFunc
 			c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		}
 		if !ok {
+			ObserveRateLimit()
 			c.Header("Retry-After", "86400")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":       "daily call limit exceeded for " + callType,

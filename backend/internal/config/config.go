@@ -188,6 +188,12 @@ func Load() *Config {
 	if cfg.IsProduction() {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
 	}
+
+	// 商业化：production 默认关闭；非 production 默认开启。COMMERCE_ENABLED 可覆盖。
+	commerceDefault := !cfg.IsProduction()
+	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
+	// 真实商店验签：默认关闭，需显式开启 COMMERCE_STORE_VERIFY=true。
+	cfg.CommerceStoreVerify = getEnvBool("COMMERCE_STORE_VERIFY", false)
 	return cfg
 }
 
