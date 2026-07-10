@@ -404,14 +404,25 @@ paths:
     get:
       tags: [Sync]
       summary: Pull animals (cursor)
+      description: |
+        Pull animals by server_version cursor (`since_version`).
+        Soft-deleted animals are returned as tombstones only
+        (`uuid`, `deleted_at`, `server_version`) — never full content or precise coordinates.
       operationId: pullAnimals
       security:
         - bearerAuth: []
       parameters:
+        - name: since_version
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: Exclusive lower bound of server_version
         - name: cursor
           in: query
           schema:
             type: string
+          description: Deprecated alias; prefer since_version
         - name: limit
           in: query
           schema:
@@ -420,7 +431,7 @@ paths:
             maximum: 100
       responses:
         "200":
-          description: Animals page
+          description: Animals page (active rows + tombstones)
           content:
             application/json:
               schema:
@@ -457,12 +468,23 @@ paths:
     post:
       tags: [Privacy]
       summary: Request data export
+      description: |
+        Default complete export: paginates all animals (beyond 200), consent,
+        security report metadata (no raw payloads), data_request history (no nested payloads),
+        orders and entitlements when present. Precise coordinates are always redacted.
+        Optional `cursor` query returns a single page for large exports.
       operationId: exportData
       security:
         - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Optional animal id cursor for page-only export
       responses:
         "200":
-          description: Export accepted
+          description: Export completed (or page)
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -472,6 +494,12 @@ paths:
     post:
       tags: [Privacy]
       summary: Request data deletion
+      description: |
+        Transactional delete: soft-delete animals (tombstone + server_version bump),
+        remove inferences and security reports, clear historical export payloads,
+        deactivate entitlements, revoke consent, bump token_version.
+        Orders are retained for legal/financial audit (not hard-deleted).
+        Precise location fields are cleared; expired precise coords cleaned via maintenance hook.
       operationId: deleteData
       security:
         - bearerAuth: []

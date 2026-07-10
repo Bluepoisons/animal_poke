@@ -15,7 +15,7 @@ type Device struct {
 	ConsentVersion string     `gorm:"size:32" json:"consent_version"`
 	ConsentAt      *time.Time `json:"consent_at,omitempty"`
 	ConsentScope   string     `gorm:"size:128" json:"consent_scope"`
-	ConsentRevoked *time.Time `json:"consent_revoked_at,omitempty"`
+	ConsentRevoked *time.Time `gorm:"column:consent_revoked_at" json:"consent_revoked_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }

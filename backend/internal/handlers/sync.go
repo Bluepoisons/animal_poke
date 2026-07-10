@@ -410,25 +410,56 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			}
 		}
 	}
+	// ListSinceVersion 含软删 tombstone（仅 uuid/deleted_at/server_version），不含原内容与精确坐标。
 	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed"})
 		return
 	}
-	// 脱敏：不返回精确坐标
+	// 二次脱敏：活跃行精确坐标；软删已在 repo 裁剪为 tombstone。
+	out := make([]gin.H, 0, len(items))
 	for i := range items {
+		if items[i].DeletedAt != nil {
+			out = append(out, gin.H{
+				"uuid":           items[i].UUID,
+				"deleted_at":     items[i].DeletedAt,
+				"server_version": items[i].ServerVersion,
+			})
+			continue
+		}
 		items[i].PreciseLat = nil
 		items[i].PreciseLng = nil
 		items[i].PreciseExpiresAt = nil
+		out = append(out, gin.H{
+			"uuid":                 items[i].UUID,
+			"device_id":            items[i].DeviceID,
+			"species":              items[i].Species,
+			"breed":                items[i].Breed,
+			"rarity":               items[i].Rarity,
+			"hp":                   items[i].HP,
+			"atk":                  items[i].ATK,
+			"def":                  items[i].DEF,
+			"spd":                  items[i].SPD,
+			"class":                items[i].Class,
+			"element":              items[i].Element,
+			"city":                 items[i].City,
+			"geohash":              items[i].GeoHash,
+			"latitude":             items[i].Latitude,
+			"longitude":            items[i].Longitude,
+			"generated_at":         items[i].GeneratedAt,
+			"inference_request_id": items[i].InferenceRequestID,
+			"server_version":       items[i].ServerVersion,
+			"created_at":           items[i].CreatedAt,
+		})
 	}
+	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
 	var next int64 = since
 	if len(items) > 0 {
 		next = items[len(items)-1].ServerVersion
 	}
-	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
 	hasMore := len(items) >= limit
 	c.JSON(http.StatusOK, gin.H{
-		"items":        items,
+		"items":        out,
 		"next_version": next,
 		"next_cursor":  next,
 		"has_more":     hasMore,
