@@ -19,6 +19,7 @@ var (
 	httpLatencyCnt sync.Map
 	aiCostCalls    sync.Map // key: type -> *uint64
 	rateLimitHits  atomic.Uint64
+	nonceReplays   atomic.Uint64
 	cacheHits      atomic.Uint64
 	cacheMisses    atomic.Uint64
 )
@@ -52,6 +53,11 @@ func ObserveAICost(callType string) {
 // ObserveRateLimit 记录限流命中。
 func ObserveRateLimit() {
 	rateLimitHits.Add(1)
+}
+
+// ObserveNonceReplay 记录 nonce 重放命中。
+func ObserveNonceReplay() {
+	nonceReplays.Add(1)
 }
 
 // ObserveCache 记录缓存命中/未命中。
@@ -129,6 +135,7 @@ func MetricsHandler() gin.HandlerFunc {
 			return true
 		})
 		fmt.Fprintf(&b, "# HELP rate_limit_hits_total Rate limit hits\n# TYPE rate_limit_hits_total counter\nrate_limit_hits_total %d\n", rateLimitHits.Load())
+		fmt.Fprintf(&b, "# HELP nonce_replays_total Nonce replay rejects\n# TYPE nonce_replays_total counter\nnonce_replays_total %d\n", nonceReplays.Load())
 		fmt.Fprintf(&b, "# HELP cache_hits_total Cache hits\n# TYPE cache_hits_total counter\ncache_hits_total %d\n", cacheHits.Load())
 		fmt.Fprintf(&b, "# HELP cache_misses_total Cache misses\n# TYPE cache_misses_total counter\ncache_misses_total %d\n", cacheMisses.Load())
 		c.Data(http.StatusOK, "text/plain; version=0.0.4; charset=utf-8", []byte(b.String()))

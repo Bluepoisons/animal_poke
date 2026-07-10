@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -91,11 +92,26 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		idempotencyRepo = repo.NewIdempotencyRepo(db)
 	}
 
-	// 限流：优先共享存储接口（内存实现可替换 Redis）
-	sharedCounter := middleware.NewMemorySharedCounter()
+	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
+	// Fail 策略见 middleware 包注释（限流/配额 fail-open，nonce fail-closed）。
+	sharedCounter := middleware.SharedCounter(middleware.NewMemorySharedCounter())
+	if cfg.RedisURL != "" {
+		rc, err := middleware.NewRedisSharedCounter(cfg.RedisURL)
+		if err != nil {
+			slog.Warn("REDIS_URL 不可用，降级内存 SharedCounter", "err", err)
+		} else {
+			sharedCounter = rc
+			slog.Info("已启用 Redis SharedCounter")
+		}
+	}
+	// AI：device 维度 100/min burst 10；附带 digest 维度防同图刷
 	rateLimiter := middleware.NewRateLimiter(100.0/60.0, 10).WithShared(sharedCounter)
+	// 每日配额（detect/analyze/value）跨 Pod 一致
 	costCounter := middleware.NewDailyCallCounter(middleware.DefaultDailyLimits).WithShared(sharedCounter)
-	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5)
+	// 鉴权：IP 维度 20/min burst 5
+	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5).WithShared(sharedCounter)
+	// digest 维度独立桶（同图短时重复）
+	digestLimiter := middleware.NewRateLimiter(10.0/60.0, 3).WithShared(sharedCounter)
 
 	api := r.Group("/api/v1")
 	{
@@ -142,7 +158,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 
 			ai := auth.Group("")
+			// device + digest 多维限流（account 维度在有 account_id 时由 RateLimitByAccount 扩展）
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
+			ai.Use(middleware.RateLimitByDigest(digestLimiter))
 			{
 				visionHandler := handlers.NewVisionHandlerWithOptions(aiService, handlers.VisionHandlerOptions{
 					InferenceRepo:  inferenceRepo,
@@ -178,7 +196,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
-				sec := handlers.NewSecurityHandler(db, auditRepo)
+				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
 				auth.POST("/security/report", sec.Report)
 
 				commerce := handlers.NewCommerceHandler(db)
