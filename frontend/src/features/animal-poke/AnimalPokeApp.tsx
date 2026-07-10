@@ -9,6 +9,8 @@ import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
 import { useStamina } from '../../stamina/useStamina'
+import { useLbs } from '../../lbs/useLbs'
+import { useWeather } from '../../weather/useWeather'
 import {
   canEnterCapture,
   createInitialCaptureFlow,
@@ -39,6 +41,8 @@ export default function AnimalPokeApp() {
   })
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
   const { state: staminaState, addGold } = useStamina()
+  const lbs = useLbs()
+  const weather = useWeather()
   const currentStamina = staminaState.currentStamina
   const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -131,6 +135,23 @@ export default function AnimalPokeApp() {
             dispatch={dispatch}
             onNavigate={navigate}
             onEnterCapture={handleEnterCapture}
+            city={
+              lbs.state.cityName ||
+              (lbs.state.geoStatus === 'locating'
+                ? '定位中'
+                : lbs.state.geoStatus === 'denied'
+                  ? '定位关闭'
+                  : '未知城市')
+            }
+            weather={
+              weather.todayMeta
+                ? `${weather.todayMeta.emoji}${weather.todayMeta.name}`
+                : weather.state.status === 'loading'
+                  ? '天气…'
+                  : weather.state.source === 'internal'
+                    ? '本地天气'
+                    : '—'
+            }
           />
         )
       case 'map':
@@ -153,6 +174,8 @@ export default function AnimalPokeApp() {
               dispatch={dispatch}
               onNavigate={navigate}
               onEnterCapture={handleEnterCapture}
+              city={lbs.state.cityName || '未知城市'}
+              weather={weather.todayMeta ? `${weather.todayMeta.emoji}${weather.todayMeta.name}` : '—'}
             />
           )
         }
