@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 
 export const DB_NAME = 'animal-poke-db'
-export const DB_VERSION = 2
+export const DB_VERSION = 3
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
@@ -32,6 +32,15 @@ export function getDB(): Promise<IDBPDatabase> {
             record.isUnlocked = record.unlocked ? 1 : 0
             await cursor.update(record)
             cursor = await cursor.continue()
+          }
+        }
+        // v3: sync queue for reliable animal upload
+        if (oldVersion < 3) {
+          if (!db.objectStoreNames.contains('sync_queue')) {
+            const q = db.createObjectStore('sync_queue', { keyPath: 'id' })
+            q.createIndex('by-status', 'status')
+            q.createIndex('by-updated', 'updatedAt')
+            q.createIndex('by-idempotency', 'idempotencyKey', { unique: true })
           }
         }
       },

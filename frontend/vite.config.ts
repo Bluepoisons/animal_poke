@@ -83,6 +83,16 @@ export default defineConfig({
       },
     },
   },
+  // preview 同样代理 /api，保证 npm run preview 与 dev 行为一致
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     target: 'es2020',
     cssCodeSplit: true,

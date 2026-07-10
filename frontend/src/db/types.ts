@@ -14,3 +14,42 @@ export interface AppSettings {
   musicEnabled: boolean
   privacyConsented: boolean
 }
+
+/** 同步队列状态 */
+export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'failed'
+
+/** 待同步的动物载荷（对齐后端 POST /sync/animal） */
+export interface AnimalSyncPayload {
+  uuid: string
+  species: string
+  breed?: string
+  rarity: number
+  hp?: number
+  atk?: number
+  def?: number
+  spd?: number
+  class?: string
+  element?: string
+  latitude?: number
+  longitude?: number
+  generated_at: string
+  inference_request_id?: string
+  narrative?: string
+}
+
+/** IndexedDB 同步队列项 */
+export interface SyncQueueItem {
+  id: string
+  /** 业务幂等键：device+route+uuid 维度，客户端稳定生成 */
+  idempotencyKey: string
+  route: '/sync/animal'
+  status: SyncStatus
+  attempts: number
+  lastError?: string
+  createdAt: number
+  updatedAt: number
+  nextAttemptAt: number
+  payload: AnimalSyncPayload
+  /** 可选本地关联的图鉴 id */
+  animalId?: string
+}

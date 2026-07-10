@@ -3,6 +3,14 @@ import type { CardEntry, RarityTier, SpeciesType } from '../types'
 import { SPECIES_DEFS, SPECIES_RARITY_WEIGHTS } from '../types'
 import { useStamina } from '../stamina/useStamina'
 import { useShop } from '../shop/useShop'
+import GenerationProgress from './GenerationProgress'
+import {
+  createCaptureSessionId,
+  runCaptureGeneration,
+  type GeneratedAnimal,
+  type PipelineProgress,
+} from '../services/capturePipeline'
+import { enqueueGeneratedAnimal, flushSyncQueue } from '../services/syncQueue'
 
 // 投掷力度相关常量
 const TICK_MS = 50          // 充能刷新间隔 50ms
@@ -14,8 +22,12 @@ type ThrowState = 'idle' | 'charging' | 'throwing' | 'success' | 'fail'
 export interface CaptureScreenProps {
   /** 当前目标物种 */
   targetSpecies?: SpeciesType
+  /** 发现页拍照 dataURL；有值时捕获成功后走 Analyze→Value 管线 */
+  photoDataUrl?: string
   onCaptureSuccess?: (entry: CardEntry) => void
   onCaptureFail?: () => void
+  /** AI 生成完成回调（#100） */
+  onGenerated?: (animal: GeneratedAnimal) => void
 }
 
 /** 根据物种权重随机稀有度 */
@@ -49,11 +61,18 @@ function generateCardEntry(species: SpeciesType): CardEntry {
 
 const CaptureScreen: React.FC<CaptureScreenProps> = ({
   targetSpecies = 'cat',
+  photoDataUrl,
   onCaptureSuccess,
   onCaptureFail,
+  onGenerated,
 }) => {
   const stamina = useStamina()
   const shop = useShop()
+
+  const [genProgress, setGenProgress] = useState<PipelineProgress | null>(null)
+  const genAbortRef = useRef<AbortController | null>(null)
+  const sessionIdRef = useRef<string>('')
+  const partialRef = useRef<PipelineProgress['partial']>(undefined)
 
   // 从 SPECIES_DEFS 读取当前物种参数
   const def = SPECIES_DEFS[targetSpecies]
@@ -85,8 +104,51 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({
 
   // 组件卸载时清理
   useEffect(() => {
-    return () => clearTimers()
+    return () => {
+      clearTimers()
+      genAbortRef.current?.abort()
+    }
   }, [clearTimers])
+
+  const startGeneration = useCallback(async (resume = false) => {
+    if (!photoDataUrl) return
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = createCaptureSessionId()
+    }
+    genAbortRef.current?.abort()
+    const controller = new AbortController()
+    genAbortRef.current = controller
+
+    setGenProgress({
+      stage: 'upload',
+      percent: 10,
+      message: '准备影像…',
+      partial: resume ? partialRef.current : undefined,
+    })
+
+    try {
+      const animal = await runCaptureGeneration({
+        sessionId: sessionIdRef.current,
+        species: targetSpecies,
+        photoDataUrl,
+        signal: controller.signal,
+        resumeFrom: resume ? partialRef.current : undefined,
+        onProgress: (p) => {
+          partialRef.current = p.partial
+          setGenProgress(p)
+        },
+      })
+      onGenerated?.(animal)
+      try {
+        await enqueueGeneratedAnimal(animal)
+        void flushSyncQueue()
+      } catch (e) {
+        console.warn('enqueue sync failed', e)
+      }
+    } catch {
+      // 进度状态已由 pipeline 写入
+    }
+  }, [photoDataUrl, targetSpecies, onGenerated])
 
   // 根据充能百分比计算命中率
   const calcSuccessRate = useCallback((charge: number): number => {
@@ -139,12 +201,15 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({
         setThrowState('success')
         const entry = generateCardEntry(targetSpecies)
         onCaptureSuccess?.(entry)
+        if (photoDataUrl) {
+          void startGeneration(false)
+        }
       } else {
         setThrowState('fail')
         onCaptureFail?.()
       }
     }, 600)
-  }, [throwState, clearTimers, stamina, shop, calcSuccessRate, onCaptureSuccess, onCaptureFail, targetSpecies])
+  }, [throwState, clearTimers, stamina, shop, calcSuccessRate, onCaptureSuccess, onCaptureFail, targetSpecies, photoDataUrl, startGeneration])
 
   // 回到待机状态
   const resetToIdle = useCallback(() => {
@@ -203,10 +268,22 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({
         <button
           className="btn btn-primary"
           style={styles.actionBtn}
-          onClick={resetToIdle}
+          onClick={() => {
+            genAbortRef.current?.abort()
+            setGenProgress(null)
+            resetToIdle()
+          }}
         >
           继续捕获
         </button>
+        {genProgress && (
+          <GenerationProgress
+            progress={genProgress}
+            onRetry={() => void startGeneration(true)}
+            onCancel={() => genAbortRef.current?.abort()}
+            onClose={() => setGenProgress(null)}
+          />
+        )}
       </div>
     )
   }
