@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PokedexFilter } from '../data/types'
 import PageTitle from '../components/PageTitle'
 import RarityCard from '../components/RarityCard'
-import { animals, filterAnimals, collectedCount } from '../data/animals'
+import { animals as seedAnimals, filterAnimals } from '../data/animals'
+import { AnimalRepository } from '../../../db/repositories/animal-repository'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
@@ -15,11 +16,39 @@ const filters: { id: PokedexFilter; label: string }[] = [
   { id: 'dog', label: '狗' },
 ]
 
+type Entry = (typeof seedAnimals)[0]
+
 export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
-  const filtered = filterAnimals(animals, filter)
+  const [entries, setEntries] = useState<Entry[]>(seedAnimals)
 
-  const handleCardClick = (entry: (typeof animals)[0]) => {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const rows = await AnimalRepository.getAll()
+        if (cancelled || !rows?.length) return
+        const mapped: Entry[] = rows.map((r, idx) => ({
+          id: r.id || `idb-${idx}`,
+          name: (r as { species?: string }).species || r.id || 'unknown',
+          species: ((r as { species?: string }).species as Entry['species']) || 'goose',
+          rarity: ((r as { rarity?: string }).rarity as Entry['rarity']) || 'common',
+          collected: Boolean((r as { unlocked?: boolean }).unlocked ?? true),
+        }))
+        setEntries(mapped)
+      } catch {
+        // keep seed fallback
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const filtered = useMemo(() => filterAnimals(entries as typeof seedAnimals, filter), [entries, filter])
+  const collectedCount = entries.filter((e) => e.collected).length
+
+  const handleCardClick = (entry: Entry) => {
     if (!entry.collected) {
       onToast('尚未发现')
       return
@@ -51,11 +80,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
 
       <div className="ap-pokedex-grid">
         {filtered.map((entry) => (
-          <RarityCard
-            key={entry.id}
-            entry={entry}
-            onClick={() => handleCardClick(entry)}
-          />
+          <RarityCard key={entry.id} entry={entry} onClick={() => handleCardClick(entry)} />
         ))}
       </div>
     </div>
