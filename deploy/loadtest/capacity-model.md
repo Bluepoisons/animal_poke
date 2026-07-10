@@ -27,3 +27,18 @@ k6 run -e BASE_URL=http://localhost:8080 -e VUS=50 -e DURATION=5m deploy/loadtes
 ## 推荐阈值
 - 先按 CPU HPA 保持；若 Vision 上线，为 `/vision/*` 单独限流 + 独立 HPA 指标（RPS/队列）。
 - MySQL `MaxOpenConns` 默认 25/Pod，20 Pod → 500；需与 DB `max_connections` 对齐。
+
+
+## AP-058 门禁说明
+
+- PR 门禁：前端 `npm run check:bundle-budget`（需先 build）
+- 本地/夜间：`k6-core-loop.js`（business_success 不含 4xx/503）
+- 基线填写后更新下表「实测」列
+
+| 指标 | 目标 | 实测（local docker / date） |
+|------|------|------------------------------|
+| business_success | > 90% | TBD |
+| unexpected_5xx | < 2% | TBD |
+| P95 | < 800ms | TBD |
+| P99 | < 2s | TBD |
+| JS gzip total | < 250KB | TBD |

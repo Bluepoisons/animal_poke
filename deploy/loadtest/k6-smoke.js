@@ -5,6 +5,10 @@
  *
  * Scenarios cover: ping, auth, geo, weather, sync (stub body).
  * Vision is optional via ENABLE_VISION=1 with a tiny JPEG fixture.
+ *
+ * AP-058: for business-path thresholds (4xx/503 not success),
+ * prefer k6-core-loop.js. This smoke still allows 503 on geo/weather
+ * for connectivity checks only.
  */
 import http from 'k6/http'
 import { check, sleep } from 'k6'

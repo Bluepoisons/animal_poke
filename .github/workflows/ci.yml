@@ -126,6 +126,8 @@ jobs:
         env:
           # Production-like: empty base → same-origin /api
           VITE_API_BASE_URL: ""
+      - name: Bundle budget gate (AP-058)
+        run: npm run check:bundle-budget
       - name: Unit tests
         # AP-014: hard fail unit tests (no continue-on-error)
         run: npm test
