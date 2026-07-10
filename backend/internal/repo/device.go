@@ -26,6 +26,11 @@ func NewDeviceRepo(db *gorm.DB) *DeviceRepo {
 	return &DeviceRepo{db: db}
 }
 
+// WithTx 返回绑定事务的 DeviceRepo。
+func (r *DeviceRepo) WithTx(tx *gorm.DB) *DeviceRepo {
+	return &DeviceRepo{db: tx}
+}
+
 // FindOrCreate 按 device_id 查找设备, 不存在则创建（唯一约束并发安全）。
 func (r *DeviceRepo) FindOrCreate(deviceID string) (*models.Device, error) {
 	var dev models.Device
