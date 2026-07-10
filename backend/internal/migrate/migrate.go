@@ -12,7 +12,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0007_privacy_lifecycle"
+const CurrentVersion = "0008_commerce_security"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -33,7 +33,8 @@ func Apply(db *gorm.DB) error {
 		{"0004_privacy_location", migrate0004},
 		{"0005_commerce_privacy_inference", migrate0005},
 		{"0006_inference_lineage", migrate0006},
-		{"0007_privacy_lifecycle", migrate0007},
+		{"0007_idempotency_keys", migrate0007},
+		{"0008_commerce_security", migrate0008},
 	}
 
 	for _, m := range migrations {
@@ -94,14 +95,26 @@ func migrate0006(db *gorm.DB) error {
 	return db.AutoMigrate(&models.Inference{})
 }
 
-// migrate0007 隐私生命周期：pull 游标复合索引 + 精确坐标过期清理索引。
-// 精确坐标保留：仅 PreciseExpiresAt 前短期保存，到期由 ClearExpiredPreciseLocation 清空。
 func migrate0007(db *gorm.DB) error {
-	if err := db.AutoMigrate(&models.Animal{}, &models.DataRequest{}, &models.SecurityReport{}, &models.Order{}, &models.Entitlement{}); err != nil {
+	return db.AutoMigrate(&models.IdempotencyRecord{})
+}
+
+// migrate0008 商业化安全：设备级幂等、回执哈希、商品种子。
+func migrate0008(db *gorm.DB) error {
+	if err := db.AutoMigrate(&models.Order{}, &models.Product{}); err != nil {
 		return err
 	}
-	// 忽略「已存在」类错误，保持幂等。
-	_ = db.Exec("CREATE INDEX idx_animals_device_server_version ON animals(device_id, server_version)").Error
-	_ = db.Exec("CREATE INDEX idx_animals_precise_expires_at ON animals(precise_expires_at)").Error
+	var count int64
+	if err := db.Model(&models.Product{}).Where("product_id = ?", "month_card").Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		if err := db.Create(&models.Product{
+			ProductID: "month_card", Name: "月卡", Type: "subscription",
+			PriceCents: 1800, Currency: "CNY", DurationDay: 30, Active: true,
+		}).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
