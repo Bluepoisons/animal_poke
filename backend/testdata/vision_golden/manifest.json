@@ -1,0 +1,263 @@
+{
+  "version": "1.0.0",
+  "description": "Vision golden set for model certification (AP-047). Fixtures use synthetic placeholder images generated at test time; no real photos are stored.",
+  "model_track": "detect",
+  "classes": ["cat", "dog", "goose", "duck", "swan", "bird", "person", "empty"],
+  "conditions_catalog": [
+    "clear",
+    "dark",
+    "backlight",
+    "blur",
+    "occlusion",
+    "far",
+    "multi",
+    "rotation",
+    "compression",
+    "screen_recapture"
+  ],
+  "thresholds": {
+    "precision_drop": 0.05,
+    "recall_drop": 0.05,
+    "unknown_rejection_drop": 0.05,
+    "mean_iou_drop": 0.05,
+    "p95_latency_ms_increase": 100,
+    "min_unknown_rejection": 0.95,
+    "min_per_class_precision": 0.9,
+    "min_per_class_recall": 0.9
+  },
+  "fixtures": [
+    {
+      "id": "cat_clear",
+      "species_group": "cat",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "cat",
+        "capturable": true,
+        "bbox": { "x": 0.2, "y": 0.2, "width": 0.4, "height": 0.5 },
+        "min_confidence": 0.5
+      },
+      "image": { "kind": "synthetic", "seed": 1, "width": 64, "height": 64 }
+    },
+    {
+      "id": "cat_dark",
+      "species_group": "cat",
+      "conditions": ["dark"],
+      "expected": {
+        "species": "cat",
+        "capturable": true,
+        "bbox": { "x": 0.18, "y": 0.22, "width": 0.38, "height": 0.48 },
+        "min_confidence": 0.45
+      },
+      "image": { "kind": "synthetic", "seed": 2, "width": 64, "height": 64 }
+    },
+    {
+      "id": "cat_blur",
+      "species_group": "cat",
+      "conditions": ["blur"],
+      "expected": {
+        "species": "cat",
+        "capturable": true,
+        "bbox": { "x": 0.25, "y": 0.25, "width": 0.35, "height": 0.4 },
+        "min_confidence": 0.4
+      },
+      "image": { "kind": "synthetic", "seed": 3, "width": 64, "height": 64 }
+    },
+    {
+      "id": "dog_clear",
+      "species_group": "dog",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "dog",
+        "capturable": true,
+        "bbox": { "x": 0.15, "y": 0.15, "width": 0.5, "height": 0.55 },
+        "min_confidence": 0.5
+      },
+      "image": { "kind": "synthetic", "seed": 11, "width": 64, "height": 64 }
+    },
+    {
+      "id": "dog_backlight",
+      "species_group": "dog",
+      "conditions": ["backlight"],
+      "expected": {
+        "species": "dog",
+        "capturable": true,
+        "bbox": { "x": 0.2, "y": 0.18, "width": 0.45, "height": 0.5 },
+        "min_confidence": 0.45
+      },
+      "image": { "kind": "synthetic", "seed": 12, "width": 64, "height": 64 }
+    },
+    {
+      "id": "dog_far",
+      "species_group": "dog",
+      "conditions": ["far"],
+      "expected": {
+        "species": "dog",
+        "capturable": true,
+        "bbox": { "x": 0.4, "y": 0.4, "width": 0.15, "height": 0.18 },
+        "min_confidence": 0.4
+      },
+      "image": { "kind": "synthetic", "seed": 13, "width": 64, "height": 64 }
+    },
+    {
+      "id": "goose_clear",
+      "species_group": "goose",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "goose",
+        "capturable": true,
+        "bbox": { "x": 0.22, "y": 0.2, "width": 0.42, "height": 0.48 },
+        "min_confidence": 0.5
+      },
+      "image": { "kind": "synthetic", "seed": 21, "width": 64, "height": 64 }
+    },
+    {
+      "id": "goose_occlusion",
+      "species_group": "goose",
+      "conditions": ["occlusion"],
+      "expected": {
+        "species": "goose",
+        "capturable": true,
+        "bbox": { "x": 0.3, "y": 0.25, "width": 0.35, "height": 0.4 },
+        "min_confidence": 0.4
+      },
+      "image": { "kind": "synthetic", "seed": 22, "width": 64, "height": 64 }
+    },
+    {
+      "id": "goose_rotation",
+      "species_group": "goose",
+      "conditions": ["rotation"],
+      "expected": {
+        "species": "goose",
+        "capturable": true,
+        "bbox": { "x": 0.2, "y": 0.25, "width": 0.4, "height": 0.45 },
+        "min_confidence": 0.45
+      },
+      "image": { "kind": "synthetic", "seed": 23, "width": 64, "height": 64 }
+    },
+    {
+      "id": "duck_clear",
+      "species_group": "duck",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "duck",
+        "capturable": false,
+        "bbox": { "x": 0.25, "y": 0.25, "width": 0.35, "height": 0.4 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 31, "width": 64, "height": 64 },
+      "notes": "Negative: duck must not map to goose or enter capturable set"
+    },
+    {
+      "id": "duck_compression",
+      "species_group": "duck",
+      "conditions": ["compression"],
+      "expected": {
+        "species": "duck",
+        "capturable": false,
+        "bbox": { "x": 0.2, "y": 0.2, "width": 0.4, "height": 0.4 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 32, "width": 64, "height": 64 }
+    },
+    {
+      "id": "swan_clear",
+      "species_group": "swan",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "swan",
+        "capturable": false,
+        "bbox": { "x": 0.18, "y": 0.2, "width": 0.45, "height": 0.5 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 41, "width": 64, "height": 64 },
+      "notes": "Negative: swan must not map to goose"
+    },
+    {
+      "id": "swan_screen_recapture",
+      "species_group": "swan",
+      "conditions": ["screen_recapture"],
+      "expected": {
+        "species": "swan",
+        "capturable": false,
+        "bbox": { "x": 0.22, "y": 0.22, "width": 0.4, "height": 0.45 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 42, "width": 64, "height": 64 }
+    },
+    {
+      "id": "bird_clear",
+      "species_group": "bird",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "bird",
+        "capturable": false,
+        "bbox": { "x": 0.35, "y": 0.3, "width": 0.2, "height": 0.25 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 51, "width": 64, "height": 64 },
+      "notes": "Negative: generic bird is unsupported"
+    },
+    {
+      "id": "bird_multi",
+      "species_group": "bird",
+      "conditions": ["multi"],
+      "expected": {
+        "species": "bird",
+        "capturable": false,
+        "bbox": { "x": 0.1, "y": 0.1, "width": 0.25, "height": 0.25 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 52, "width": 64, "height": 64 }
+    },
+    {
+      "id": "person_clear",
+      "species_group": "person",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "person",
+        "capturable": false,
+        "bbox": { "x": 0.3, "y": 0.1, "width": 0.35, "height": 0.7 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 61, "width": 64, "height": 64 },
+      "notes": "Negative: person must not be capturable"
+    },
+    {
+      "id": "person_occlusion",
+      "species_group": "person",
+      "conditions": ["occlusion"],
+      "expected": {
+        "species": "person",
+        "capturable": false,
+        "bbox": { "x": 0.28, "y": 0.15, "width": 0.3, "height": 0.6 },
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 62, "width": 64, "height": 64 }
+    },
+    {
+      "id": "empty_scene",
+      "species_group": "empty",
+      "conditions": ["clear"],
+      "expected": {
+        "species": "empty",
+        "capturable": false,
+        "bbox": null,
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 71, "width": 64, "height": 64 },
+      "notes": "Empty landscape: no animals"
+    },
+    {
+      "id": "empty_dark",
+      "species_group": "empty",
+      "conditions": ["dark"],
+      "expected": {
+        "species": "empty",
+        "capturable": false,
+        "bbox": null,
+        "min_confidence": 0.0
+      },
+      "image": { "kind": "synthetic", "seed": 72, "width": 64, "height": 64 }
+    }
+  ]
+}
