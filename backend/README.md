@@ -34,7 +34,8 @@ make run
 探针：
 - `GET /livez`（或 `/health`）— 进程存活
 - `GET /readyz`（或 `/ready`）— DB / 配置就绪
-- `GET /metrics` — Prometheus 文本指标
+- `GET /metrics` on **METRICS_ADDR** (default `:9090`) — Prometheus 文本指标（management only）
+- 公网/主端口 `GET /metrics` → **404**（AP-036，不经 Ingress 暴露）
 
 ## Docker 构建（唯一约定）
 
@@ -63,9 +64,16 @@ make vision-golden-stub  # AP-047 ML golden set (stub, no API keys)
 ## 配置要点
 
 - `SERVER_ADDR=:8080`（不是 `PORT`）
+- `METRICS_ADDR=:9090` — management metrics listen address；设为 `off` 可关闭
 - `CORS_ALLOWED_ORIGINS`：生产必填精确 Origin 列表
 - Vision/LLM：`VISION_*` / `LLM_*`
 - 详见 `.env.example` 与根 README / OpenAPI
+
+## Metrics 安全（AP-036）
+
+- 主路由（Ingress）不再提供可抓取的 `/metrics`（返回 404）
+- 独立 `NewMetricsServer` 绑定 `METRICS_ADDR`；K8s 使用 ClusterIP Service `animal-poke-backend-metrics`
+- `ObserveHTTP` 仅使用 `c.FullPath()` 路由模板；未匹配 → `unknown`；series 有上限
 
 ## 中间件链
 

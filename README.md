@@ -128,7 +128,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  🦫 Go 1.25 后端（Gin · Gorm · MySQL）                        │
 │  鉴权 · Geo · Weather · Vision · Value · Sync · Privacy     │
-│  CORS 白名单 · /livez · /readyz · /metrics · 审计 RBAC       │
+│  CORS 白名单 · /livez · /readyz · metrics(:9090) · 审计 RBAC  │
 └───────┬─────────────┬─────────────┬─────────────┬───────────┘
         ▼             ▼             ▼             ▼
    腾讯地图        彩云天气        云端 VLM       云端 LLM
@@ -152,7 +152,7 @@
 | 网络 | `fetchWithRetry` · 设备 Token 自动续签 · Idempotency-Key |
 | 后端 | Go 1.25 · Gin · Gorm · MySQL 8 |
 | AI | 云端 VLM + LLM（双 Provider，可 Mock） |
-| 可观测 | Request-ID · JSON 日志 · Prometheus `/metrics` |
+| 可观测 | Request-ID · JSON 日志 · Prometheus metrics on `METRICS_ADDR` (ClusterIP, not Ingress) |
 | 交付 | Docker · Kustomize · GitHub Actions · gitleaks |
 | 契约 | OpenAPI 3.1 → TypeScript 类型 |
 

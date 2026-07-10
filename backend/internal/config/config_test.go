@@ -41,7 +41,7 @@ func TestDSN(t *testing.T) {
 func clearProviderEnv(t *testing.T) {
 	t.Helper()
 	keys := []string{
-		"APP_ENV", "SERVER_ADDR", "LOG_LEVEL", "JWT_SECRET", "AI_MOCK_ENABLED",
+		"APP_ENV", "SERVER_ADDR", "METRICS_ADDR", "LOG_LEVEL", "JWT_SECRET", "AI_MOCK_ENABLED",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
 		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY",
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
@@ -74,6 +74,7 @@ func TestLoad_Defaults(t *testing.T) {
 	cfg := Load()
 	assert.Equal(t, "development", cfg.AppEnv)
 	assert.Equal(t, ":8080", cfg.ServerAddr)
+	assert.Equal(t, ":9090", cfg.MetricsAddr)
 	assert.Equal(t, "INFO", cfg.LogLevel)
 	assert.Equal(t, "127.0.0.1", cfg.Database.Host)
 	assert.Equal(t, 3306, cfg.Database.Port)

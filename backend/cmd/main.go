@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/config"
+	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/migrate"
 	"animalpoke/backend/internal/repo"
 	"animalpoke/backend/internal/routes"
@@ -38,7 +39,6 @@ func main() {
 		slog.Error("数据库连接失败, 服务以降级模式启动(部分接口将不可用)", "err", err)
 	} else {
 		slog.Info("数据库连接成功")
-		// 版本化迁移：开发可随启动执行；生产建议单独 Job（AUTO_MIGRATE=false 跳过）
 		autoMigrate := os.Getenv("AUTO_MIGRATE")
 		if autoMigrate != "false" {
 			if err := migrate.Apply(db); err != nil {
@@ -74,6 +74,19 @@ func main() {
 		MaxHeaderBytes:    cfg.Server.MaxHeader,
 	}
 
+	// AP-036: management-only metrics on METRICS_ADDR (default :9090).
+	// Not registered on the public Ingress-facing router.
+	var metricsSrv *http.Server
+	if cfg.MetricsAddr != "" && cfg.MetricsAddr != "off" && cfg.MetricsAddr != "-" {
+		metricsSrv = middleware.NewMetricsServer(cfg.MetricsAddr)
+		go func() {
+			slog.Info("metrics server starting", "addr", cfg.MetricsAddr)
+			if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("metrics server exited", "err", err)
+			}
+		}()
+	}
+
 	go func() {
 		slog.Info("服务启动", "addr", cfg.ServerAddr, "app_env", cfg.AppEnv)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -92,6 +105,11 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
+	if metricsSrv != nil {
+		if err := metricsSrv.Shutdown(ctx); err != nil {
+			slog.Error("metrics server shutdown failed", "err", err)
+		}
+	}
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("关闭失败", "err", err)
 	}
