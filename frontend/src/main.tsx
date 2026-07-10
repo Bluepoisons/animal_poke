@@ -4,6 +4,7 @@ import App from './App'
 import { loadPublicConfig } from './config/publicConfig'
 import { ensureAuth } from './auth/deviceAuth'
 import { flushSyncQueue, installSyncOnlineFlush } from './services/syncQueue'
+import { pullAnimalsFromServer } from './services/syncPull'
 import { GlobalErrorBoundary, setupGlobalErrorHandlers, installOnlineListener } from './errors'
 import './index.css'
 import './a11y/a11y.css'
@@ -33,7 +34,14 @@ async function bootstrap() {
   }
 
   installSyncOnlineFlush()
-  void flushSyncQueue()
+  void (async () => {
+    try {
+      await pullAnimalsFromServer()
+    } catch (e) {
+      console.warn('sync pull deferred', e)
+    }
+    await flushSyncQueue()
+  })()
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
