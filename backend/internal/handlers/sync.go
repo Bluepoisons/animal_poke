@@ -88,7 +88,11 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 		return
 	}
 	if exists {
-		c.JSON(http.StatusConflict, gin.H{"error": "animal already exists", "uuid": req.UUID})
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "animal already exists",
+			"uuid": req.UUID,
+			"reason_code": "duplicate_animal",
+		})
 		return
 	}
 
@@ -153,12 +157,26 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "animal already exists", "uuid": req.UUID})
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "animal already exists",
+				"uuid": req.UUID,
+				"reason_code": "duplicate_animal",
+			})
 			return
 		}
-		if req.InferenceRequestID != "" && (err.Error() == "inference already consumed" || err.Error() == "inference not successful" || errors.Is(err, gorm.ErrRecordNotFound)) {
-			c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
-			return
+		if req.InferenceRequestID != "" {
+			msg := err.Error()
+			switch {
+			case msg == "inference already consumed" || contains(msg, "already consumed"):
+				c.JSON(http.StatusConflict, gin.H{"error": "inference already consumed", "reason_code": "inference_consumed"})
+				return
+			case contains(msg, "expired"):
+				c.JSON(http.StatusConflict, gin.H{"error": "inference expired", "reason_code": "inference_expired"})
+				return
+			case msg == "inference not successful" || errors.Is(err, gorm.ErrRecordNotFound) || contains(msg, "inference"):
+				c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
+				return
+			}
 		}
 		slog.Error("动物同步失败", "uuid", req.UUID, "device_id", deviceID, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "sync failed"})
