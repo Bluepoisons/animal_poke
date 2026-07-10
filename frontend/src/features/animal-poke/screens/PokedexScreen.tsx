@@ -1,3 +1,4 @@
+import { useVirtualList, pickThumbnailSrc } from '../../../performance'
 import { useEffect, useMemo, useState } from 'react'
 import type { PokedexFilter, AnimalEntry, Rarity, Species } from '../data/types'
 import PageTitle from '../components/PageTitle'
@@ -33,6 +34,7 @@ function mapRecord(r: AnimalRecord): AnimalEntry {
   }
 }
 
+// AP-054: useVirtualList / pickThumbnailSrc available for large collections
 export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
   const [entries, setEntries] = useState<AnimalEntry[]>([])

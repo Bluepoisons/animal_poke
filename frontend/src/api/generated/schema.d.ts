@@ -234,7 +234,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upsert single animal (idempotent) */
+        /**
+         * Upsert single animal (idempotent)
+         * @description Validates and persists one animal. Single and batch share the same
+         *     validateAndSyncOne domain path. Returns stable reason_code on failure;
+         *     never leaks raw database errors.
+         */
         post: operations["syncAnimal"];
         delete?: never;
         options?: never;
@@ -252,7 +257,13 @@ export interface paths {
         /** Pull animals (cursor) */
         get: operations["pullAnimals"];
         put?: never;
-        /** Batch upsert animals */
+        /**
+         * Batch upsert animals (non-atomic per-item results)
+         * @description Non-atomic batch: each item is validated and synced independently via
+         *     the same validateAndSyncOne path as POST /sync/animal. Max 100 items.
+         *     Response is always a results array with per-item status and reason_code;
+         *     raw DB errors are never returned.
+         */
         post: operations["syncAnimalsBatch"];
         delete?: never;
         options?: never;
@@ -551,6 +562,55 @@ export interface components {
             inference_id?: string;
         } & {
             [key: string]: unknown;
+        };
+        SyncAnimalRequest: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description capturable species (cat|dog|goose after normalize) */
+            species: string;
+            breed?: string;
+            rarity: number;
+            hp?: number;
+            atk?: number;
+            def?: number;
+            spd?: number;
+            /** @enum {string} */
+            class?: "Warrior" | "Mage" | "Ranger" | "Tank" | "Support" | "Assassin";
+            /** @enum {string} */
+            element?: "Fire" | "Water" | "Grass" | "Electric" | "Ice" | "Dark" | "Light" | "Earth" | "Wind";
+            latitude?: number;
+            longitude?: number;
+            city?: string;
+            /** Format: date-time */
+            generated_at: string;
+            inference_request_id?: string;
+            keep_precise_location?: boolean;
+        };
+        SyncAnimalResponse: {
+            /** @example synced */
+            status: string;
+            /** Format: uuid */
+            uuid: string;
+            review_status?: string;
+        };
+        BatchSyncRequest: {
+            items: components["schemas"]["SyncAnimalRequest"][];
+        };
+        BatchSyncItemResult: {
+            uuid: string;
+            /** @enum {string} */
+            status: "synced" | "conflict" | "error";
+            error?: string;
+            /**
+             * @description Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
+             *     invalid_class, invalid_element, invalid_coords, invalid_time,
+             *     invalid_string_length, species_unsupported, duplicate_animal,
+             *     batch_duplicate, inference_*, sync_failed, batch_too_large
+             */
+            reason_code?: string;
+        };
+        BatchSyncResponse: {
+            results: components["schemas"]["BatchSyncItemResult"][];
         };
     };
     responses: {
@@ -931,8 +991,23 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
-                    /** Format: binary */
+                    /**
+                     * Format: binary
+                     * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
+                     */
                     image: string;
+                    /** @description Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region. */
+                    crop_x?: number;
+                    /** @description Optional normalized crop origin Y (0..1). */
+                    crop_y?: number;
+                    /** @description Optional normalized crop width (0..1). */
+                    crop_w?: number;
+                    /** @description Optional normalized crop height (0..1). */
+                    crop_h?: number;
+                    /** @description Optional parent detect inference id for audit linkage. */
+                    parent_inference_id?: string;
+                    /** @description Alias of parent_inference_id. */
+                    detect_inference_id?: string;
                 };
             };
         };
@@ -948,8 +1023,16 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid image or crop box */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
         };
     };
@@ -994,23 +1077,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["SyncAnimalRequest"];
             };
         };
         responses: {
             /** @description Synced */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SyncAnimalResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
@@ -1052,23 +1132,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["BatchSyncRequest"];
             };
         };
         responses: {
-            /** @description Batch result */
+            /** @description Per-item batch results */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["BatchSyncResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
         };

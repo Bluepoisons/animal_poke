@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -81,19 +82,36 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	var auditService *services.AuditService
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
+	var idempotencyRepo *repo.IdempotencyRepo
 	if db != nil {
 		deviceRepo = repo.NewDeviceRepo(db)
 		animalRepo = repo.NewAnimalRepo(db)
 		auditRepo = repo.NewAuditLogRepo(db)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(db)
+		idempotencyRepo = repo.NewIdempotencyRepo(db)
 	}
 
-	// 限流：优先共享存储接口（内存实现可替换 Redis）
-	sharedCounter := middleware.NewMemorySharedCounter()
+	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
+	// Fail 策略见 middleware 包注释（限流/配额 fail-open，nonce fail-closed）。
+	sharedCounter := middleware.SharedCounter(middleware.NewMemorySharedCounter())
+	if cfg.RedisURL != "" {
+		rc, err := middleware.NewRedisSharedCounter(cfg.RedisURL)
+		if err != nil {
+			slog.Warn("REDIS_URL 不可用，降级内存 SharedCounter", "err", err)
+		} else {
+			sharedCounter = rc
+			slog.Info("已启用 Redis SharedCounter")
+		}
+	}
+	// AI：device 维度 100/min burst 10；附带 digest 维度防同图刷
 	rateLimiter := middleware.NewRateLimiter(100.0/60.0, 10).WithShared(sharedCounter)
+	// 每日配额（detect/analyze/value）跨 Pod 一致
 	costCounter := middleware.NewDailyCallCounter(middleware.DefaultDailyLimits).WithShared(sharedCounter)
-	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5)
+	// 鉴权：IP 维度 20/min burst 5
+	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5).WithShared(sharedCounter)
+	// digest 维度独立桶（同图短时重复）
+	digestLimiter := middleware.NewRateLimiter(10.0/60.0, 3).WithShared(sharedCounter)
 
 	api := r.Group("/api/v1")
 	{
@@ -143,7 +161,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 
 			ai := auth.Group("")
+			// device + digest 多维限流（account 维度在有 account_id 时由 RateLimitByAccount 扩展）
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
+			ai.Use(middleware.RateLimitByDigest(digestLimiter))
 			{
 				visionHandler := handlers.NewVisionHandlerWithOptions(aiService, handlers.VisionHandlerOptions{
 					InferenceRepo:  inferenceRepo,
@@ -154,16 +174,16 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					ConsentVersion: "v1",
 				})
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
-				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
-				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
-				ai.POST("/value/generate", middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
+				ai.POST("/vision/detect", middleware.Idempotency(idempotencyRepo, "vision.detect"), middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
+				ai.POST("/vision/analyze", middleware.Idempotency(idempotencyRepo, "vision.analyze"), middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
+				ai.POST("/value/generate", middleware.Idempotency(idempotencyRepo, "value.generate"), middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
 			}
 
 			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
 				syncHandler := handlers.NewSyncHandlerFull(animalRepo, auditService, inferenceRepo)
-				auth.POST("/sync/animal", syncHandler.SyncAnimal)
-				auth.POST("/sync/animals", syncHandler.SyncAnimalsBatch)
+				auth.POST("/sync/animal", middleware.Idempotency(idempotencyRepo, "sync.animal"), syncHandler.SyncAnimal)
+				auth.POST("/sync/animals", middleware.Idempotency(idempotencyRepo, "sync.animals"), syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
 			} else {
 				auth.POST("/sync/animal", unavailable("db_unavailable"))
@@ -179,7 +199,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
-				sec := handlers.NewSecurityHandler(db, auditRepo)
+				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
 				auth.POST("/security/report", sec.Report)
 
 				commerce := handlers.NewCommerceHandler(db)
