@@ -13,6 +13,11 @@ export interface AppSettings {
   soundEnabled: boolean
   musicEnabled: boolean
   privacyConsented: boolean
+  /** AP-053 extended prefs (optional for back-compat) */
+  hapticsEnabled?: boolean
+  reduceMotion?: boolean
+  dataSaver?: boolean
+  locale?: string
 }
 
 /** 同步队列状态 */
