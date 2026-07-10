@@ -94,14 +94,24 @@ func (r *AnimalRepo) SoftDeleteByDevice(deviceID string) error {
 		Update("deleted_at", now).Error
 }
 
-// ListSinceVersion 按 server_version 游标拉取。
+// ListSinceVersion 按 server_version 游标拉取（设备作用域）。
 func (r *AnimalRepo) ListSinceVersion(deviceID string, sinceVersion int64, limit int) ([]models.Animal, error) {
+	return r.ListSinceVersionScoped(deviceID, "", sinceVersion, limit)
+}
+
+// ListSinceVersionScoped 按 device 或 account 拉取（绑定后跨设备恢复）。
+func (r *AnimalRepo) ListSinceVersionScoped(deviceID, accountID string, sinceVersion int64, limit int) ([]models.Animal, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	var animals []models.Animal
-	err := r.db.Where("device_id = ? AND server_version > ?", deviceID, sinceVersion).
-		Order("server_version asc").Limit(limit).Find(&animals).Error
+	q := r.db.Where("server_version > ?", sinceVersion)
+	if accountID != "" {
+		q = q.Where("(account_id = ? OR device_id = ?)", accountID, deviceID)
+	} else {
+		q = q.Where("device_id = ?", deviceID)
+	}
+	err := q.Order("server_version asc").Limit(limit).Find(&animals).Error
 	return animals, err
 }
 

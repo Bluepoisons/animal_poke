@@ -13,6 +13,8 @@ import (
 const (
 	// ContextKeyDeviceID Gin context 中存放 device_id 的 key。
 	ContextKeyDeviceID = "device_id"
+	// ContextKeyAccountID Gin context 中存放 account_id 的 key（可选）。
+	ContextKeyAccountID = "account_id"
 	// ContextKeyTokenVersion token 版本。
 	ContextKeyTokenVersion = "token_version"
 	// ContextKeyJTI jti。
@@ -128,6 +130,9 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 		}
 		c.Set(ContextKeyDeviceID, deviceID)
 		c.Set(ContextKeyTokenVersion, tokenVer)
+		if accountID, ok := claims["account_id"].(string); ok && accountID != "" {
+			c.Set(ContextKeyAccountID, accountID)
+		}
 		c.Next()
 	}
 }
@@ -135,6 +140,15 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 // GetDeviceID 从 Gin context 提取 device_id。
 func GetDeviceID(c *gin.Context) string {
 	id, _ := c.Get(ContextKeyDeviceID)
+	if s, ok := id.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// GetAccountID 从 Gin context 提取 account_id（未绑定则为空）。
+func GetAccountID(c *gin.Context) string {
+	id, _ := c.Get(ContextKeyAccountID)
 	if s, ok := id.(string); ok {
 		return s
 	}

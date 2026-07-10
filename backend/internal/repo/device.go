@@ -22,6 +22,21 @@ func NewDeviceRepo(db *gorm.DB) *DeviceRepo {
 	return &DeviceRepo{db: db}
 }
 
+// DB 暴露底层 DB。
+func (r *DeviceRepo) DB() *gorm.DB { return r.db }
+
+// Enable 重新启用设备（登录恢复）。
+func (r *DeviceRepo) Enable(deviceID string) error {
+	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
+		Update("disabled", false).Error
+}
+
+// SetAccountID 设置设备账号归属。
+func (r *DeviceRepo) SetAccountID(deviceID, accountID string) error {
+	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
+		Update("account_id", accountID).Error
+}
+
 // FindOrCreate 按 device_id 查找设备, 不存在则创建（唯一约束并发安全）。
 func (r *DeviceRepo) FindOrCreate(deviceID string) (*models.Device, error) {
 	var dev models.Device

@@ -83,6 +83,7 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	req.Species = normSpecies
 
 	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
 	if err != nil {
@@ -116,6 +117,7 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	animal := &models.Animal{
 		UUID:               req.UUID,
 		DeviceID:           deviceID,
+		AccountID:          accountID,
 		Species:            req.Species,
 		Breed:              req.Breed,
 		Rarity:             req.Rarity,
@@ -296,13 +298,17 @@ func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
 		// 复用单条逻辑：构造临时 context 调用较重，这里内联简化
 		c.Set("batch_item", item)
 		// 直接调用内部
-		status, errMsg := h.syncOne(middleware.GetDeviceID(c), item)
+		status, errMsg := h.syncOneScoped(middleware.GetDeviceID(c), middleware.GetAccountID(c), item)
 		results = append(results, batchItemResult{UUID: item.UUID, Status: status, Error: errMsg})
 	}
 	c.JSON(http.StatusOK, BatchSyncResponse{Results: results})
 }
 
 func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string) {
+	return h.syncOneScoped(deviceID, "", req)
+}
+
+func (h *SyncHandler) syncOneScoped(deviceID, accountID string, req syncRequest) (string, string) {
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
 	if err != nil {
 		return "error", "invalid generated_at"
@@ -315,7 +321,7 @@ func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string)
 		return "conflict", "already exists"
 	}
 	animal := &models.Animal{
-		UUID: req.UUID, DeviceID: deviceID, Species: req.Species, Breed: req.Breed,
+		UUID: req.UUID, DeviceID: deviceID, AccountID: accountID, Species: req.Species, Breed: req.Breed,
 		Rarity: req.Rarity, HP: req.HP, ATK: req.ATK, DEF: req.DEF, SPD: req.SPD,
 		Class: req.Class, Element: req.Element, City: req.City,
 		Latitude: services.RoundCoord(req.Latitude), Longitude: services.RoundCoord(req.Longitude),
@@ -393,6 +399,7 @@ func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string)
 // PullAnimals GET /sync/animals?since_version=
 func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 	var since int64
 	if v := c.Query("since_version"); v != "" {
 		if _, err := parseInt64(v, &since); err != nil {
@@ -410,7 +417,7 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			}
 		}
 	}
-	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
+	items, err := h.animalRepo.ListSinceVersionScoped(deviceID, accountID, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed"})
 		return

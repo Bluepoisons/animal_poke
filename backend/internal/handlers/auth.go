@@ -57,6 +57,8 @@ type authResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
 	TokenType string `json:"token_type"`
+	AccountID string `json:"account_id,omitempty"`
+	Guest     bool   `json:"guest"`
 }
 
 // DeviceAuth POST /auth/device 注册设备并签发 JWT Token。
@@ -98,6 +100,9 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 		"jti":           jti,
 		"token_version": dev.TokenVersion,
 	}
+	if dev.AccountID != "" {
+		claims["account_id"] = dev.AccountID
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
@@ -106,10 +111,12 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 		return
 	}
 
-	slog.Info("设备鉴权成功", "device_id", dev.DeviceID)
+	slog.Info("设备鉴权成功", "device_id", dev.DeviceID, "account_id", dev.AccountID)
 	c.JSON(http.StatusOK, authResponse{
 		Token:     tokenStr,
 		ExpiresAt: expiresAt.Format(time.RFC3339),
 		TokenType: "Bearer",
+		AccountID: dev.AccountID,
+		Guest:     dev.AccountID == "",
 	})
 }

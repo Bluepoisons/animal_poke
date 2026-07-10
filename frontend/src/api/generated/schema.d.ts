@@ -140,6 +140,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind current device to email or mock OAuth account
+         * @description Guest remains default. Binding creates or attaches an account, merges guest
+         *     animals/entitlements without double-granting rewards. Credentials are stored hashed.
+         */
+        post: operations["authBind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login with email/mock OAuth to recover after clearing local data */
+        post: operations["authLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout current device (bump token version, clear refresh hash) */
+        post: operations["authLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current account profile (guest if unbound) */
+        get: operations["authAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List devices linked to current account */
+        get: operations["authListDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/devices/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a lost device */
+        post: operations["authRevokeDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geo/city": {
         parameters: {
             query?: never;
@@ -511,6 +617,64 @@ export interface components {
             expires_at: string;
             /** @example Bearer */
             token_type: string;
+            account_id?: string;
+            guest?: boolean;
+        };
+        AuthBindRequest: {
+            /** @enum {string} */
+            provider: "email" | "mock_oauth";
+            /** Format: email */
+            email?: string;
+            password?: string;
+            oauth_subject?: string;
+            /** @description Mock OAuth secret; server stores only a hash */
+            oauth_token?: string;
+            display_name?: string;
+        };
+        AuthLoginRequest: {
+            device_id: string;
+            /** @enum {string} */
+            provider: "email" | "mock_oauth";
+            email?: string;
+            password?: string;
+            oauth_subject?: string;
+            oauth_token?: string;
+        };
+        AuthAccountResponse: {
+            token: string;
+            expires_at: string;
+            token_type: string;
+            account_id?: string;
+            /** @description Returned once; server stores only hash */
+            refresh_token?: string;
+            guest?: boolean;
+            merge?: {
+                animals_moved?: number;
+                animals_skipped?: number;
+                entitlements_moved?: number;
+                entitlements_merged?: number;
+                orders_moved?: number;
+            };
+        };
+        AuthAccountInfo: {
+            guest?: boolean;
+            account_id?: string;
+            display_name?: string;
+            status?: string;
+            device_id?: string;
+        };
+        AuthDeviceList: {
+            guest?: boolean;
+            account_id?: string;
+            items?: {
+                device_id?: string;
+                device_label?: string;
+                status?: string;
+                linked_at?: string;
+                last_seen_at?: string;
+                revoked_at?: string;
+                current?: boolean;
+            }[];
         };
         CityResponse: {
             city?: string;
@@ -820,6 +984,165 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authBind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthBindRequest"];
+            };
+        };
+        responses: {
+            /** @description Bound and token re-issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in; guest assets on device_id merged into account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example logged_out */
+                        status?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account or guest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authListDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthDeviceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authRevokeDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    device_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Device revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        device_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Device not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getCity: {
