@@ -1,13 +1,16 @@
+import { useEffect } from 'react'
 import type { ScreenId } from '../data/types'
 import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
 import AnimalIcon from '../components/AnimalIcon'
+import { useCamera } from '../../../camera/useCamera'
 
 interface DiscoverScreenProps {
   energy: number
   coins: number
   onStartCapture: () => void
   onNavigate: (screen: ScreenId) => void
+  onFrame?: (blob: Blob) => void
 }
 
 function DoodleStar() {
@@ -56,7 +59,35 @@ export default function DiscoverScreen({
   coins,
   onStartCapture,
   onNavigate,
+  onFrame,
 }: DiscoverScreenProps) {
+  const camera = useCamera()
+
+  useEffect(() => {
+    void camera.start()
+    return () => camera.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const statusText =
+    camera.status === 'denied'
+      ? '相机权限被拒绝 · 请在系统设置开启'
+      : camera.status === 'busy'
+        ? '相机被占用'
+        : camera.status === 'unavailable'
+          ? '设备无可用相机 · 使用占位预览'
+          : camera.status === 'requesting'
+            ? '正在打开相机…'
+            : camera.status === 'ready'
+              ? 'VLM 实时识别中'
+              : '准备相机…'
+
+  const handleStart = async () => {
+    const blob = await camera.captureFrame()
+    if (blob && onFrame) onFrame(blob)
+    onStartCapture()
+  }
+
   return (
     <div className="ap-screen">
       <TopResourceBar city="宁波" weather="雨" energy={energy} coins={coins} />
@@ -91,7 +122,21 @@ export default function DiscoverScreen({
             <span />
             <span />
           </div>
-          <AnimalIcon species="goose" size={108} />
+          <video
+            ref={camera.videoRef}
+            playsInline
+            muted
+            autoPlay
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              opacity: camera.status === 'ready' ? 1 : 0,
+            }}
+          />
+          {camera.status !== 'ready' && <AnimalIcon species="goose" size={108} />}
           <div className="ap-scan-line" />
           <MascotBlob />
         </div>
@@ -99,10 +144,10 @@ export default function DiscoverScreen({
 
       <div className="ap-result-pill">
         <span className="ap-result-pill__dot" aria-hidden="true" />
-        <span>鹅 · 置信度 94%</span>
+        <span>{statusText}</span>
       </div>
 
-      <ActionButton onClick={onStartCapture}>开始捕获</ActionButton>
+      <ActionButton onClick={() => void handleStart()}>开始捕获</ActionButton>
     </div>
   )
 }
