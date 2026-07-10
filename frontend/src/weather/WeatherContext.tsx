@@ -84,6 +84,7 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const lbs = useLbs() // 需放在 LbsProvider 内
 
   const cityName = lbs.state.cityName
+  const playerLocation = lbs.state.playerLocation
 
   /** 为指定城市生成本周天气 */
   const loadWeather = useCallback(async (city: string) => {
@@ -92,17 +93,21 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const weekStart = getWeekStart()
     dispatch({ type: 'LOADING' })
 
-    // 尝试后端拉取
-    const backendWeek = await fetchWeekWeather(city)
-    if (backendWeek) {
-      dispatch({ type: 'SET_WEEK', week: backendWeek, weekStart, city, source: 'backend' })
-      return
+    // 优先用 lat/lng 调后端；失败则确定性本地降级
+    const lat = playerLocation?.lat
+    const lng = playerLocation?.lng
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      const backend = await fetchWeekWeather(lat, lng)
+      if (backend) {
+        dispatch({ type: 'SET_WEEK', week: backend.week, weekStart, city, source: 'backend' })
+        return
+      }
     }
 
-    // 降级为游戏内随机生成
+    // 降级为游戏内随机生成（仅接口异常时）
     const week = generateWeekWeather(city, weekStart)
     dispatch({ type: 'SET_WEEK', week, weekStart, city, source: 'internal' })
-  }, [])
+  }, [playerLocation?.lat, playerLocation?.lng])
 
   // 城市名变化时自动加载天气
   useEffect(() => {

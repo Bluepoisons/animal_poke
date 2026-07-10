@@ -31,13 +31,6 @@ export async function collectSecurityReport(): Promise<DeviceSecurityReport> {
 
 /**
  * 评估设备风险等级。
- *
- * | 风险分 | 等级 | 处理策略 |
- * |--------|------|---------|
- * | 0~29   | low      | 正常游戏 |
- * | 30~49  | medium   | 正常，服务端标记"关注" |
- * | 50~79  | high     | 允许但延迟发放奖励 |
- * | 80~100 | critical | 降级为"仅浏览"模式 |
  */
 export function evaluateRisk(report: DeviceSecurityReport): RiskAssessment {
   let score = 0
@@ -45,7 +38,6 @@ export function evaluateRisk(report: DeviceSecurityReport): RiskAssessment {
   if (report.emulatorCheck.isEmulator) {
     score += report.emulatorCheck.riskScore
   } else if (report.emulatorCheck.riskScore > 0) {
-    // 部分信号（未达 isEmulator 阈值）按 75% 折算
     score += Math.floor(report.emulatorCheck.riskScore * 0.75)
   }
 
@@ -69,4 +61,37 @@ export function evaluateRisk(report: DeviceSecurityReport): RiskAssessment {
   else if (score >= 30) level = 'medium'
 
   return { level, score, report }
+}
+
+/**
+ * 提交安全报告到后端 /api/v1/security/report。
+ * token 可选；失败时返回 null 且不默认安全。
+ */
+export async function submitSecurityReport(
+  report: DeviceSecurityReport,
+  token?: string,
+  baseUrl = '',
+): Promise<{ risk_score: number; safe: boolean } | null> {
+  try {
+    const nonce = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers.Authorization = `Bearer ${token}`
+    const resp = await fetch(`${baseUrl}/api/v1/security/report`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        nonce,
+        payload: {
+          client_skew_ms: report.timeSync.offset,
+          debugger: report.emulatorCheck.isEmulator,
+          rooted: report.rootCheck.isRooted,
+          collected_at: report.collectedAt,
+        },
+      }),
+    })
+    if (!resp.ok) return null
+    return (await resp.json()) as { risk_score: number; safe: boolean }
+  } catch {
+    return null
+  }
 }
