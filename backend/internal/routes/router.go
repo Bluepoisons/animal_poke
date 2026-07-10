@@ -131,6 +131,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			errHandler := handlers.NewErrorReportHandler()
 			auth.POST("/errors/report", errHandler.Report)
 
+			product := handlers.NewProductHandler()
+			auth.GET("/ranking/daily", product.RankingDaily)
+			auth.POST("/pvp/match", product.PvPMatch)
+			auth.POST("/pvp/result", product.PvPReport)
+			auth.GET("/social/friends", product.FriendsList)
+			auth.POST("/social/share", product.ShareCreate)
+			auth.GET("/ops/metrics-summary", product.OpsMetrics)
+
 			ai := auth.Group("")
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
 			{
