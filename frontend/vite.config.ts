@@ -15,14 +15,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
-          {
-            urlPattern: /\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-            },
-          },
+          // 禁止缓存鉴权/敏感 API（auth/vision/value/sync/privacy/security/commerce/errors）
+          // 不对 /api/ 做通用 NetworkFirst，避免跨设备复用 Token 响应。
+          // 仅允许明确公开且安全的 GET（当前无公开业务缓存资源）。
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/,
             handler: 'CacheFirst',
