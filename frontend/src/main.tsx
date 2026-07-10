@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { loadPublicConfig } from './config/publicConfig'
+import { loadGameConfigFromWindow } from './config/gameConfig'
 import { ensureAuth } from './auth/deviceAuth'
 import { flushSyncQueue, installSyncOnlineFlush } from './services/syncQueue'
 import { pullAnimalsFromServer } from './services/syncPull'
@@ -40,6 +41,7 @@ async function bootstrap() {
 
   try {
     loadPublicConfig()
+    loadGameConfigFromWindow()
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const rootEl = document.getElementById('root')
