@@ -21,8 +21,13 @@ func setupAuthTest() *gin.Engine {
 func signToken(secret, deviceID string, exp time.Time) string {
 	claims := jwt.MapClaims{
 		"device_id": deviceID,
+		"sub":       deviceID,
+		"iss":       "animal-poke",
+		"aud":       "animal-poke-client",
 		"iat":       time.Now().Unix(),
 		"exp":       exp.Unix(),
+		"jti":       "test-jti",
+		"token_version": 1,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	s, _ := token.SignedString([]byte(secret))
@@ -31,7 +36,7 @@ func signToken(secret, deviceID string, exp time.Time) string {
 
 func TestJWTAuth_MissingHeader(t *testing.T) {
 	r := setupAuthTest()
-	r.Use(JWTAuth("secret"))
+	r.Use(JWTAuth("secret", "animal-poke", "animal-poke-client"))
 	r.GET("/test", func(c *gin.Context) { c.Status(200) })
 
 	w := httptest.NewRecorder()
@@ -43,7 +48,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 
 func TestJWTAuth_InvalidFormat(t *testing.T) {
 	r := setupAuthTest()
-	r.Use(JWTAuth("secret"))
+	r.Use(JWTAuth("secret", "animal-poke", "animal-poke-client"))
 	r.GET("/test", func(c *gin.Context) { c.Status(200) })
 
 	w := httptest.NewRecorder()
@@ -58,7 +63,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	secret := "test-secret"
 	deviceID := "device-abc-123"
 	r := setupAuthTest()
-	r.Use(JWTAuth(secret))
+	r.Use(JWTAuth(secret, "animal-poke", "animal-poke-client"))
 	r.GET("/test", func(c *gin.Context) {
 		id := GetDeviceID(c)
 		assert.Equal(t, deviceID, id)
@@ -80,7 +85,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 func TestJWTAuth_ExpiredToken(t *testing.T) {
 	secret := "test-secret"
 	r := setupAuthTest()
-	r.Use(JWTAuth(secret))
+	r.Use(JWTAuth(secret, "animal-poke", "animal-poke-client"))
 	r.GET("/test", func(c *gin.Context) { c.Status(200) })
 
 	token := signToken(secret, "device-1", time.Now().Add(-time.Hour))
@@ -94,7 +99,7 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 
 func TestJWTAuth_WrongSecret(t *testing.T) {
 	r := setupAuthTest()
-	r.Use(JWTAuth("correct-secret"))
+	r.Use(JWTAuth("correct-secret", "animal-poke", "animal-poke-client"))
 	r.GET("/test", func(c *gin.Context) { c.Status(200) })
 
 	token := signToken("wrong-secret", "device-1", time.Now().Add(time.Hour))
@@ -103,6 +108,24 @@ func TestJWTAuth_WrongSecret(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(w, req)
 
+	assert.Equal(t, 401, w.Code)
+}
+
+func TestJWTAuth_RejectsNoneAlg(t *testing.T) {
+	r := setupAuthTest()
+	r.Use(JWTAuth("secret", "animal-poke", "animal-poke-client"))
+	r.GET("/test", func(c *gin.Context) { c.Status(200) })
+
+	// 伪造 none 算法 token 应拒绝
+	token := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
+		"device_id": "x", "exp": time.Now().Add(time.Hour).Unix(),
+	})
+	s, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	assert.NoError(t, err)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+s)
+	r.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
 }
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/config"
-	"animalpoke/backend/internal/models"
+	"animalpoke/backend/internal/migrate"
 	"animalpoke/backend/internal/repo"
 	"animalpoke/backend/internal/routes"
 
@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-	// 加载 .env(若存在); 不存在则使用 OS 环境变量
 	if err := godotenv.Load(); err != nil {
 		slog.Warn("未找到 .env 文件, 使用 OS 环境变量", "err", err)
 	}
@@ -26,15 +25,37 @@ func main() {
 	cfg := config.Load()
 	config.SetupLogger(cfg.LogLevel)
 
-	// 初始化数据库(开发期若 MySQL 未就绪, 仅告警不阻断启动)
+	if err := cfg.Validate(); err != nil {
+		if cfg.IsProduction() {
+			slog.Error("配置校验失败, 拒绝启动", "err", err)
+			os.Exit(1)
+		}
+		slog.Warn("配置校验告警", "err", err)
+	}
+
 	db, err := repo.InitDB(cfg.Database)
 	if err != nil {
 		slog.Error("数据库连接失败, 服务以降级模式启动(部分接口将不可用)", "err", err)
 	} else {
 		slog.Info("数据库连接成功")
-		// 自动迁移表结构(Device / Animal / AuditLog)
-		if err := db.AutoMigrate(&models.Device{}, &models.Animal{}, &models.AuditLog{}); err != nil {
-			slog.Error("数据库迁移失败", "err", err)
+		// 版本化迁移：开发可随启动执行；生产建议单独 Job（AUTO_MIGRATE=false 跳过）
+		autoMigrate := os.Getenv("AUTO_MIGRATE")
+		if autoMigrate != "false" {
+			if err := migrate.Apply(db); err != nil {
+				slog.Error("数据库迁移失败", "err", err)
+				if cfg.IsProduction() {
+					os.Exit(1)
+				}
+			} else {
+				slog.Info("数据库迁移完成", "version", migrate.CurrentVersion)
+			}
+		} else {
+			if err := migrate.CheckVersion(db, migrate.CurrentVersion); err != nil {
+				slog.Error("schema 版本不匹配", "err", err)
+				if cfg.IsProduction() {
+					os.Exit(1)
+				}
+			}
 		}
 		if sqlDB, err := db.DB(); err == nil && sqlDB != nil {
 			defer sqlDB.Close()
@@ -44,24 +65,32 @@ func main() {
 	r := routes.NewRouter(cfg, db)
 
 	srv := &http.Server{
-		Addr:    cfg.ServerAddr,
-		Handler: r,
+		Addr:              cfg.ServerAddr,
+		Handler:           r,
+		ReadHeaderTimeout: cfg.Server.ReadHeader,
+		ReadTimeout:       cfg.Server.Read,
+		WriteTimeout:      cfg.Server.Write,
+		IdleTimeout:       cfg.Server.Idle,
+		MaxHeaderBytes:    cfg.Server.MaxHeader,
 	}
 
 	go func() {
-		slog.Info("服务启动", "addr", cfg.ServerAddr)
+		slog.Info("服务启动", "addr", cfg.ServerAddr, "app_env", cfg.AppEnv)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("服务异常退出", "err", err)
 			os.Exit(1)
 		}
 	}()
 
-	// 优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	slog.Info("收到关闭信号, 正在关闭...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	slog.Info("收到关闭信号, 停止接入新请求...")
+	shutdownTimeout := cfg.Server.Shutdown
+	if shutdownTimeout <= 0 {
+		shutdownTimeout = 15 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("关闭失败", "err", err)

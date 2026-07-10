@@ -26,7 +26,7 @@ func (h *WeatherHandler) GetWeek(c *gin.Context) {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
 	if latStr == "" || lngStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lat and lng are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "lat and lng are required", "reason_code": "missing_params"})
 		return
 	}
 
@@ -46,10 +46,10 @@ func (h *WeatherHandler) GetWeek(c *gin.Context) {
 		return
 	}
 
-	result, err := h.weatherService.GetWeekWeather(lat, lng)
+	result, err := h.weatherService.GetWeekWeatherContext(c.Request.Context(), lat, lng)
 	if err != nil {
 		slog.Error("天气查询失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "weather lookup failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "weather lookup failed", "reason_code": "provider_error"})
 		return
 	}
 

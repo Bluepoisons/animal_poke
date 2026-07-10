@@ -35,6 +35,19 @@ func TestValueGenerate_MissingSpecies(t *testing.T) {
 	assert.Equal(t, 400, w.Code)
 }
 
+func TestValueGenerate_InvalidScore(t *testing.T) {
+	r, _ := setupValueTest()
+	body, _ := json.Marshal(map[string]interface{}{
+		"species": "cat",
+		"clarity": 99,
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/value/generate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+}
+
 func TestValueGenerate_Success(t *testing.T) {
 	r, _ := setupValueTest()
 

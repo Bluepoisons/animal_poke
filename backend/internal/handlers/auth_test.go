@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +24,8 @@ func setupAuthHandlerTest(t *testing.T) (*gin.Engine, *AuthHandler) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
 
-	// 迁移 Device 表
-	err = db.Exec("CREATE TABLE IF NOT EXISTS devices (id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT UNIQUE NOT NULL, created_at DATETIME, updated_at DATETIME)").Error
+	// 迁移完整 Device 模型
+	err = db.AutoMigrate(&models.Device{})
 	assert.NoError(t, err)
 
 	deviceRepo := repo.NewDeviceRepo(db)

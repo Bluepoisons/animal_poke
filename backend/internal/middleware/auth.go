@@ -13,11 +13,26 @@ import (
 const (
 	// ContextKeyDeviceID Gin context 中存放 device_id 的 key。
 	ContextKeyDeviceID = "device_id"
+	// ContextKeyTokenVersion token 版本。
+	ContextKeyTokenVersion = "token_version"
+	// ContextKeyJTI jti。
+	ContextKeyJTI = "jti"
 )
 
+// DeviceChecker 可选：校验设备是否禁用 / token version。
+type DeviceChecker interface {
+	IsDisabled(deviceID string) (bool, error)
+	TokenVersion(deviceID string) (int, error)
+}
+
 // JWTAuth 返回 Gin 中间件, 校验 Authorization: Bearer <token>。
-// 未带 / 无效 Token 返回 401; 校验通过后将 device_id 写入 Gin context。
-func JWTAuth(secret string) gin.HandlerFunc {
+// 固定 HS256；校验 iss/aud/exp；拒绝非 HMAC 算法。
+func JWTAuth(secret, issuer, audience string) gin.HandlerFunc {
+	return JWTAuthWithChecker(secret, issuer, audience, nil)
+}
+
+// JWTAuthWithChecker 带设备禁用/版本校验。
+func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -33,11 +48,12 @@ func JWTAuth(secret string) gin.HandlerFunc {
 
 		tokenStr := parts[1]
 		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			// 仅允许 HS256
+			if t.Method != jwt.SigningMethodHS256 {
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(secret), nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !token.Valid {
 			slog.Warn("无效 Token", "err", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
@@ -50,22 +66,93 @@ func JWTAuth(secret string) gin.HandlerFunc {
 			return
 		}
 
+		if issuer != "" {
+			if iss, _ := claims["iss"].(string); iss != "" && iss != issuer {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid issuer"})
+				return
+			}
+		}
+		if audience != "" {
+			switch aud := claims["aud"].(type) {
+			case string:
+				if aud != "" && aud != audience {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid audience"})
+					return
+				}
+			case []interface{}:
+				okAud := false
+				for _, a := range aud {
+					if s, _ := a.(string); s == audience {
+						okAud = true
+						break
+					}
+				}
+				if !okAud && len(aud) > 0 {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid audience"})
+					return
+				}
+			}
+		}
+
 		deviceID, ok := claims["device_id"].(string)
 		if !ok || deviceID == "" {
+			// 兼容 sub
+			if sub, ok2 := claims["sub"].(string); ok2 {
+				deviceID = sub
+			}
+		}
+		if deviceID == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device_id missing in token"})
 			return
 		}
 
+		tokenVer := 1
+		if v, ok := claims["token_version"].(float64); ok {
+			tokenVer = int(v)
+		}
+
+		if checker != nil {
+			disabled, err := checker.IsDisabled(deviceID)
+			if err == nil && disabled {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device disabled"})
+				return
+			}
+			if ver, err := checker.TokenVersion(deviceID); err == nil && ver > 0 && tokenVer < ver {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token revoked"})
+				return
+			}
+		}
+
+		if jti, ok := claims["jti"].(string); ok {
+			c.Set(ContextKeyJTI, jti)
+		}
 		c.Set(ContextKeyDeviceID, deviceID)
+		c.Set(ContextKeyTokenVersion, tokenVer)
 		c.Next()
 	}
 }
 
-// GetDeviceID 从 Gin context 提取 device_id。调用方确保在 JWTAuth 中间件之后调用。
+// GetDeviceID 从 Gin context 提取 device_id。
 func GetDeviceID(c *gin.Context) string {
 	id, _ := c.Get(ContextKeyDeviceID)
 	if s, ok := id.(string); ok {
 		return s
 	}
 	return ""
+}
+
+// AdminAuth 简单管理员 API Key 校验。
+func AdminAuth(adminKey string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if adminKey == "" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin not configured"})
+			return
+		}
+		key := c.GetHeader("X-Admin-Key")
+		if key == "" || key != adminKey {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		c.Next()
+	}
 }
