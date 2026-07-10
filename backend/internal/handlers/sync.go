@@ -118,13 +118,18 @@ func failOutcome(uuid, status string, httpStatus int, msg, code string) syncOutc
 // SyncAnimal POST /sync/animal 接收客户端上传的动物元数据。
 func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	var req syncRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "invalid request: uuid, species, rarity, generated_at are required",
-			"reason_code": "invalid_request",
-		})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
+
+
+	normSpecies, _ := taxonomy.Normalize(req.Species)
+	if !taxonomy.Capturable(normSpecies) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "species not capturable", "reason_code": "species_unsupported", "species": normSpecies})
+		return
+	}
+	req.Species = normSpecies
 
 	deviceID := middleware.GetDeviceID(c)
 	accountID := middleware.GetAccountID(c)
@@ -295,16 +300,22 @@ func validateSyncFields(req *syncRequest) *syncOutcome {
 		return &o
 	}
 
-	normSpecies, _ := taxonomy.Normalize(speciesRaw)
-	if !taxonomy.Capturable(normSpecies) {
-		req.Species = normSpecies
-		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "species not capturable", "species_unsupported")
-		return &o
-	}
-	if len(req.Items) > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch"})
+// SyncAnimalsBatch POST /sync/animals
+func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
+	var req BatchSyncRequest
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
+	if len(req.Items) == 0 {
+		middleware.AbortBadRequest(c, "items_required", "items required", nil)
+		return
+	}
+	if len(req.Items) > 100 {
+		middleware.AbortBadRequest(c, "batch_too_large", "max 100 items per batch", nil)
+		return
+	}
+
 	results := make([]batchItemResult, 0, len(req.Items))
 	for _, item := range req.Items {
 		// 复用单条逻辑：构造临时 context 调用较重，这里内联简化

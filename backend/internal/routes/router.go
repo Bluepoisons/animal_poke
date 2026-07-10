@@ -1,8 +1,7 @@
 package routes
 
 import (
-	"log/slog"
-	"net/http"
+	"time"
 
 	"animalpoke/backend/internal/config"
 	"animalpoke/backend/internal/handlers"
@@ -34,12 +33,7 @@ func (d deviceChecker) TokenVersion(deviceID string) (int, error) {
 // unavailable 依赖不可用时返回结构化 503（避免 404）。
 func unavailable(reason string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Retry-After", "30")
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":       "service unavailable",
-			"reason_code": reason,
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.AbortUnavailable(c, reason, "service unavailable", 30)
 	}
 }
 
@@ -64,7 +58,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		AllowedOrigins: cfg.CORSAllowedOrigins,
 		DevOpen:        cfg.IsDevelopment(),
 	}))
+	// 全局 body 硬上限（可选兜底，略大于最大图片上传）。
+	r.Use(middleware.GlobalBodyLimit(middleware.MaxBodyGlobal))
 	r.MaxMultipartMemory = cfg.MaxImageBytes
+
 
 	// Liveness / Readiness
 	r.GET("/health", handlers.Health())
@@ -139,13 +136,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			authHandler = handlers.NewAuthHandlerFull(
 				deviceRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 			)
-			api.POST("/auth/device", middleware.RateLimitByIP(ipLimiter), authHandler.DeviceAuth)
-			if accountRepo != nil {
-				accountHandler = handlers.NewAccountHandler(
-					deviceRepo, accountRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
-				)
-				api.POST("/auth/login", middleware.RateLimitByIP(ipLimiter), accountHandler.Login)
-			}
+			api.POST("/auth/device",
+				middleware.RateLimitByIP(ipLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				authHandler.DeviceAuth,
+			)
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
 			api.POST("/auth/login", unavailable("db_unavailable"))
@@ -171,7 +166,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/weather/week", weatherHandler.GetWeek)
 
 			errHandler := handlers.NewErrorReportHandler()
-			auth.POST("/errors/report", errHandler.Report)
+			auth.POST("/errors/report", middleware.BodyLimit(middleware.MaxBodyErrorReport), errHandler.Report)
 
 			// 账号绑定 / 设备管理
 			if accountHandler != nil {
@@ -190,10 +185,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 			product := handlers.NewProductHandler()
 			auth.GET("/ranking/daily", product.RankingDaily)
-			auth.POST("/pvp/match", product.PvPMatch)
-			auth.POST("/pvp/result", product.PvPReport)
+			auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
+			auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			auth.GET("/social/friends", product.FriendsList)
-			auth.POST("/social/share", product.ShareCreate)
+			auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 
 			ai := auth.Group("")
@@ -212,16 +207,20 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					AllowSafetyFixture:    cfg.IsDevelopment() || cfg.MockAllowed(),
 				})
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
-				ai.POST("/vision/detect", middleware.Idempotency(idempotencyRepo, "vision.detect"), middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
-				ai.POST("/vision/analyze", middleware.Idempotency(idempotencyRepo, "vision.analyze"), middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
-				ai.POST("/value/generate", middleware.Idempotency(idempotencyRepo, "value.generate"), middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
+				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
+				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
+				ai.POST("/value/generate",
+					middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.CostLimitByType(costCounter, "value"),
+					valueHandler.Generate,
+				)
 			}
 
 			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
 				syncHandler := handlers.NewSyncHandlerFull(animalRepo, auditService, inferenceRepo)
-				auth.POST("/sync/animal", middleware.Idempotency(idempotencyRepo, "sync.animal"), syncHandler.SyncAnimal)
-				auth.POST("/sync/animals", middleware.Idempotency(idempotencyRepo, "sync.animals"), syncHandler.SyncAnimalsBatch)
+				auth.POST("/sync/animal", middleware.BodyLimit(middleware.MaxBodyDefault), syncHandler.SyncAnimal)
+				auth.POST("/sync/animals", middleware.BodyLimit(middleware.MaxBodySyncBatch), syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
 			} else {
 				auth.POST("/sync/animal", unavailable("db_unavailable"))
@@ -234,24 +233,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/account/defaults", safetyH.AccountDefaults)
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
-				auth.POST("/privacy/consent", privacy.PutConsent)
-				auth.POST("/privacy/export", privacy.ExportData)
-				auth.POST("/privacy/delete", privacy.DeleteData)
+				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
+				auth.POST("/privacy/export", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.ExportData)
+				auth.POST("/privacy/delete", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
-				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
-				auth.POST("/security/report", sec.Report)
-				auth.POST("/safety/report", safetyH.Report)
+				sec := handlers.NewSecurityHandler(db, auditRepo)
+				auth.POST("/security/report", middleware.BodyLimit(middleware.MaxBodyDefault), sec.Report)
 
-				commerce := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
-					Production:  cfg.IsProduction(),
-					Enabled:     cfg.CommerceEnabled,
-					StoreVerify: cfg.CommerceStoreVerify,
-				})
-				auth.POST("/commerce/orders", commerce.CreateOrder)
-				auth.POST("/commerce/orders/fulfill", commerce.FulfillOrder)
-				// 设备 JWT 退款永久 403；真实退款走 admin/webhook
-				auth.POST("/commerce/orders/refund", commerce.RefundOrder)
+				commerce := handlers.NewCommerceHandler(db)
+				auth.POST("/commerce/orders", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.CreateOrder)
+				auth.POST("/commerce/orders/fulfill", middleware.BodyLimit(middleware.MaxBodyReceipt), commerce.FulfillOrder)
+				auth.POST("/commerce/orders/refund", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.RefundOrder)
 				auth.GET("/commerce/orders/:id", commerce.GetOrder)
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
 			} else {

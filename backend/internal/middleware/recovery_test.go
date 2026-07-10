@@ -13,7 +13,7 @@ import (
 func TestRecovery_PanicReturns500(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(Recovery())
+	r.Use(RequestID(), Recovery())
 	r.GET("/boom", func(c *gin.Context) { panic("oops") })
 
 	w := httptest.NewRecorder()
@@ -21,9 +21,12 @@ func TestRecovery_PanicReturns500(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	var body map[string]string
+	var body ErrorResponse
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "internal server error", body["error"])
+	assert.Equal(t, "internal server error", body.Error)
+	assert.Equal(t, "internal_error", body.ReasonCode)
+	assert.True(t, body.Retryable)
+	assert.NotEmpty(t, body.RequestID)
 }
 
 func TestRecovery_NormalPassthrough(t *testing.T) {
