@@ -401,6 +401,15 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 		}
 	}
 	limit := 50
+	if v := c.Query("limit"); v != "" {
+		var n int64
+		if _, err := parseInt64(v, &n); err == nil && n > 0 {
+			limit = int(n)
+			if limit > 200 {
+				limit = 200
+			}
+		}
+	}
 	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed"})
@@ -412,11 +421,19 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 		items[i].PreciseLng = nil
 		items[i].PreciseExpiresAt = nil
 	}
-	var next int64
+	var next int64 = since
 	if len(items) > 0 {
 		next = items[len(items)-1].ServerVersion
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "next_version": next})
+	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
+	hasMore := len(items) >= limit
+	c.JSON(http.StatusOK, gin.H{
+		"items": items,
+		"next_version": next,
+		"next_cursor": next,
+		"has_more": hasMore,
+		"limit": limit,
+	})
 }
 
 func isDuplicate(err error) bool {
