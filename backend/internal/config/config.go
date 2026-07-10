@@ -16,21 +16,22 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv         string
-	ServerAddr     string
-	LogLevel       string
-	JWTSecret      string
-	JWTIssuer      string
-	JWTAudience    string
-	JWTAccessTTL   time.Duration
-	AIMockEnabled  bool
-	RedisURL       string
-	AdminAPIKey    string
-	MaxImageBytes  int64
-	MaxImagePixels int
-	Database       DatabaseConfig
-	ThirdParty     ThirdPartyConfig
-	Server         ServerTimeouts
+	AppEnv             string
+	ServerAddr         string
+	LogLevel           string
+	JWTSecret          string
+	JWTIssuer          string
+	JWTAudience        string
+	JWTAccessTTL       time.Duration
+	AIMockEnabled      bool
+	RedisURL           string
+	AdminAPIKey        string
+	MaxImageBytes      int64
+	MaxImagePixels     int
+	CORSAllowedOrigins []string
+	Database           DatabaseConfig
+	ThirdParty         ThirdPartyConfig
+	Server             ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -53,7 +54,7 @@ type DatabaseConfig struct {
 	TLSMode         string // prefer / require / skip-verify / false
 	MaxOpenConns    int
 	MaxIdleConns    int
-	ConnMaxLifetime    time.Duration
+	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
 }
 
@@ -113,18 +114,19 @@ func (c *Config) MockAllowed() bool {
 // Load 读取配置, 优先级: OS 环境变量 > .env > 默认值。
 func Load() *Config {
 	cfg := &Config{
-		AppEnv:         getEnv("APP_ENV", "development"),
-		ServerAddr:     getEnv("SERVER_ADDR", ":8080"),
-		LogLevel:       getEnv("LOG_LEVEL", "INFO"),
-		JWTSecret:      getEnv("JWT_SECRET", DefaultDevJWTSecret),
-		JWTIssuer:      getEnv("JWT_ISSUER", "animal-poke"),
-		JWTAudience:    getEnv("JWT_AUDIENCE", "animal-poke-client"),
-		JWTAccessTTL:   getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
-		AIMockEnabled:  getEnvBool("AI_MOCK_ENABLED", true),
-		RedisURL:       getEnv("REDIS_URL", ""),
-		AdminAPIKey:    getEnv("ADMIN_API_KEY", ""),
-		MaxImageBytes:  int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
-		MaxImagePixels: getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
+		AppEnv:             getEnv("APP_ENV", "development"),
+		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
+		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
+		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
+		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
+		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
+		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
+		AIMockEnabled:      getEnvBool("AI_MOCK_ENABLED", true),
+		RedisURL:           getEnv("REDIS_URL", ""),
+		AdminAPIKey:        getEnv("ADMIN_API_KEY", ""),
+		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
+		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
+		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),
@@ -134,7 +136,7 @@ func Load() *Config {
 			TLSMode:         getEnv("DB_TLS", "false"),
 			MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 10),
-			ConnMaxLifetime:    getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+			ConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
 			ConnMaxIdleTime: getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
 		},
 		ThirdParty: ThirdPartyConfig{
@@ -186,6 +188,9 @@ func (c *Config) Validate() error {
 		if c.AdminAPIKey == "" {
 			errs = append(errs, "production requires ADMIN_API_KEY for audit RBAC")
 		}
+		if len(c.CORSAllowedOrigins) == 0 {
+			errs = append(errs, "production requires CORS_ALLOWED_ORIGINS allowlist")
+		}
 	}
 
 	if c.JWTAccessTTL <= 0 {
@@ -232,7 +237,7 @@ func SetupLogger(level string) {
 	default:
 		l = slog.LevelInfo
 	}
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: l})
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l})
 	slog.SetDefault(slog.New(handler))
 }
 
@@ -289,4 +294,19 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+func splitCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

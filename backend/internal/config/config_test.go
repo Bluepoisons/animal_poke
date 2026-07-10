@@ -127,6 +127,12 @@ func TestValidate_Production(t *testing.T) {
 		LLMEndpoint: "https://l", LLMKey: "k", LLMModel: "m",
 	}
 	cfg.AdminAPIKey = "admin-secret"
+	// 缺 CORS 白名单应失败
+	err = cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS")
+
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	assert.NoError(t, cfg.Validate())
 }
 
