@@ -81,12 +81,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	var auditService *services.AuditService
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
+	var idempotencyRepo *repo.IdempotencyRepo
 	if db != nil {
 		deviceRepo = repo.NewDeviceRepo(db)
 		animalRepo = repo.NewAnimalRepo(db)
 		auditRepo = repo.NewAuditLogRepo(db)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(db)
+		idempotencyRepo = repo.NewIdempotencyRepo(db)
 	}
 
 	// 限流：优先共享存储接口（内存实现可替换 Redis）
@@ -151,16 +153,16 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					ConsentVersion: "v1",
 				})
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
-				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
-				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
-				ai.POST("/value/generate", middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
+				ai.POST("/vision/detect", middleware.Idempotency(idempotencyRepo, "vision.detect"), middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
+				ai.POST("/vision/analyze", middleware.Idempotency(idempotencyRepo, "vision.analyze"), middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
+				ai.POST("/value/generate", middleware.Idempotency(idempotencyRepo, "value.generate"), middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
 			}
 
 			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
 				syncHandler := handlers.NewSyncHandlerFull(animalRepo, auditService, inferenceRepo)
-				auth.POST("/sync/animal", syncHandler.SyncAnimal)
-				auth.POST("/sync/animals", syncHandler.SyncAnimalsBatch)
+				auth.POST("/sync/animal", middleware.Idempotency(idempotencyRepo, "sync.animal"), syncHandler.SyncAnimal)
+				auth.POST("/sync/animals", middleware.Idempotency(idempotencyRepo, "sync.animals"), syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
 			} else {
 				auth.POST("/sync/animal", unavailable("db_unavailable"))
