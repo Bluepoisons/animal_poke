@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ScreenId } from './data/types'
 import PhoneFrame from './components/PhoneFrame'
 import BottomTabBar from './components/BottomTabBar'
@@ -31,7 +31,20 @@ export default function AnimalPokeApp() {
   }, [])
 
   const handleStartCapture = useCallback(() => setScreen('capture'), [])
-  const handleNavigate = useCallback((nextScreen: ScreenId) => setScreen(nextScreen), [])
+  const handleNavigate = useCallback((nextScreen: ScreenId) => {
+    setScreen(nextScreen)
+    if (typeof history !== 'undefined') history.replaceState(null, '', `#${nextScreen}`)
+  }, [])
+
+  useEffect(() => {
+    const onHash = () => {
+      const h = location.hash.replace('#', '') as ScreenId
+      const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store']
+      if ((allowed as string[]).includes(h)) setScreen(h)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const handleAchievement = useCallback(() => showToast('成就暂未开放'), [showToast])
   const handleCoinsChange = useCallback(
     (next: number) => {
@@ -78,7 +91,7 @@ export default function AnimalPokeApp() {
       <PhoneFrame variant={screen}>
         {renderScreen()}
         {screen !== 'map' && (
-          <BottomTabBar active={screen} onChange={setScreen} onAchievement={handleAchievement} />
+          <BottomTabBar active={screen} onChange={handleNavigate} onAchievement={handleAchievement} />
         )}
         <div className={`ap-toast ${toastMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {toastMessage}
