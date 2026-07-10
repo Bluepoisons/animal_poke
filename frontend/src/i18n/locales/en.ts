@@ -2,7 +2,6 @@
 import type { TranslationKey } from './zh'
 
 export const en: Record<TranslationKey, string> = {
-  // Common
   'app.name': 'Animal Poke',
   'common.confirm': 'Confirm',
   'common.cancel': 'Cancel',
@@ -11,35 +10,40 @@ export const en: Record<TranslationKey, string> = {
   'common.close': 'Close',
   'common.save': 'Save',
   'common.back': 'Back',
+  'common.on': 'On',
+  'common.off': 'Off',
+  'common.export': 'Export',
+  'common.delete': 'Delete',
 
-  // Navigation
   'tab.camera': 'Discover',
   'tab.collection': 'Collection',
   'tab.fight': 'Battle',
   'tab.store': 'Store',
   'tab.dispatch': 'Dispatch',
   'tab.achievement': 'Achievements',
+  'tab.settings': 'Settings',
+  'tab.map': 'Map',
 
-  // Stamina
   'stamina.label': 'Stamina',
   'stamina.insufficient': '⚡ Not enough stamina',
   'stamina.full': 'Stamina full',
 
-  // Discover
   'discover.scanning': 'Scanning…',
   'discover.detected': 'Animal found! Start capture',
   'discover.notfound': 'No animal found',
   'discover.error': 'Detection failed, please retry',
   'discover.cameraDenied': 'Camera permission denied',
   'discover.cameraPrompt': 'Please allow camera access to discover animals',
+  'discover.title': 'Discover',
+  'discover.subtitle': 'Find companions with your camera',
 
-  // Capture
   'capture.throw': 'Throw',
   'capture.success': 'Capture successful!',
   'capture.fail': 'So close! Try again',
   'capture.power': 'Power',
+  'capture.title': 'Capture',
+  'capture.stopFirst': 'Stop first — do not walk while looking at the screen',
 
-  // Collection
   'collection.title': 'Collection',
   'collection.empty': 'No animals collected yet',
   'collection.unlocked': 'Collected',
@@ -49,32 +53,52 @@ export const en: Record<TranslationKey, string> = {
   'collection.filter.week': 'This Week',
   'collection.filter.nearby': 'Nearby',
 
-  // Battle
   'battle.title': 'Battle',
   'battle.win': 'Victory!',
   'battle.lose': 'Defeat…',
   'battle.attack': 'Attack',
   'battle.selectPet': 'Select Pet',
 
-  // Store
   'store.title': 'Store',
   'store.checkIn': 'Daily Check-in',
   'store.checkInClaimed': 'Already checked in today',
   'store.gold': 'Gold',
   'store.buy': 'Buy',
 
-  // Achievement
   'achievement.title': 'Achievements',
   'achievement.locked': 'Locked',
 
-  // Error
   'error.title': 'Something went wrong',
   'error.crash': 'App crashed',
   'error.reload': 'Reload',
   'error.provider': 'Module temporarily unavailable',
 
-  // Settings
+  'settings.title': 'Settings',
+  'settings.subtitle': 'Language, sound, permissions & data',
   'settings.language': 'Language',
   'settings.chinese': '中文',
   'settings.english': 'English',
+  'settings.japanese': '日本語 (stub)',
+  'settings.section.audio': 'Audio',
+  'settings.section.motion': 'Motion & haptics',
+  'settings.section.data': 'Data & network',
+  'settings.section.privacy': 'Permissions & privacy',
+  'settings.sfx': 'Sound effects',
+  'settings.music': 'Music',
+  'settings.haptics': 'Haptics',
+  'settings.motion': 'Reduce motion',
+  'settings.dataSaver': 'Data saver',
+  'settings.permissions': 'System permissions',
+  'settings.permissions.desc': 'Camera is used for discover/capture; location for nearby points. Manage in system settings.',
+  'settings.export': 'Export local data',
+  'settings.export.done': 'Exported to clipboard/download',
+  'settings.delete': 'Delete local data',
+  'settings.delete.confirm': 'Delete local settings and cache? This cannot be undone.',
+  'settings.delete.done': 'Local data cleared',
+  'settings.sync.hint': 'After account bind, non-sensitive prefs (language, sfx…) can sync safely',
+  'settings.saved': 'Saved',
+  'map.title': 'Hunt Map',
+  'map.subtitle': 'Nearby finds · sketch map',
+  'map.you': 'You',
+  'map.back': 'Back',
 }

@@ -18,10 +18,12 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv             string
-	ServerAddr         string
-	LogLevel           string
-	JWTSecret          string
+	AppEnv     string
+	ServerAddr string
+	LogLevel   string
+	JWTSecret  string
+	// JWTSecretPrevious 可选：密钥轮换窗口内用于校验旧 Token 的上一版密钥；签发始终用 JWTSecret。
+	JWTSecretPrevious  string
 	JWTIssuer          string
 	JWTAudience        string
 	JWTAccessTTL       time.Duration
@@ -139,6 +141,7 @@ func Load() *Config {
 		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
+		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
 		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
@@ -179,6 +182,7 @@ func Load() *Config {
 			MaxHeader:  getEnvInt("HTTP_MAX_HEADER_BYTES", 1<<20),
 			Shutdown:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		},
+		Upstream: loadUpstreamConfig(),
 	}
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
@@ -188,6 +192,12 @@ func Load() *Config {
 	if cfg.IsProduction() {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
 	}
+
+	// 商业化：production 默认关闭；非 production 默认开启。COMMERCE_ENABLED 可覆盖。
+	commerceDefault := !cfg.IsProduction()
+	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
+	// 真实商店验签：默认关闭，需显式开启 COMMERCE_STORE_VERIFY=true。
+	cfg.CommerceStoreVerify = getEnvBool("COMMERCE_STORE_VERIFY", false)
 	return cfg
 }
 
@@ -430,6 +440,45 @@ func SetupLogger(level string) {
 	}
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l})
 	slog.SetDefault(slog.New(handler))
+}
+
+func loadUpstreamConfig() UpstreamConfig {
+	u := DefaultUpstreamConfig()
+	u.Geo = loadProviderBudget("UPSTREAM_GEO", u.Geo)
+	u.Weather = loadProviderBudget("UPSTREAM_WEATHER", u.Weather)
+	u.Vision = loadProviderBudget("UPSTREAM_VISION", u.Vision)
+	u.LLM = loadProviderBudget("UPSTREAM_LLM", u.LLM)
+	u.MaxRetryAfter = getEnvDuration("UPSTREAM_MAX_RETRY_AFTER", u.MaxRetryAfter)
+	u.CircuitFailureThreshold = getEnvInt("UPSTREAM_CIRCUIT_FAILURES", u.CircuitFailureThreshold)
+	u.CircuitOpenTimeout = getEnvDuration("UPSTREAM_CIRCUIT_OPEN_TIMEOUT", u.CircuitOpenTimeout)
+	if u.MaxRetryAfter <= 0 {
+		u.MaxRetryAfter = 5 * time.Second
+	}
+	if u.CircuitFailureThreshold <= 0 {
+		u.CircuitFailureThreshold = 5
+	}
+	if u.CircuitOpenTimeout <= 0 {
+		u.CircuitOpenTimeout = 30 * time.Second
+	}
+	return u
+}
+
+func loadProviderBudget(prefix string, def ProviderBudget) ProviderBudget {
+	b := def
+	b.TotalDeadline = getEnvDuration(prefix+"_DEADLINE", b.TotalDeadline)
+	b.Timeout = getEnvDuration(prefix+"_TIMEOUT", b.Timeout)
+	b.MaxRetries = getEnvInt(prefix+"_MAX_RETRIES", b.MaxRetries)
+	b.MaxConcurrent = getEnvInt(prefix+"_CONCURRENCY", b.MaxConcurrent)
+	if b.Timeout <= 0 {
+		b.Timeout = def.Timeout
+	}
+	if b.MaxRetries < 0 {
+		b.MaxRetries = 0
+	}
+	if b.MaxConcurrent <= 0 {
+		b.MaxConcurrent = def.MaxConcurrent
+	}
+	return b
 }
 
 func getEnv(k, def string) string {

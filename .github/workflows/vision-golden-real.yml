@@ -1,0 +1,67 @@
+# Vision golden set — real provider (AP-047)
+#
+# Manual / scheduled certification against a real Vision endpoint.
+# Does NOT run on pull_request. Requires repository secrets:
+#   VISION_ENDPOINT, VISION_KEY, VISION_MODEL
+#
+# Stub PR path lives in ci.yml job `vision-golden-stub`.
+
+name: vision-golden-real
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this certification run is needed"
+        required: false
+        default: "manual model/prompt certification"
+  # Nightly is opt-in via schedule; keep commented until secrets + budget are ready.
+  # schedule:
+  #   - cron: "0 3 * * *"
+
+concurrency:
+  group: vision-golden-real-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25.12"
+
+jobs:
+  certify:
+    name: Real provider golden set
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Stub contract always first
+        run: make vision-golden-stub
+
+      - name: Real provider note
+        env:
+          VISION_ENDPOINT: ${{ secrets.VISION_ENDPOINT }}
+          VISION_KEY: ${{ secrets.VISION_KEY }}
+          VISION_MODEL: ${{ secrets.VISION_MODEL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VISION_ENDPOINT:-}" ] || [ -z "${VISION_KEY:-}" ] || [ -z "${VISION_MODEL:-}" ]; then
+            echo "VISION_* secrets not configured — skipping real provider certification."
+            echo "Configure secrets and re-run workflow_dispatch for live model cert."
+            echo "Stub path already passed above."
+            exit 0
+          fi
+          echo "Real provider secrets present."
+          echo "Wire a real-detector harness (AIService + Evaluate) when staging budget allows."
+          echo "Until then, stub baseline remains the PR gate; this job documents the manual path."
+          # Placeholder for future:
+          # go test ./internal/mlqa/ -run TestGoldenReal -count=1
+          exit 0

@@ -34,6 +34,13 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          env:
+            # Nginx /api reverse proxy upstream (K8s Service name:port)
+            - name: BACKEND_UPSTREAM
+              value: animal-poke-backend:80
+            # Empty = same-origin /api via nginx proxy (recommended)
+            - name: API_BASE_URL
+              value: ""
           resources:
             requests:
               cpu: 50m

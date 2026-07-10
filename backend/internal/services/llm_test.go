@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -86,10 +87,16 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "qwen3.6-flash", requestBody.Model)
 	assert.NotEmpty(t, requestBody.Messages)
-	assert.Equal(t, 3, result.Rarity)
-	assert.Equal(t, "real", result.Source)
+	// LLM 返回的 rarity/stats 必须被忽略；服务端算法权威
+	assert.NotEqual(t, 0, result.Rarity)
+	assert.NotEqual(t, 60, result.HP) // LLM 给了 60，算法不应原样采用
+	assert.Equal(t, "swift and alert", result.Narrative)
+	assert.Equal(t, "algo", result.Source)
+	assert.NotNil(t, result.Factors)
+	assert.Equal(t, StatsConfigVersion, result.ConfigVersion)
 	// 完整渲染后不应残留模板
 	assert.Contains(t, requestBody.Messages[0].Content, "completeness=8")
+	assert.Contains(t, requestBody.Messages[0].Content, "Do NOT invent")
 }
 
 func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
@@ -137,7 +144,7 @@ func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
 func TestWeightedRarity_Distribution(t *testing.T) {
 	counts := map[int]int{}
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		mockResult := mockValue(ValueInput{
 			Species:             "cat",
 			Breed:               "test",
@@ -149,6 +156,7 @@ func TestWeightedRarity_Distribution(t *testing.T) {
 			Composition:         5,
 			Pose:                5,
 			Angle:               5,
+			SeedID:              fmt.Sprintf("mock-dist-%d", i),
 		})
 		counts[mockResult.Rarity]++
 	}
@@ -168,7 +176,7 @@ func TestMockValue_RangeCheck(t *testing.T) {
 		"Dark": true, "Light": true, "Earth": true, "Wind": true,
 	}
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		result := mockValue(ValueInput{
 			Species:             "cat",
 			SubjectCompleteness: 5,
@@ -177,9 +185,12 @@ func TestMockValue_RangeCheck(t *testing.T) {
 			Composition:         5,
 			Pose:                5,
 			Angle:               5,
+			SeedID:              fmt.Sprintf("range-%d", i),
 		})
 		assert.True(t, validClasses[result.Class], "invalid class: %s", result.Class)
 		assert.True(t, validElements[result.Element], "invalid element: %s", result.Element)
+		assert.NotNil(t, result.Factors)
+		assert.Equal(t, StatsConfigVersion, result.ConfigVersion)
 	}
 }
 

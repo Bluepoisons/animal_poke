@@ -1,0 +1,35 @@
+import type { Locale } from '../i18n'
+
+/** Full client preferences (AP-053 settings center) */
+export interface UserSettings {
+  locale: Locale
+  sfxEnabled: boolean
+  musicEnabled: boolean
+  hapticsEnabled: boolean
+  reduceMotion: boolean
+  dataSaver: boolean
+  /** Non-sensitive prefs may sync after account bind */
+  syncNonSensitive: boolean
+}
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  locale: 'zh',
+  sfxEnabled: true,
+  musicEnabled: true,
+  hapticsEnabled: true,
+  reduceMotion: false,
+  dataSaver: false,
+  syncNonSensitive: true,
+}
+
+export const SETTINGS_STORAGE_KEY = 'animal_poke_user_settings'
+
+/** Keys safe to sync after account bind (no precise location / photos / tokens) */
+export const SYNCABLE_SETTING_KEYS: (keyof UserSettings)[] = [
+  'locale',
+  'sfxEnabled',
+  'musicEnabled',
+  'hapticsEnabled',
+  'reduceMotion',
+  'dataSaver',
+]
