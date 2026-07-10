@@ -220,8 +220,11 @@ export default function AnimalPokeApp() {
 
   return (
     <div className="ap-root">
+      <a className="ap-skip-link" href="#ap-main-content">
+        跳到主要内容
+      </a>
       <PhoneFrame variant={screen}>
-        <div className="ap-main">{renderScreen()}</div>
+        <div className="ap-main" id="ap-main-content" tabIndex={-1}>{renderScreen()}</div>
         {screen !== 'map' && (
           <BottomTabBar active={screen === 'capture' ? 'discover' : screen} onChange={navigate} onAchievement={handleAchievement} />
         )}

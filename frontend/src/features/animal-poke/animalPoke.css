@@ -1339,3 +1339,35 @@
 .ap-main > .ap-screen {
   flex: 1;
 }
+
+/* ===== A11y (#191) ===== */
+.ap-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: #2B2B2B;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.ap-skip-link:focus {
+  left: 12px;
+  top: 12px;
+}
+.ap-bottom-tabs button:focus-visible,
+.ap-action-button:focus-visible,
+.ap-map-chip:focus-visible,
+.ap-pokedex-tabs button:focus-visible,
+.ap-strategy-row button:focus-visible {
+  outline: 3px solid #6FA3D2;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-scan-line,
+  .ap-toast,
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
