@@ -5,12 +5,13 @@
 //   - RateLimitByDevice（AI 识别类）：fail-open — 同上，避免 Redis 抖动导致全站 429。
 //   - CostLimitByType（每日配额）：fail-open — Incr 失败时降级本机计数。
 //   - SecurityHandler nonce（/security/report）：fail-closed — SetNX 失败返回 503，避免跨 Pod 重放穿透。
+//
 // 未配置 REDIS_URL 时全程使用 MemorySharedCounter（单 Pod 语义）。
 package middleware
 
 import (
 	"context"
-	"strconv"
+	"net/http"
 	"sync"
 	"time"
 

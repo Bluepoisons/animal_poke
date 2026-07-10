@@ -41,7 +41,7 @@ var (
 	ErrBindingNotFound   = errors.New("binding not found")
 	ErrInvalidCredential = errors.New("invalid credential")
 	ErrDeviceRevoked     = errors.New("device revoked")
-	ErrAlreadyBound     = errors.New("device already bound to another account")
+	ErrAlreadyBound      = errors.New("device already bound to another account")
 	ErrBindingConflict   = errors.New("binding already linked to another account")
 )
 
@@ -255,11 +255,11 @@ func (r *AccountRepo) FindActiveDeviceAccount(deviceID string) (*models.DeviceAc
 // MergeGuestIntoAccount 游客合并：动物/权益/订单归属账号，权益不重复发放。
 // 返回合并统计。
 type MergeStats struct {
-	AnimalsMoved      int `json:"animals_moved"`
-	AnimalsSkipped    int `json:"animals_skipped"`
-	EntitlementsMoved int `json:"entitlements_moved"`
+	AnimalsMoved       int `json:"animals_moved"`
+	AnimalsSkipped     int `json:"animals_skipped"`
+	EntitlementsMoved  int `json:"entitlements_moved"`
 	EntitlementsMerged int `json:"entitlements_merged"`
-	OrdersMoved       int `json:"orders_moved"`
+	OrdersMoved        int `json:"orders_moved"`
 }
 
 // MergeGuestIntoAccount 将 guestDevice 上的资产合并到 accountID。

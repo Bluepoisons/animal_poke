@@ -87,7 +87,7 @@ func TestExportData_Complete201Animals(t *testing.T) {
 	}).Error)
 	require.NoError(t, db.Create(&models.Order{
 		OrderID: "o1", DeviceID: "dev-privacy-1", ProductID: "month", Status: "fulfilled",
-		IdempotencyKey: "ik1", ReceiptHash: "rh1",
+		IdempotencyKey: "ik1", ReceiptHash: strPtr("rh1"),
 	}).Error)
 
 	w := httptest.NewRecorder()
@@ -142,7 +142,7 @@ func TestDeleteData_TombstonePullAndTokenBump(t *testing.T) {
 	}).Error)
 	require.NoError(t, db.Create(&models.Order{
 		OrderID: "keep-order", DeviceID: "dev-privacy-1", ProductID: "month", Status: "fulfilled",
-		IdempotencyKey: "ik-keep", ReceiptHash: "rh-keep",
+		IdempotencyKey: "ik-keep", ReceiptHash: strPtr("rh-keep"),
 	}).Error)
 
 	// delete
@@ -258,3 +258,5 @@ func TestPullAnimals_TombstoneOnlyAfterDelete(t *testing.T) {
 		assert.False(t, hasSpecies, "tombstone must not include species")
 	}
 }
+
+func strPtr(s string) *string { return &s }

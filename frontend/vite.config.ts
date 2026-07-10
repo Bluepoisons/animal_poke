@@ -98,7 +98,7 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: true,
     minify: 'esbuild',
-    sourcemap: 'hidden' // AP-037: private maps for error platform; not referenced in browser,
+    sourcemap: 'hidden', // AP-037: private maps for error platform; not referenced in browser
     rollupOptions: {
       output: {
         manualChunks: {

@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,6 +44,7 @@ type BoundingBox struct {
 // animals 保留兼容；targets 为多目标权威列表（与 animals 同步）。
 type DetectResult struct {
 	Animals       []DetectBox `json:"animals"`
+	Targets       []DetectBox `json:"targets,omitempty"`
 	Source        string      `json:"source,omitempty"` // real|mock|cache|safety
 	Degraded      bool        `json:"degraded,omitempty"`
 	ReasonCode    string      `json:"reason_code,omitempty"`
@@ -69,23 +69,28 @@ type SafetySummary struct {
 
 // AnalysisResult 深度分析结果。
 type AnalysisResult struct {
-	Breed               string         `json:"breed"`
-	Color               string         `json:"color"`
-	BodyType            string         `json:"body_type"`
-	QualityScore        int            `json:"quality_score"`
-	SubjectCompleteness int            `json:"subject_completeness"`
-	Clarity             int            `json:"clarity"`
-	Lighting            int            `json:"lighting"`
-	Composition         int            `json:"composition"`
-	Pose                int            `json:"pose"`
-	Angle               int            `json:"angle"`
-	Source              string         `json:"source,omitempty"`
-	Degraded            bool           `json:"degraded,omitempty"`
-	ReasonCode          string         `json:"reason_code,omitempty"`
-	InferenceID         string         `json:"inference_id,omitempty"`
-	Model               string         `json:"model,omitempty"`
-	PromptVersion       string         `json:"prompt_version,omitempty"`
-	Safety              *SafetySummary `json:"safety,omitempty"`
+	Breed               string `json:"breed"`
+	Color               string `json:"color"`
+	BodyType            string `json:"body_type"`
+	QualityScore        int    `json:"quality_score"`
+	SubjectCompleteness int    `json:"subject_completeness"`
+	Clarity             int    `json:"clarity"`
+	Lighting            int    `json:"lighting"`
+	Composition         int    `json:"composition"`
+	Pose                int    `json:"pose"`
+	Angle               int    `json:"angle"`
+	// 多目标一致性：回传锁定目标
+	Species           string         `json:"species,omitempty"`
+	TargetID          string         `json:"target_id,omitempty"`
+	DetectInferenceID string         `json:"detect_inference_id,omitempty"`
+	Box               *BoundingBox   `json:"box,omitempty"`
+	Source            string         `json:"source,omitempty"`
+	Degraded          bool           `json:"degraded,omitempty"`
+	ReasonCode        string         `json:"reason_code,omitempty"`
+	InferenceID       string         `json:"inference_id,omitempty"`
+	Model             string         `json:"model,omitempty"`
+	PromptVersion     string         `json:"prompt_version,omitempty"`
+	Safety            *SafetySummary `json:"safety,omitempty"`
 }
 
 // ---------- LLM 相关类型 ----------
@@ -505,6 +510,7 @@ func validateDetectResult(r *DetectResult) error {
 	}
 	normalized := make([]DetectBox, 0, len(r.Animals))
 	safetyLabels := make([]string, 0, len(r.Animals)*2)
+	seenIDs := make(map[string]int)
 	for i, a := range r.Animals {
 		if a.Confidence < 0 || a.Confidence > 1 {
 			return fmt.Errorf("animal[%d] confidence out of range", i)
@@ -566,6 +572,7 @@ func validateDetectResult(r *DetectResult) error {
 		}
 	}
 	r.Animals = normalized
+	r.Targets = append([]DetectBox(nil), normalized...)
 	r.SafetyLabels = safetyLabels
 	return nil
 }

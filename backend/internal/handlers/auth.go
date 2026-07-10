@@ -56,11 +56,12 @@ type authRequest struct {
 }
 
 type authResponse struct {
-	Token     string `json:"token"`
-	ExpiresAt string `json:"expires_at"`
-	TokenType string `json:"token_type"`
-	AccountID string `json:"account_id,omitempty"`
-	Guest     bool   `json:"guest"`
+	Token              string `json:"token"`
+	ExpiresAt          string `json:"expires_at"`
+	TokenType          string `json:"token_type"`
+	AccountID          string `json:"account_id,omitempty"`
+	Guest              bool   `json:"guest"`
+	InstallationSecret string `json:"installation_secret,omitempty"`
 }
 
 // DeviceAuth POST /auth/device 注册设备并签发 JWT Token。
@@ -173,10 +174,11 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 
 	slog.Info("设备鉴权成功", "device_id", dev.DeviceID, "account_id", dev.AccountID)
 	c.JSON(http.StatusOK, authResponse{
-		Token:     tokenStr,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
-		TokenType: "Bearer",
-		AccountID: dev.AccountID,
-		Guest:     dev.AccountID == "",
+		Token:              tokenStr,
+		ExpiresAt:          expiresAt.Format(time.RFC3339),
+		TokenType:          "Bearer",
+		AccountID:          dev.AccountID,
+		Guest:              dev.AccountID == "",
+		InstallationSecret: returnedSecret,
 	})
 }

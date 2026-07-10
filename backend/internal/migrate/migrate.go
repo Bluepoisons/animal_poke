@@ -3,7 +3,9 @@ package migrate
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"animalpoke/backend/internal/models"
@@ -23,21 +25,7 @@ func Apply(db *gorm.DB) error {
 		return err
 	}
 
-	migrations := []struct {
-		version string
-		fn      func(*gorm.DB) error
-	}{
-		{"0001_init_core", migrate0001},
-		{"0002_device_token_consent", migrate0002},
-		{"0003_inference_provenance", migrate0003},
-		{"0004_privacy_location", migrate0004},
-		{"0005_commerce_privacy_inference", migrate0005},
-		{"0006_inference_lineage", migrate0006},
-		{"0007_idempotency_keys", migrate0007},
-		{"0008_commerce_security", migrate0008},
-	}
-
-	for _, m := range migrations {
+	for _, m := range allMigrations() {
 		var existing models.SchemaMigration
 		err := db.Where("version = ?", m.version).First(&existing).Error
 		if err == nil {
@@ -69,6 +57,91 @@ func CheckVersion(db *gorm.DB, minVersion string) error {
 		return fmt.Errorf("schema version %s not applied", minVersion)
 	}
 	return nil
+}
+
+// migrationSpec 单条迁移定义。
+type migrationSpec struct {
+	version string
+	fn      func(*gorm.DB) error
+}
+
+func allMigrations() []migrationSpec {
+	return []migrationSpec{
+		{"0001_init_core", migrate0001},
+		{"0002_device_token_consent", migrate0002},
+		{"0003_inference_provenance", migrate0003},
+		{"0004_privacy_location", migrate0004},
+		{"0005_commerce_privacy_inference", migrate0005},
+		{"0006_inference_lineage", migrate0006},
+		{"0007_idempotency_keys", migrate0007},
+		{"0008_commerce_security", migrate0008},
+	}
+}
+
+// StatusReport 迁移状态。
+type StatusReport struct {
+	Target  string
+	Applied []string
+	Pending []string
+}
+
+// Status 返回已应用/待应用迁移。
+func Status(db *gorm.DB) (*StatusReport, error) {
+	if db == nil {
+		return nil, fmt.Errorf("db is nil")
+	}
+	if err := db.AutoMigrate(&models.SchemaMigration{}); err != nil {
+		return nil, err
+	}
+	var rows []models.SchemaMigration
+	if err := db.Order("applied_at asc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	appliedSet := make(map[string]struct{}, len(rows))
+	applied := make([]string, 0, len(rows))
+	for _, r := range rows {
+		applied = append(applied, r.Version)
+		appliedSet[r.Version] = struct{}{}
+	}
+	pending := make([]string, 0)
+	for _, m := range allMigrations() {
+		if _, ok := appliedSet[m.version]; !ok {
+			pending = append(pending, m.version)
+		}
+	}
+	return &StatusReport{Target: CurrentVersion, Applied: applied, Pending: pending}, nil
+}
+
+// FormatStatus 人类可读迁移状态。
+func FormatStatus(s *StatusReport) string {
+	if s == nil {
+		return "status: <nil>"
+	}
+	var b strings.Builder
+	b.WriteString("target: ")
+	b.WriteString(s.Target)
+	b.WriteString("\n")
+	b.WriteString("applied:\n")
+	if len(s.Applied) == 0 {
+		b.WriteString("  (none)\n")
+	} else {
+		for _, v := range s.Applied {
+			b.WriteString("  [x] ")
+			b.WriteString(v)
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString("pending:\n")
+	if len(s.Pending) == 0 {
+		b.WriteString("  (none — schema is current)\n")
+	} else {
+		for _, v := range s.Pending {
+			b.WriteString("  [ ] ")
+			b.WriteString(v)
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
 
 func migrate0001(db *gorm.DB) error {
@@ -117,4 +190,17 @@ func migrate0008(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// WriteStatus 查询并输出迁移状态（CLI 用）。
+func WriteStatus(w io.Writer, db *gorm.DB) error {
+	if w == nil {
+		return fmt.Errorf("writer is nil")
+	}
+	s, err := Status(db)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, FormatStatus(s))
+	return err
 }

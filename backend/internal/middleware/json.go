@@ -89,7 +89,6 @@ func BindStrictJSON(c *gin.Context, dst any) error {
 		return ErrTrailingJSON
 	}
 
-
 	if binding.Validator != nil {
 		if err := binding.Validator.ValidateStruct(dst); err != nil {
 			return err

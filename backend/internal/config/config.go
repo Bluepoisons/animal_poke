@@ -18,22 +18,22 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv             string
-	ServerAddr         string
+	AppEnv     string
+	ServerAddr string
 	// MetricsAddr is the management-only listen address for Prometheus scrape
 	// (default :9090). Empty disables the dedicated metrics server.
 	// Never expose this port via public Ingress; use ClusterIP only.
-	MetricsAddr        string
-	LogLevel           string
-	JWTSecret          string
+	MetricsAddr string
+	LogLevel    string
+	JWTSecret   string
 	// JWTSecretPrevious optional previous secret for rotation window.
-	JWTSecretPrevious  string
-	JWTIssuer          string
-	JWTAudience        string
-	JWTAccessTTL       time.Duration
-	AIMockEnabled      bool
-	RedisURL           string
-	AdminAPIKey        string
+	JWTSecretPrevious string
+	JWTIssuer         string
+	JWTAudience       string
+	JWTAccessTTL      time.Duration
+	AIMockEnabled     bool
+	RedisURL          string
+	AdminAPIKey       string
 	// OpsToken 运维内部接口 X-AP-Ops-Token 校验值（可与 AdminAPIKey 相同，但独立配置）。
 	OpsToken string
 	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
@@ -43,7 +43,7 @@ type Config struct {
 	// 环境变量 COMMERCE_STORE_VERIFY。
 	CommerceStoreVerify bool
 	// FeatureFlags 未完成产品能力开关。production 默认全部 false。
-	FeatureFlags FeatureFlags
+	FeatureFlags       FeatureFlags
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string

@@ -117,7 +117,6 @@ func TestValidateDetectResult_EmptyAndIllegal(t *testing.T) {
 	assert.Error(t, validateDetectResult(bad))
 }
 
-
 func TestValidateDetectResult_InvalidBoxArea(t *testing.T) {
 	var b DetectBox
 	b.Species = "cat"

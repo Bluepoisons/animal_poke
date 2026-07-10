@@ -63,7 +63,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.Use(middleware.GlobalBodyLimit(middleware.MaxBodyGlobal))
 	r.MaxMultipartMemory = cfg.MaxImageBytes
 
-
 	// Liveness / Readiness
 	r.GET("/health", handlers.Health())
 	r.GET("/livez", handlers.Livez())

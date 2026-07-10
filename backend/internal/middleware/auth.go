@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -68,13 +69,13 @@ func JWTAuthWithConfig(cfg JWTAuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			AbortUnauthorized(c, "missing_authorization", "missing authorization header")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			AbortUnauthorized(c, "invalid_authorization", "invalid authorization format")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
 			return
 		}
 
@@ -82,41 +83,36 @@ func JWTAuthWithConfig(cfg JWTAuthConfig) gin.HandlerFunc {
 		token, err := parseJWTWithSecrets(tokenStr, secrets)
 		if err != nil || token == nil || !token.Valid {
 			slog.Warn("无效 Token", "err", err)
-			AbortUnauthorized(c, "invalid_token", "invalid token")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			AbortUnauthorized(c, "invalid_token", "invalid token claims")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
 			return
 		}
 
-		if issuer != "" {
-			if iss, _ := claims["iss"].(string); iss != "" && iss != issuer {
-				AbortUnauthorized(c, "invalid_issuer", "invalid issuer")
+		// 强制 exp 存在（解析层已校验未过期；此处拒绝缺失）
+		if _, hasExp := claims["exp"]; !hasExp {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "exp claim required"})
+			return
+		}
+
+		// issuer 配置时必须存在且匹配（空 iss 拒绝）
+		if cfg.Issuer != "" {
+			iss, _ := claims["iss"].(string)
+			if iss == "" || iss != cfg.Issuer {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid issuer"})
 				return
 			}
 		}
-		if audience != "" {
-			switch aud := claims["aud"].(type) {
-			case string:
-				if aud != "" && aud != audience {
-					AbortUnauthorized(c, "invalid_audience", "invalid audience")
-					return
-				}
-			case []interface{}:
-				okAud := false
-				for _, a := range aud {
-					if s, _ := a.(string); s == audience {
-						okAud = true
-						break
-					}
-				}
-				if !okAud && len(aud) > 0 {
-					AbortUnauthorized(c, "invalid_audience", "invalid audience")
-					return
-				}
+
+		// audience 配置时必须存在且匹配
+		if cfg.Audience != "" {
+			if !audienceMatches(claims["aud"], cfg.Audience) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid audience"})
+				return
 			}
 		}
 
@@ -142,37 +138,41 @@ func JWTAuthWithConfig(cfg JWTAuthConfig) gin.HandlerFunc {
 			}
 		}
 		if deviceID == "" {
-			AbortUnauthorized(c, "device_id_missing", "device_id missing in token")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device_id or sub required"})
 			return
 		}
 
-		tokenVer := 1
-		if v, ok := claims["token_version"].(float64); ok {
-			tokenVer = int(v)
-		}
-
-		if checker != nil {
-			disabled, err := checker.IsDisabled(deviceID)
-			if err == nil && disabled {
-				AbortUnauthorized(c, "device_disabled", "device disabled")
+		if cfg.Checker != nil {
+			disabled, err := cfg.Checker.IsDisabled(deviceID)
+			if err != nil {
+				slog.Error("设备禁用检查失败", "device_id", deviceID, "err", err)
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "device check unavailable"})
 				return
 			}
-			if ver, err := checker.TokenVersion(deviceID); err == nil && ver > 0 && tokenVer < ver {
-				AbortUnauthorized(c, "token_revoked", "token revoked")
+			if disabled {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device disabled"})
+				return
+			}
+			ver, err := cfg.Checker.TokenVersion(deviceID)
+			if err != nil {
+				slog.Error("token version 检查失败", "device_id", deviceID, "err", err)
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "device check unavailable"})
+				return
+			}
+			if ver > 0 && tokenVer < ver {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token revoked"})
 				return
 			}
 		}
 
-		if jti, ok := claims["jti"].(string); ok {
-			c.Set(ContextKeyJTI, jti)
-		}
-		if role, ok := claims["role"].(string); ok && role != "" {
-			c.Set(ContextKeyRole, role)
-		}
+		c.Set(ContextKeyJTI, jti)
 		c.Set(ContextKeyDeviceID, deviceID)
 		c.Set(ContextKeyTokenVersion, tokenVer)
 		if accountID, ok := claims["account_id"].(string); ok && accountID != "" {
 			c.Set(ContextKeyAccountID, accountID)
+		}
+		if role, ok := claims["role"].(string); ok && role != "" {
+			c.Set(ContextKeyRole, role)
 		}
 		c.Next()
 	}
@@ -256,6 +256,15 @@ func GetDeviceID(c *gin.Context) string {
 	return ""
 }
 
+// GetAccountID 从 Gin context 提取 account_id（未绑定则为空）。
+func GetAccountID(c *gin.Context) string {
+	id, _ := c.Get(ContextKeyAccountID)
+	if s, ok := id.(string); ok {
+		return s
+	}
+	return ""
+}
+
 // GetRole 从 Gin context 提取 JWT role claim。
 func GetRole(c *gin.Context) string {
 	r, _ := c.Get(ContextKeyRole)
@@ -269,12 +278,12 @@ func GetRole(c *gin.Context) string {
 func AdminAuth(adminKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if adminKey == "" {
-			AbortForbidden(c, "admin_not_configured", "admin not configured")
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin not configured"})
 			return
 		}
 		key := c.GetHeader("X-Admin-Key")
 		if key == "" || key != adminKey {
-			AbortForbidden(c, "forbidden", "forbidden")
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
 		c.Next()
