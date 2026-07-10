@@ -26,6 +26,7 @@ import {
 
 import './animalPoke.css'
 import OnboardingOverlay from './components/OnboardingOverlay'
+import { setCaptureActive } from '../../pwa/updateGate'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store', 'settings']
 
@@ -62,6 +63,17 @@ const progression = useProgression()
   const [flow, dispatchFlow] = useReducer(reduceCaptureFlow, undefined, createInitialCaptureFlow)
   const flowRef = useRef(flow)
   flowRef.current = flow
+  // AP-040: block SW apply mid-capture
+  useEffect(() => {
+    const phase = String((flow as { phase?: string }).phase || '')
+    const active =
+      screen === 'capture' ||
+      phase === 'throwing' ||
+      phase === 'generating' ||
+      phase === 'settling' ||
+      phase === 'analyzing'
+    setCaptureActive(active)
+  }, [screen, flow])
   const dispatch = useCallback((event: CaptureFlowEvent) => {
     dispatchFlow(event)
   }, [])

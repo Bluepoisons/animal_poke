@@ -1,13 +1,39 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * AP-014 E2E hard gate — production entry via Vite + page.route API mocks.
- * CI-friendly: no MySQL/backend; pure route mocks.
+ * AP-014 / AP-040 E2E — production entry via Vite + page.route API mocks.
+ * Matrix: Chromium (CI hard gate) + WebKit (desktop Safari proxy).
+ * Mobile projects available via PLAYWRIGHT_MOBILE=1.
  *
  * Uses vite dev server by default (stable under bulk-delete sandboxes).
  * Set E2E_USE_PREVIEW=1 to build + vite preview instead.
  */
 const usePreview = process.env.E2E_USE_PREVIEW === '1'
+const enableMobile = process.env.PLAYWRIGHT_MOBILE === '1'
+
+const projects = [
+  {
+    name: 'chromium',
+    use: { ...devices['Desktop Chrome'] },
+  },
+  {
+    name: 'webkit',
+    use: { ...devices['Desktop Safari'] },
+  },
+]
+
+if (enableMobile) {
+  projects.push(
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'mobile-safari',
+      use: { ...devices['iPhone 14'] },
+    },
+  )
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -31,12 +57,7 @@ export default defineConfig({
       ],
     },
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
+  projects,
   webServer: {
     command: usePreview
       ? 'npx vite build --outDir dist-e2e --emptyOutDir false && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 4173 --strictPort'
