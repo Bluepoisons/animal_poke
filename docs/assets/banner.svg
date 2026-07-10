@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="Animal Poke banner">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FFF3E0"/>
+      <stop offset="0%" stop-color="#FFF3E0">
+        <animate attributeName="stop-color" values="#FFF3E0;#FFE8C8;#FFF3E0" dur="8s" repeatCount="indefinite"/>
+      </stop>
       <stop offset="45%" stop-color="#FFE0B8"/>
-      <stop offset="100%" stop-color="#FFB06B"/>
+      <stop offset="100%" stop-color="#FFB06B">
+        <animate attributeName="stop-color" values="#FFB06B;#FF9A4D;#FFB06B" dur="8s" repeatCount="indefinite"/>
+      </stop>
     </linearGradient>
     <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#7BC67E"/>
@@ -21,6 +25,7 @@
     </filter>
     <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
       <circle cx="4" cy="4" r="2" fill="#FF8C42" opacity="0.12"/>
+      <animateTransform attributeName="patternTransform" type="translate" values="0 0;14 10;0 0" dur="12s" repeatCount="indefinite"/>
     </pattern>
   </defs>
 
@@ -28,64 +33,140 @@
   <rect width="1280" height="420" rx="36" fill="url(#sky)"/>
   <rect width="1280" height="420" rx="36" fill="url(#dots)"/>
 
-  <!-- sun -->
-  <circle cx="1080" cy="86" r="54" fill="#FFE566" opacity="0.95"/>
-  <circle cx="1080" cy="86" r="72" fill="#FFE566" opacity="0.18"/>
+  <!-- sun + pulse glow -->
+  <g>
+    <circle cx="1080" cy="86" r="72" fill="#FFE566" opacity="0.18">
+      <animate attributeName="r" values="68;80;68" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.12;0.28;0.12" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1080" cy="86" r="54" fill="#FFE566" opacity="0.95">
+      <animate attributeName="opacity" values="0.9;1;0.9" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <!-- sun rays -->
+    <g stroke="#FFE566" stroke-width="4" stroke-linecap="round" opacity="0.55">
+      <line x1="1080" y1="8" x2="1080" y2="22">
+        <animate attributeName="y2" values="22;16;22" dur="2.5s" repeatCount="indefinite"/>
+      </line>
+      <line x1="1145" y1="30" x2="1156" y2="19">
+        <animate attributeName="x2" values="1156;1162;1156" dur="2.5s" begin="0.3s" repeatCount="indefinite"/>
+      </line>
+      <line x1="1165" y1="86" x2="1178" y2="86">
+        <animate attributeName="x2" values="1178;1184;1178" dur="2.5s" begin="0.6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="1015" y1="30" x2="1004" y2="19">
+        <animate attributeName="x2" values="1004;998;1004" dur="2.5s" begin="0.9s" repeatCount="indefinite"/>
+      </line>
+    </g>
+  </g>
 
-  <!-- hills -->
-  <path d="M0 300 C180 220 320 340 480 280 C640 220 760 320 920 260 C1080 200 1180 280 1280 240 L1280 420 L0 420 Z" fill="url(#hill)" opacity="0.92"/>
+  <!-- hills (gentle sway via opacity shimmer) -->
+  <path d="M0 300 C180 220 320 340 480 280 C640 220 760 320 920 260 C1080 200 1180 280 1280 240 L1280 420 L0 420 Z" fill="url(#hill)" opacity="0.92">
+    <animate attributeName="opacity" values="0.88;0.96;0.88" dur="7s" repeatCount="indefinite"/>
+  </path>
   <path d="M0 340 C200 300 360 380 540 330 C720 280 860 370 1040 320 C1160 290 1220 330 1280 310 L1280 420 L0 420 Z" fill="#3F8A4A" opacity="0.55"/>
 
   <!-- floating stickers -->
   <g filter="url(#pop)">
-    <!-- map pin -->
-    <g transform="translate(980 150)">
+    <!-- map pin float -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="980 150;980 138;980 150" dur="3.2s" repeatCount="indefinite"/>
       <path d="M36 8 C18 8 6 22 6 38 C6 62 36 92 36 92 C36 92 66 62 66 38 C66 22 54 8 36 8 Z" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="4"/>
-      <circle cx="36" cy="36" r="12" fill="#FF8C42"/>
+      <circle cx="36" cy="36" r="12" fill="#FF8C42">
+        <animate attributeName="r" values="11;13;11" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
     </g>
-    <!-- ball -->
-    <g transform="translate(1120 210)">
-      <circle cx="34" cy="34" r="34" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="4"/>
-      <path d="M0 34 H68" stroke="#4A2C1A" stroke-width="4"/>
-      <path d="M34 0 V68" stroke="#4A2C1A" stroke-width="4"/>
-      <circle cx="34" cy="34" r="10" fill="#FF8C42" stroke="#4A2C1A" stroke-width="3"/>
+    <!-- ball bounce + spin-ish via slight rotate -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="1120 210;1120 198;1120 210" dur="2.4s" repeatCount="indefinite"/>
+      <g transform="translate(34 34)">
+        <animateTransform attributeName="transform" type="rotate" values="0;12;-8;0" dur="2.4s" repeatCount="indefinite" additive="sum"/>
+        <g transform="translate(-34 -34)">
+          <circle cx="34" cy="34" r="34" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="4"/>
+          <path d="M0 34 H68" stroke="#4A2C1A" stroke-width="4"/>
+          <path d="M34 0 V68" stroke="#4A2C1A" stroke-width="4"/>
+          <circle cx="34" cy="34" r="10" fill="#FF8C42" stroke="#4A2C1A" stroke-width="3"/>
+        </g>
+      </g>
     </g>
-    <!-- star -->
-    <path d="M170 88 l10 22 24 2 -18 16 6 24 -22-14 -22 14 6-24 -18-16 24-2 z" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3" stroke-linejoin="round"/>
-    <!-- heart -->
-    <path d="M240 120 C240 104 256 96 268 108 C280 96 296 104 296 120 C296 148 268 168 268 168 C268 168 240 148 240 120 Z" fill="#FF9EC6" stroke="#4A2C1A" stroke-width="3"/>
+    <!-- star twinkle -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 -8;0 0" dur="2.8s" begin="0.4s" repeatCount="indefinite"/>
+      <path d="M170 88 l10 22 24 2 -18 16 6 24 -22-14 -22 14 6-24 -18-16 24-2 z" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3" stroke-linejoin="round">
+        <animateTransform attributeName="transform" type="rotate" values="0 170 110;15 170 110;-10 170 110;0 170 110" dur="3.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;0.75;1" dur="1.6s" repeatCount="indefinite"/>
+      </path>
+    </g>
+    <!-- heart pulse -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 -6;0 0" dur="2.2s" begin="0.8s" repeatCount="indefinite"/>
+      <path d="M240 120 C240 104 256 96 268 108 C280 96 296 104 296 120 C296 148 268 168 268 168 C268 168 240 148 240 120 Z" fill="#FF9EC6" stroke="#4A2C1A" stroke-width="3">
+        <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="1.4s" repeatCount="indefinite" additive="sum"/>
+      </path>
+    </g>
   </g>
 
-  <!-- mascot blob -->
-  <g filter="url(#soft)" transform="translate(920 230)">
-    <ellipse cx="90" cy="96" rx="78" ry="70" fill="#FFB3D0" stroke="#4A2C1A" stroke-width="5"/>
-    <circle cx="62" cy="86" r="8" fill="#4A2C1A"/>
-    <circle cx="118" cy="86" r="8" fill="#4A2C1A"/>
-    <path d="M70 118 C86 132 110 132 126 118" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
-    <path d="M40 50 C50 18 78 12 96 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
-    <path d="M140 50 C130 18 102 12 84 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="150" cy="34" r="14" fill="#F2E66B" stroke="#4A2C1A" stroke-width="4"/>
-  </g>
-
-  <!-- title card -->
+  <!-- mascot blob bob + blink -->
   <g filter="url(#soft)">
+    <animateTransform attributeName="transform" type="translate" values="920 230;920 220;920 230" dur="3s" repeatCount="indefinite"/>
+    <ellipse cx="90" cy="96" rx="78" ry="70" fill="#FFB3D0" stroke="#4A2C1A" stroke-width="5"/>
+    <!-- eyes with blink -->
+    <g>
+      <circle cx="62" cy="86" r="8" fill="#4A2C1A">
+        <animate attributeName="ry" values="8;8;1;8;8" keyTimes="0;0.42;0.46;0.5;1" dur="3.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="118" cy="86" r="8" fill="#4A2C1A">
+        <animate attributeName="ry" values="8;8;1;8;8" keyTimes="0;0.42;0.46;0.5;1" dur="3.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <path d="M70 118 C86 132 110 132 126 118" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
+    <!-- ear wiggle -->
+    <path d="M40 50 C50 18 78 12 96 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round">
+      <animate attributeName="d" values="M40 50 C50 18 78 12 96 36;M42 48 C52 16 80 10 98 34;M40 50 C50 18 78 12 96 36" dur="2.6s" repeatCount="indefinite"/>
+    </path>
+    <path d="M140 50 C130 18 102 12 84 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round">
+      <animate attributeName="d" values="M140 50 C130 18 102 12 84 36;M138 48 C128 16 100 10 82 34;M140 50 C130 18 102 12 84 36" dur="2.6s" begin="0.3s" repeatCount="indefinite"/>
+    </path>
+    <circle cx="150" cy="34" r="14" fill="#F2E66B" stroke="#4A2C1A" stroke-width="4">
+      <animate attributeName="r" values="13;16;13" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- title card gentle float -->
+  <g filter="url(#soft)">
+    <animateTransform attributeName="transform" type="translate" values="0 0;0 -4;0 0" dur="5s" repeatCount="indefinite"/>
     <rect x="72" y="78" width="620" height="250" rx="28" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="5"/>
     <rect x="72" y="300" width="620" height="28" rx="0" fill="#E67300" opacity="0.18"/>
-  </g>
+    <text x="108" y="150" font-family="Verdana, Geneva, sans-serif" font-size="28" font-weight="700" fill="#E67300" letter-spacing="4">LBS · VLM · COLLECTION</text>
+    <text x="104" y="220" font-family="Verdana, Geneva, sans-serif" font-size="72" font-weight="900" fill="#4A2C1A">Animal Poke</text>
+    <text x="108" y="268" font-family="Verdana, Geneva, sans-serif" font-size="26" fill="#7A4A2E">走出门，用相机捕捉真实世界的小动物</text>
 
-  <text x="108" y="150" font-family="Verdana, Geneva, sans-serif" font-size="28" font-weight="700" fill="#E67300" letter-spacing="4">LBS · VLM · COLLECTION</text>
-  <text x="104" y="220" font-family="Verdana, Geneva, sans-serif" font-size="72" font-weight="900" fill="#4A2C1A">Animal Poke</text>
-  <text x="108" y="268" font-family="Verdana, Geneva, sans-serif" font-size="26" fill="#7A4A2E">走出门，用相机捕捉真实世界的小动物</text>
-
-  <!-- pill tags -->
-  <g font-family="Verdana, Geneva, sans-serif" font-size="16" font-weight="700">
-    <rect x="108" y="292" width="118" height="34" rx="17" fill="url(#btn)" stroke="#4A2C1A" stroke-width="3"/>
-    <text x="167" y="314" text-anchor="middle" fill="#FFF8F0">发现</text>
-    <rect x="238" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
-    <text x="297" y="314" text-anchor="middle" fill="#4A2C1A">捕获</text>
-    <rect x="368" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
-    <text x="427" y="314" text-anchor="middle" fill="#4A2C1A">收藏</text>
-    <rect x="498" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
-    <text x="557" y="314" text-anchor="middle" fill="#4A2C1A">对战</text>
+    <!-- pill tags with sequential highlight -->
+    <g font-family="Verdana, Geneva, sans-serif" font-size="16" font-weight="700">
+      <rect x="108" y="292" width="118" height="34" rx="17" fill="url(#btn)" stroke="#4A2C1A" stroke-width="3">
+        <animate attributeName="opacity" values="1;0.7;1;1;1" keyTimes="0;0.12;0.25;0.5;1" dur="4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="167" y="314" text-anchor="middle" fill="#FFF8F0">发现</text>
+      <rect x="238" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3">
+        <animate attributeName="fill" values="#FFF8F0;#FF9A4D;#FFF8F0;#FFF8F0" keyTimes="0;0.25;0.4;1" dur="4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="297" y="314" text-anchor="middle" fill="#4A2C1A">
+        <animate attributeName="fill" values="#4A2C1A;#FFF8F0;#4A2C1A;#4A2C1A" keyTimes="0;0.25;0.4;1" dur="4s" repeatCount="indefinite"/>
+        捕获
+      </text>
+      <rect x="368" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3">
+        <animate attributeName="fill" values="#FFF8F0;#FFF8F0;#FF9A4D;#FFF8F0" keyTimes="0;0.4;0.55;1" dur="4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="427" y="314" text-anchor="middle" fill="#4A2C1A">
+        <animate attributeName="fill" values="#4A2C1A;#4A2C1A;#FFF8F0;#4A2C1A" keyTimes="0;0.4;0.55;1" dur="4s" repeatCount="indefinite"/>
+        收藏
+      </text>
+      <rect x="498" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3">
+        <animate attributeName="fill" values="#FFF8F0;#FFF8F0;#FFF8F0;#FF9A4D;#FFF8F0" keyTimes="0;0.55;0.7;0.85;1" dur="4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="557" y="314" text-anchor="middle" fill="#4A2C1A">
+        <animate attributeName="fill" values="#4A2C1A;#4A2C1A;#4A2C1A;#FFF8F0;#4A2C1A" keyTimes="0;0.55;0.7;0.85;1" dur="4s" repeatCount="indefinite"/>
+        对战
+      </text>
+    </g>
   </g>
 </svg>
