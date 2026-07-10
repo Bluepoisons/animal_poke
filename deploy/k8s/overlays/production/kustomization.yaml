@@ -2,8 +2,24 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
+  # Production-only backup CronJob (references mysql.production — never include in staging)
+  - mysql-backup-cronjob.yaml
 namespace: production
+# Immutable release tag injected by CI / release pipeline:
+#   IMAGE_TAG=$GITHUB_SHA ./deploy/k8s/scripts/assert-manifests.sh
+images:
+  - name: registry.cn-beijing.aliyuncs.com/animal-poke/backend
+    newTag: "0.0.0-unset"
+  - name: registry.cn-beijing.aliyuncs.com/animal-poke/frontend
+    newTag: "0.0.0-unset"
 patches:
+  - target:
+      kind: Namespace
+      name: production
+    patch: |-
+      - op: add
+        path: /metadata/labels/environment
+        value: production
   - target:
       kind: ConfigMap
       name: backend-config
