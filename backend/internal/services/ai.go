@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -24,21 +25,26 @@ import (
 
 // DetectBox 检测框。
 type DetectBox struct {
-	Species     string  `json:"species"`
-	Label       string  `json:"label,omitempty"` // 原始标签，仅审计
-	TargetID    string  `json:"target_id,omitempty"`
-	Confidence  float64 `json:"confidence"`
-	BoundingBox struct {
-		X      float64 `json:"x"`
-		Y      float64 `json:"y"`
-		Width  float64 `json:"width"`
-		Height float64 `json:"height"`
-	} `json:"bounding_box"`
+	Species     string      `json:"species"`
+	Label       string      `json:"label,omitempty"` // 原始标签，仅审计
+	TargetID    string      `json:"target_id"`
+	Confidence  float64     `json:"confidence"`
+	BoundingBox BoundingBox `json:"bounding_box"`
+}
+
+// BoundingBox 归一化检测框（0~1）。
+type BoundingBox struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // DetectResult VLM 检测结果（标准 envelope）。
+// animals 保留兼容；targets 为多目标权威列表（与 animals 同步）。
 type DetectResult struct {
 	Animals       []DetectBox `json:"animals"`
+	Targets       []DetectBox `json:"targets"`
 	Source        string      `json:"source,omitempty"` // real|mock|cache
 	Degraded      bool        `json:"degraded,omitempty"`
 	ReasonCode    string      `json:"reason_code,omitempty"`
@@ -49,22 +55,27 @@ type DetectResult struct {
 
 // AnalysisResult 深度分析结果。
 type AnalysisResult struct {
-	Breed               string `json:"breed"`
-	Color               string `json:"color"`
-	BodyType            string `json:"body_type"`
-	QualityScore        int    `json:"quality_score"`
-	SubjectCompleteness int    `json:"subject_completeness"`
-	Clarity             int    `json:"clarity"`
-	Lighting            int    `json:"lighting"`
-	Composition         int    `json:"composition"`
-	Pose                int    `json:"pose"`
-	Angle               int    `json:"angle"`
-	Source              string `json:"source,omitempty"`
-	Degraded            bool   `json:"degraded,omitempty"`
-	ReasonCode          string `json:"reason_code,omitempty"`
-	InferenceID         string `json:"inference_id,omitempty"`
-	Model               string `json:"model,omitempty"`
-	PromptVersion       string `json:"prompt_version,omitempty"`
+	Breed               string       `json:"breed"`
+	Color               string       `json:"color"`
+	BodyType            string       `json:"body_type"`
+	QualityScore        int          `json:"quality_score"`
+	SubjectCompleteness int          `json:"subject_completeness"`
+	Clarity             int          `json:"clarity"`
+	Lighting            int          `json:"lighting"`
+	Composition         int          `json:"composition"`
+	Pose                int          `json:"pose"`
+	Angle               int          `json:"angle"`
+	// 多目标一致性：回传锁定目标
+	Species           string       `json:"species,omitempty"`
+	TargetID          string       `json:"target_id,omitempty"`
+	DetectInferenceID string       `json:"detect_inference_id,omitempty"`
+	Box               *BoundingBox `json:"box,omitempty"`
+	Source            string       `json:"source,omitempty"`
+	Degraded          bool         `json:"degraded,omitempty"`
+	ReasonCode        string       `json:"reason_code,omitempty"`
+	InferenceID       string       `json:"inference_id,omitempty"`
+	Model             string       `json:"model,omitempty"`
+	PromptVersion     string       `json:"prompt_version,omitempty"`
 }
 
 // ---------- LLM 相关类型 ----------
@@ -218,8 +229,11 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return nil, fmt.Errorf("json unmarshal: %w", err)
+	if err := parseAnalysisJSON(jsonStr, &result); err != nil {
+		return nil, err
+	}
+	if err := validateAnalysisResult(&result); err != nil {
+		return nil, err
 	}
 	result.Source = "real"
 	result.Model = model
@@ -364,15 +378,21 @@ func (s *AIService) parseChatResponse(body []byte) (string, error) {
 	return extractJSON(content), nil
 }
 
-// parseDetectJSON 兼容 envelope 与裸数组。
+// parseDetectJSON 兼容 envelope 与裸数组；拒绝 Markdown 残留。
 func parseDetectJSON(jsonStr string) (*DetectResult, error) {
 	jsonStr = strings.TrimSpace(jsonStr)
 	if jsonStr == "" {
 		return nil, fmt.Errorf("empty detect json")
 	}
+	if strings.Contains(jsonStr, "```") {
+		return nil, fmt.Errorf("detect json contains markdown fence")
+	}
 	// 标准 envelope
 	var env DetectResult
-	if err := json.Unmarshal([]byte(jsonStr), &env); err == nil && (env.Animals != nil || strings.HasPrefix(jsonStr, "{")) {
+	if err := json.Unmarshal([]byte(jsonStr), &env); err == nil && (env.Animals != nil || env.Targets != nil || strings.HasPrefix(jsonStr, "{")) {
+		if env.Animals == nil && env.Targets != nil {
+			env.Animals = env.Targets
+		}
 		if env.Animals == nil {
 			env.Animals = []DetectBox{}
 		}
@@ -386,20 +406,25 @@ func parseDetectJSON(jsonStr string) (*DetectResult, error) {
 	return nil, fmt.Errorf("unable to parse detect json")
 }
 
+// minBoxArea 归一化最小框面积，过滤噪声点/退化框。
+const minBoxArea = 0.0001
+
 func validateDetectResult(r *DetectResult) error {
 	if r == nil {
 		return fmt.Errorf("nil detect result")
 	}
+	if len(r.Animals) == 0 && len(r.Targets) > 0 {
+		r.Animals = r.Targets
+	}
 	normalized := make([]DetectBox, 0, len(r.Animals))
+	seenIDs := make(map[string]int, len(r.Animals))
 	for i, a := range r.Animals {
 		if a.Confidence < 0 || a.Confidence > 1 {
 			return fmt.Errorf("animal[%d] confidence out of range", i)
 		}
 		bb := a.BoundingBox
-		if bb.X < 0 || bb.Y < 0 || bb.Width < 0 || bb.Height < 0 ||
-			bb.X > 1 || bb.Y > 1 || bb.Width > 1 || bb.Height > 1 ||
-			bb.X+bb.Width > 1.0001 || bb.Y+bb.Height > 1.0001 {
-			return fmt.Errorf("animal[%d] bounding_box out of range", i)
+		if err := ValidateBoundingBox(bb); err != nil {
+			return fmt.Errorf("animal[%d] %w", i, err)
 		}
 		// 权威 taxonomy：规范化物种，禁止静默映射为鹅
 		raw := a.Species
@@ -414,13 +439,20 @@ func validateDetectResult(r *DetectResult) error {
 		if a.TargetID == "" {
 			a.TargetID = fmt.Sprintf("%d", i)
 		}
+		if n, ok := seenIDs[a.TargetID]; ok {
+			a.TargetID = fmt.Sprintf("%s_%d", a.TargetID, n)
+			seenIDs[a.TargetID] = 1
+			seenIDs[fmt.Sprintf("%d", i)] = n + 1
+		} else {
+			seenIDs[a.TargetID] = 1
+		}
 		// 仅 capturable 进入返回列表；unknown/unsupported 不进入捕获
 		if taxonomy.Capturable(norm) {
 			normalized = append(normalized, a)
 		}
 	}
 	// 稳定排序：confidence desc, species, target_id
-	for i := 0; i < len(normalized); i++ {
+	for i := range normalized {
 		for j := i + 1; j < len(normalized); j++ {
 			a, b := normalized[i], normalized[j]
 			swap := false
@@ -439,7 +471,131 @@ func validateDetectResult(r *DetectResult) error {
 		}
 	}
 	r.Animals = normalized
+	r.Targets = append([]DetectBox(nil), normalized...)
 	return nil
+}
+
+// parseAnalysisJSON 严格解析单对象；拒绝多段 JSON。
+func parseAnalysisJSON(jsonStr string, out *AnalysisResult) error {
+	jsonStr = strings.TrimSpace(jsonStr)
+	if jsonStr == "" {
+		return fmt.Errorf("empty analysis json")
+	}
+	if strings.Contains(jsonStr, "```") {
+		return fmt.Errorf("analysis json contains markdown fence")
+	}
+	if !strings.HasPrefix(jsonStr, "{") {
+		return fmt.Errorf("analysis json must be object")
+	}
+	dec := json.NewDecoder(strings.NewReader(jsonStr))
+	if err := dec.Decode(out); err != nil {
+		return fmt.Errorf("analysis json decode: %w", err)
+	}
+	var second interface{}
+	if err := dec.Decode(&second); err == nil {
+		return fmt.Errorf("analysis json contains multiple values")
+	}
+	return nil
+}
+
+// validateAnalysisResult 严格校验枚举/长度/1-10 分值，不静默 clamp。
+func validateAnalysisResult(r *AnalysisResult) error {
+	if r == nil {
+		return fmt.Errorf("nil analysis result")
+	}
+	if strings.TrimSpace(r.Breed) == "" || len(r.Breed) > 64 {
+		return fmt.Errorf("breed missing or too long")
+	}
+	if strings.TrimSpace(r.Color) == "" || len(r.Color) > 64 {
+		return fmt.Errorf("color missing or too long")
+	}
+	if strings.TrimSpace(r.BodyType) == "" || len(r.BodyType) > 64 {
+		return fmt.Errorf("body_type missing or too long")
+	}
+	scores := []struct {
+		name string
+		v    int
+	}{
+		{"quality_score", r.QualityScore},
+		{"subject_completeness", r.SubjectCompleteness},
+		{"clarity", r.Clarity},
+		{"lighting", r.Lighting},
+		{"composition", r.Composition},
+		{"pose", r.Pose},
+		{"angle", r.Angle},
+	}
+	for _, s := range scores {
+		if s.v < 1 || s.v > 10 {
+			return fmt.Errorf("%s out of range (must be 1-10)", s.name)
+		}
+	}
+	return nil
+}
+
+// ValidateBoundingBox 校验归一化框边界与面积。
+func ValidateBoundingBox(bb BoundingBox) error {
+	if bb.X < 0 || bb.Y < 0 || bb.Width < 0 || bb.Height < 0 ||
+		bb.X > 1 || bb.Y > 1 || bb.Width > 1 || bb.Height > 1 ||
+		bb.X+bb.Width > 1.0001 || bb.Y+bb.Height > 1.0001 {
+		return fmt.Errorf("bounding_box out of range")
+	}
+	if bb.Width*bb.Height < minBoxArea {
+		return fmt.Errorf("bounding_box area too small")
+	}
+	return nil
+}
+
+// FindTarget 在 detect 结果中按 target_id 或 box 匹配目标。
+func FindTarget(targets []DetectBox, targetID string, box *BoundingBox) (*DetectBox, error) {
+	if targetID != "" {
+		for i := range targets {
+			if targets[i].TargetID == targetID {
+				t := targets[i]
+				return &t, nil
+			}
+		}
+		return nil, fmt.Errorf("target_id not found")
+	}
+	if box != nil {
+		if err := ValidateBoundingBox(*box); err != nil {
+			return nil, err
+		}
+		bestIdx := -1
+		bestIoU := 0.0
+		for i := range targets {
+			iou := boxIoU(targets[i].BoundingBox, *box)
+			if iou > bestIoU {
+				bestIoU = iou
+				bestIdx = i
+			}
+		}
+		if bestIdx >= 0 && bestIoU >= 0.3 {
+			t := targets[bestIdx]
+			return &t, nil
+		}
+		return nil, fmt.Errorf("box does not match any target")
+	}
+	return nil, fmt.Errorf("target_id or box required")
+}
+
+func boxIoU(a, b BoundingBox) float64 {
+	ax2, ay2 := a.X+a.Width, a.Y+a.Height
+	bx2, by2 := b.X+b.Width, b.Y+b.Height
+	ix1 := math.Max(a.X, b.X)
+	iy1 := math.Max(a.Y, b.Y)
+	ix2 := math.Min(ax2, bx2)
+	iy2 := math.Min(ay2, by2)
+	iw := math.Max(0, ix2-ix1)
+	ih := math.Max(0, iy2-iy1)
+	inter := iw * ih
+	if inter <= 0 {
+		return 0
+	}
+	union := a.Width*a.Height + b.Width*b.Height - inter
+	if union <= 0 {
+		return 0
+	}
+	return inter / union
 }
 
 // ---------- Prompt 渲染 ----------
@@ -511,20 +667,18 @@ func truncate(s string, n int) string {
 // ---------- Mock 函数(开发/测试用) ----------
 
 func mockDetect() *DetectResult {
-	return &DetectResult{
+	r := &DetectResult{
 		Animals: []DetectBox{
 			{
-				Species:    "cat",
-				Confidence: 0.92,
-				BoundingBox: struct {
-					X      float64 `json:"x"`
-					Y      float64 `json:"y"`
-					Width  float64 `json:"width"`
-					Height float64 `json:"height"`
-				}{X: 0.15, Y: 0.2, Width: 0.35, Height: 0.45},
+				Species:     "cat",
+				TargetID:    "0",
+				Confidence:  0.92,
+				BoundingBox: BoundingBox{X: 0.15, Y: 0.2, Width: 0.35, Height: 0.45},
 			},
 		},
 	}
+	_ = validateDetectResult(r)
+	return r
 }
 
 func mockAnalyze() *AnalysisResult {
