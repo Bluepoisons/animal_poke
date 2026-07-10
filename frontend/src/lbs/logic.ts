@@ -6,6 +6,12 @@ import {
   CAPTURE_RANGE_M,
   DISCOVERY_RANGE_M,
 } from './constants'
+import {
+  canMarkInRange,
+  generateSafeSpawnPosition,
+  isAccuracyTooLow,
+} from '../outdoorSafety/logic'
+import { DEFAULT_UNSAFE_ZONES, type UnsafeZone } from '../outdoorSafety/constants'
 
 /** MVP 阶段物种池 */
 const SPECIES_POOL: SpeciesType[] = ['cat', 'goose', 'dog']
@@ -89,16 +95,29 @@ export function filterExpired(
   return points.filter(p => p.expiresAt > now)
 }
 
-/** 批量生成发现点 */
+/**
+ * 批量生成发现点（排除道路/水体/施工/私人/不可达启发式区域）
+ */
 export function generateDiscoveryPoints(
   center: GeoLocation,
   count: number,
   now: number,
   rand: () => number = Math.random,
+  zones: UnsafeZone[] = DEFAULT_UNSAFE_ZONES,
 ): DiscoveryPoint[] {
   const points: DiscoveryPoint[] = []
-  for (let i = 0; i < count; i++) {
-    const pos = generateRandomPosition(center, 50, DISCOVERY_RANGE_M, rand(), rand())
+  let attempts = 0
+  const maxAttempts = count * 8
+  while (points.length < count && attempts < maxAttempts) {
+    attempts++
+    const pos =
+      generateSafeSpawnPosition(center, 50, DISCOVERY_RANGE_M, zones, rand) ??
+      generateRandomPosition(center, 50, DISCOVERY_RANGE_M, rand(), rand())
+    const unsafe = zones.some((z) => {
+      const dist = calculateDistance({ lat: pos.lat, lng: pos.lng }, { lat: z.lat, lng: z.lng })
+      return dist <= z.radiusM
+    })
+    if (unsafe) continue
     const rarity = rollRarity(rand())
     const species = rollSpecies(rand())
     points.push({
@@ -115,17 +134,27 @@ export function generateDiscoveryPoints(
   return points
 }
 
-/** 根据玩家位置更新发现点状态 */
+/**
+ * 根据玩家位置更新发现点状态。
+ * 精度超阈值时不允许 in_range（AP-045）。
+ */
 export function updatePointStatus(
   points: DiscoveryPoint[],
   playerLocation: GeoLocation,
   rangeMeters: number = CAPTURE_RANGE_M,
 ): DiscoveryPoint[] {
+  const accuracy = playerLocation.accuracy
+  const accuracyBlocks = isAccuracyTooLow(accuracy)
   return points.map(p => {
     const dist = calculateDistance({ lat: p.lat, lng: p.lng }, playerLocation)
+    const inRange = canMarkInRange({
+      distanceM: dist,
+      captureRangeM: rangeMeters,
+      accuracyM: accuracy,
+    })
     return {
       ...p,
-      status: dist <= rangeMeters ? 'in_range' : 'available',
+      status: inRange && !accuracyBlocks ? 'in_range' : 'available',
     }
   })
 }

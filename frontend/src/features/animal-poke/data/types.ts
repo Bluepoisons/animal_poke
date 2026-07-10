@@ -5,6 +5,7 @@ export type ScreenId =
   | 'pokedex'
   | 'battle'
   | 'store'
+  | 'settings'
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 
