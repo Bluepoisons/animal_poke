@@ -1,4 +1,6 @@
 import type { SpeciesType } from '../types'
+import { getApiBaseUrl } from '../api/client'
+import { getAccessToken } from '../auth/deviceAuth'
 
 // ===== 检测结果类型 =====
 
@@ -13,7 +15,7 @@ export interface DetectionResult {
 
 export interface VisionDetector {
   /** 对单帧照片进行动物检测 */
-  detect: (photoData: string) => Promise<DetectionResult>
+  detect: (photoData: string | Blob) => Promise<DetectionResult>
 }
 
 // ===== 物种差异化置信度阈值 =====
@@ -32,59 +34,117 @@ export function getSpeciesThreshold(species: SpeciesType): number {
 
 // ===== Mock 实现 =====
 
-/** 模拟网络延迟范围 ms */
 const MOCK_LATENCY: [number, number] = [300, 1200]
-
-/** 模拟置信度范围 */
-const MOCK_CONFIDENCE: [number, number] = [0.70, 0.98]
-
-/** 三种物种均概率 */
+const MOCK_CONFIDENCE: [number, number] = [0.7, 0.98]
 const SPECIES_POOL: SpeciesType[] = ['cat', 'goose', 'dog']
 
-/** 模拟检测框（随机位置） */
 function randomBoundingBox(): [number, number, number, number] {
-  const x = 0.15 + Math.random() * 0.2   // 0.15~0.35
-  const y = 0.20 + Math.random() * 0.15  // 0.20~0.35
-  const w = 0.3 + Math.random() * 0.2    // 0.30~0.50
-  const h = 0.3 + Math.random() * 0.15   // 0.30~0.45
+  const x = 0.15 + Math.random() * 0.2
+  const y = 0.2 + Math.random() * 0.15
+  const w = 0.3 + Math.random() * 0.2
+  const h = 0.3 + Math.random() * 0.15
   return [x, y, w, h]
 }
 
-/** Mock 视觉检测器 —— 设计为接口形式，方便后续替换为真实 API */
+/** Mock 视觉检测器 —— 仅测试/显式开发开关 */
 export const mockVisionDetector: VisionDetector = {
-  async detect(_photoData: string): Promise<DetectionResult> {
-    // 模拟网络延迟
+  async detect(_photoData: string | Blob): Promise<DetectionResult> {
     const latency = MOCK_LATENCY[0] + Math.random() * (MOCK_LATENCY[1] - MOCK_LATENCY[0])
-    await new Promise(resolve => setTimeout(resolve, latency))
-
-    // 随机选择物种
+    await new Promise((resolve) => setTimeout(resolve, latency))
     const species = SPECIES_POOL[Math.floor(Math.random() * SPECIES_POOL.length)]
-
-    // 随机置信度
     const confidence = MOCK_CONFIDENCE[0] + Math.random() * (MOCK_CONFIDENCE[1] - MOCK_CONFIDENCE[0])
-
-    // 随机检测框
-    const boundingBox = randomBoundingBox()
-
-    return { species, confidence: Math.round(confidence * 100) / 100, boundingBox }
+    return {
+      species,
+      confidence: Math.round(confidence * 100) / 100,
+      boundingBox: randomBoundingBox(),
+    }
   },
 }
 
-// ===== 未来替换为真实 API 的接口 =====
-//
-// export const apiVisionDetector: VisionDetector = {
-//   async detect(photoData: string): Promise<DetectionResult> {
-//     const formData = new FormData()
-//     const blob = await (await fetch(photoData)).blob()
-//     formData.append('frame', blob, 'frame.jpg')
-//
-//     const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/vision/detect`, {
-//       method: 'POST',
-//       headers: { Authorization: `Bearer ${getToken()}` },
-//       body: formData,
-//     })
-//
-//     if (!res.ok) throw new Error(`Vision detect failed: ${res.status}`)
-//     return res.json()
-//   },
-// }
+function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(',')
+  if (parts.length < 2) return new Blob([], { type: 'image/jpeg' })
+  const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg'
+  const bin = atob(parts[1])
+  const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+  return new Blob([arr], { type: mime })
+}
+
+export async function blobOrDataToImageFile(photoData: string | Blob): Promise<Blob> {
+  if (typeof photoData !== 'string') return photoData
+  if (photoData.startsWith('data:')) return dataUrlToBlob(photoData)
+  const res = await fetch(photoData)
+  return res.blob()
+}
+
+type BackendDetectResponse = {
+  animals?: Array<{
+    species?: string
+    label?: string
+    confidence?: number
+    bounding_box?: {
+      x?: number
+      y?: number
+      w?: number
+      h?: number
+      width?: number
+      height?: number
+    }
+  }>
+}
+
+function mapSpecies(raw?: string): SpeciesType {
+  const s = (raw || '').toLowerCase()
+  if (s.includes('cat') || s.includes('猫')) return 'cat'
+  if (s.includes('dog') || s.includes('狗')) return 'dog'
+  return 'goose'
+}
+
+/** 真实 /api/v1/vision/detect（multipart field: image） */
+export const apiVisionDetector: VisionDetector = {
+  async detect(photoData: string | Blob): Promise<DetectionResult> {
+    const blob = await blobOrDataToImageFile(photoData)
+    const form = new FormData()
+    form.append('image', blob, 'frame.jpg')
+    const token = await getAccessToken()
+    const base = getApiBaseUrl()
+    const res = await fetch(`${base}/api/v1/vision/detect`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Request-ID':
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `vis-${Date.now()}`,
+      },
+      body: form,
+    })
+    if (!res.ok) {
+      throw new Error(`Vision detect failed: ${res.status}`)
+    }
+    const data = (await res.json()) as BackendDetectResponse
+    const animals = data.animals || []
+    if (animals.length === 0) {
+      throw new Error('no_animals_detected')
+    }
+    const best = [...animals].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
+    const bb = best.bounding_box || {}
+    return {
+      species: mapSpecies(best.species || best.label),
+      confidence: Math.round((best.confidence || 0) * 1000) / 1000,
+      boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
+    }
+  },
+}
+
+/**
+ * 生产默认真实检测。
+ * - vitest: mock
+ * - VITE_VISION_MOCK=1: mock
+ */
+export function getVisionDetector(
+  preferMock = import.meta.env.MODE === 'test' || import.meta.env.VITE_VISION_MOCK === '1',
+): VisionDetector {
+  return preferMock ? mockVisionDetector : apiVisionDetector
+}
