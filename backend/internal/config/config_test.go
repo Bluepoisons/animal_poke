@@ -3,11 +3,14 @@ package config
 import (
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDSN(t *testing.T) {
@@ -18,13 +21,13 @@ func TestDSN(t *testing.T) {
 	}{
 		{
 			name: "standard",
-			cfg:  DatabaseConfig{Host: "127.0.0.1", Port: 3306, User: "u", Password: "p", DBName: "db"},
-			want: "u:p@tcp(127.0.0.1:3306)/db?charset=utf8mb4&parseTime=True&loc=Local",
+			cfg:  DatabaseConfig{Host: "127.0.0.1", Port: 3306, User: "u", Password: "p", DBName: "db", TLSMode: "false"},
+			want: "u:p@tcp(127.0.0.1:3306)/db?charset=utf8mb4&parseTime=True&loc=UTC&tls=false&timeout=5s&readTimeout=10s&writeTimeout=10s",
 		},
 		{
-			name: "custom",
-			cfg:  DatabaseConfig{Host: "db.host", Port: 3307, User: "root", Password: "secret", DBName: "prod"},
-			want: "root:secret@tcp(db.host:3307)/prod?charset=utf8mb4&parseTime=True&loc=Local",
+			name: "special_password",
+			cfg:  DatabaseConfig{Host: "db.host", Port: 3307, User: "root", Password: "p@ss:w/rd", DBName: "prod", TLSMode: "require"},
+			want: "root:" + url.QueryEscape("p@ss:w/rd") + "@tcp(db.host:3307)/prod?charset=utf8mb4&parseTime=True&loc=UTC&tls=require&timeout=5s&readTimeout=10s&writeTimeout=10s",
 		},
 	}
 	for _, tt := range tests {
@@ -37,8 +40,12 @@ func TestDSN(t *testing.T) {
 // 用例需要环境变量为空以验证默认值; t.Setenv 无法 unset, 故手动保存/清除/恢复。
 func TestLoad_Defaults(t *testing.T) {
 	keys := []string{
-		"SERVER_ADDR", "LOG_LEVEL", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
-		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY", "VLM_ENDPOINT", "VLM_KEY", "LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
+		"APP_ENV", "SERVER_ADDR", "LOG_LEVEL", "JWT_SECRET", "AI_MOCK_ENABLED",
+		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
+		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY",
+		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
+		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
+		"LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
 	}
 	saved := map[string]string{}
 	for _, k := range keys {
@@ -49,12 +56,16 @@ func TestLoad_Defaults(t *testing.T) {
 		os.Unsetenv(k)
 	}
 	t.Cleanup(func() {
+		for _, k := range keys {
+			os.Unsetenv(k)
+		}
 		for k, v := range saved {
 			os.Setenv(k, v)
 		}
 	})
 
 	cfg := Load()
+	assert.Equal(t, "development", cfg.AppEnv)
 	assert.Equal(t, ":8080", cfg.ServerAddr)
 	assert.Equal(t, "INFO", cfg.LogLevel)
 	assert.Equal(t, "127.0.0.1", cfg.Database.Host)
@@ -63,11 +74,14 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "animal_poke", cfg.Database.Password)
 	assert.Equal(t, "animal_poke", cfg.Database.DBName)
 	assert.Equal(t, "", cfg.ThirdParty.TencentMapKey)
-	assert.Equal(t, "", cfg.ThirdParty.VLMKey)
+	assert.Equal(t, "", cfg.ThirdParty.VisionKey)
 	assert.Equal(t, "", cfg.ThirdParty.LLMModel)
+	assert.True(t, cfg.AIMockEnabled)
+	assert.True(t, cfg.MockAllowed())
 }
 
 func TestLoad_Overrides(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
 	t.Setenv("SERVER_ADDR", ":9999")
 	t.Setenv("LOG_LEVEL", "DEBUG")
 	t.Setenv("DB_HOST", "db.example.com")
@@ -77,6 +91,9 @@ func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("DB_NAME", "prod")
 	t.Setenv("TENCENT_MAP_KEY", "tk")
 	t.Setenv("LLM_MODEL", "qwen3.6-flash")
+	t.Setenv("VISION_ENDPOINT", "https://vision.example")
+	t.Setenv("VISION_KEY", "vk")
+	t.Setenv("VISION_MODEL", "vision-model")
 
 	cfg := Load()
 	assert.Equal(t, ":9999", cfg.ServerAddr)
@@ -88,6 +105,39 @@ func TestLoad_Overrides(t *testing.T) {
 	assert.Equal(t, "prod", cfg.Database.DBName)
 	assert.Equal(t, "tk", cfg.ThirdParty.TencentMapKey)
 	assert.Equal(t, "qwen3.6-flash", cfg.ThirdParty.LLMModel)
+	assert.Equal(t, "https://vision.example", cfg.ThirdParty.VisionEndpoint)
+	assert.Equal(t, "vk", cfg.ThirdParty.VisionKey)
+	assert.Equal(t, "vision-model", cfg.ThirdParty.VisionModel)
+}
+
+func TestValidate_Production(t *testing.T) {
+	cfg := Load()
+	cfg.AppEnv = "production"
+	cfg.JWTSecret = DefaultDevJWTSecret
+	cfg.AIMockEnabled = true
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JWT_SECRET")
+
+	cfg.JWTSecret = strings.Repeat("x", 32)
+	cfg.Database.Password = "complex-pass"
+	cfg.AIMockEnabled = false
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://v", VisionKey: "k", VisionModel: "m",
+		LLMEndpoint: "https://l", LLMKey: "k", LLMModel: "m",
+	}
+	cfg.AdminAPIKey = "admin-secret"
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestMockAllowed(t *testing.T) {
+	cfg := &Config{AppEnv: "development", AIMockEnabled: true}
+	assert.True(t, cfg.MockAllowed())
+	cfg.AIMockEnabled = false
+	assert.False(t, cfg.MockAllowed())
+	cfg.AppEnv = "production"
+	cfg.AIMockEnabled = true
+	assert.False(t, cfg.MockAllowed())
 }
 
 func TestGetEnv_Default(t *testing.T) {
@@ -97,7 +147,6 @@ func TestGetEnv_Default(t *testing.T) {
 	t.Setenv("MY_PRESENT_KEY", "val")
 	assert.Equal(t, "val", getEnv("MY_PRESENT_KEY", "fallback"))
 
-	// 空字符串视为未设置(getEnv 检查 v != "")
 	t.Setenv("MY_EMPTY_KEY", "")
 	assert.Equal(t, "fallback", getEnv("MY_EMPTY_KEY", "fallback"))
 }
@@ -112,9 +161,15 @@ func TestGetEnvInt_Fallback(t *testing.T) {
 	os.Unsetenv("MY_INT_MISSING")
 	assert.Equal(t, 42, getEnvInt("MY_INT_MISSING", 42))
 
-	// 空字符串视为未设置
 	t.Setenv("MY_INT_EMPTY", "")
 	assert.Equal(t, 42, getEnvInt("MY_INT_EMPTY", 42))
+}
+
+func TestGetEnvDuration(t *testing.T) {
+	t.Setenv("MY_DUR", "2h")
+	assert.Equal(t, 2*time.Hour, getEnvDuration("MY_DUR", time.Second))
+	t.Setenv("MY_DUR_SEC", "30")
+	assert.Equal(t, 30*time.Second, getEnvDuration("MY_DUR_SEC", time.Second))
 }
 
 func TestSetupLogger_NoPanic(t *testing.T) {
