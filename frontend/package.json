@@ -19,6 +19,7 @@
     "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts",
     "preinstall": "node ./scripts/check-node.mjs",
     "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs",
+    "check:dead-modules": "node ./scripts/check-dead-modules.mjs",
     "economy:gate": "node ./scripts/economy-monte-carlo-gate.mjs",
     "test:economy": "vitest run src/economy/monteCarlo",
     "sbom": "npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json"

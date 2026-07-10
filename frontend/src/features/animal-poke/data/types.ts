@@ -1,3 +1,12 @@
+import type { RarityTier, SpeciesType } from '../../../types'
+
+/**
+ * Feature-local aliases for shared domain types (AP-032).
+ * Canonical definitions live in `src/types.ts` and `src/shop/constants.ts`.
+ */
+export type Rarity = RarityTier
+export type Species = SpeciesType
+
 export type ScreenId =
   | 'discover'
   | 'map'
@@ -6,10 +15,6 @@ export type ScreenId =
   | 'battle'
   | 'store'
   | 'settings'
-
-export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
-
-export type Species = 'cat' | 'goose' | 'dog'
 
 export type PokedexFilter = 'all' | 'cat' | 'goose' | 'dog'
 

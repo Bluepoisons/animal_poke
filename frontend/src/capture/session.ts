@@ -1,5 +1,6 @@
 import type { SpeciesType } from '../types'
 import type { DetectionResult } from '../services/visionDetect'
+import { CAPTURE_STAMINA_COST as SHARED_CAPTURE_STAMINA_COST } from '../stamina/constants'
 
 export type CapturePhase =
   | 'idle'
@@ -23,7 +24,8 @@ export type CaptureSession = {
   targetId?: string
 }
 
-const CAPTURE_STAMINA_COST = 20
+/** Single source of truth (AP-032): stamina/constants.ts */
+export const CAPTURE_STAMINA_COST = SHARED_CAPTURE_STAMINA_COST
 const BEST_MIN = 35
 const BEST_MAX = 75
 
@@ -102,4 +104,4 @@ export function settleCapture(input: SettleInput): SettleResult {
   return { ok: false, reason: 'failed', session }
 }
 
-export { CAPTURE_STAMINA_COST, BEST_MIN, BEST_MAX }
+export { BEST_MIN, BEST_MAX }
