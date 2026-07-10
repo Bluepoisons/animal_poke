@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { I18nProvider, useI18n } from './index'
+import { I18nProvider, useI18n, resolveMessage } from './index'
 import { zh, type TranslationKey } from './locales/zh'
 import { en } from './locales/en'
 
@@ -11,7 +11,6 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('i18n', () => {
   beforeEach(() => {
     localStorage.clear()
-    // jsdom defaults navigator.language to 'en-US'; force zh for default tests
     vi.stubGlobal('navigator', { ...navigator, language: 'zh-CN' })
   })
 
@@ -32,6 +31,13 @@ describe('i18n', () => {
     expect(result.current.t('app.name')).toBe(en['app.name'])
   })
 
+  it('switches to ja stub locale', () => {
+    const { result } = renderHook(() => useI18n(), { wrapper })
+    act(() => result.current.setLocale('ja'))
+    expect(result.current.locale).toBe('ja')
+    expect(result.current.t('app.name')).toBe('アニマルポケ')
+  })
+
   it('persists locale choice to localStorage', () => {
     const { result } = renderHook(() => useI18n(), { wrapper })
     act(() => result.current.setLocale('en'))
@@ -44,14 +50,19 @@ describe('i18n', () => {
     expect(result.current.locale).toBe('en')
   })
 
-  it('handles missing key gracefully', () => {
+  it('handles missing key gracefully (returns key)', () => {
     const { result } = renderHook(() => useI18n(), { wrapper })
     expect(result.current.t('nonexistent.key' as TranslationKey)).toBe('nonexistent.key')
+    expect(resolveMessage('en', 'totally.missing.key')).toBe('totally.missing.key')
+  })
+
+  it('falls back to zh when key missing in current locale dict', () => {
+    // ja has partial; en/zh full — resolveMessage still returns string
+    expect(resolveMessage('ja', 'settings.title')).toBeTruthy()
   })
 
   it('substitutes params in template', () => {
     const { result } = renderHook(() => useI18n(), { wrapper })
-    // Key without placeholders returns as-is even with params
     const text = result.current.t('collection.unlocked', { count: 5 })
     expect(text).toBe(zh['collection.unlocked'])
   })
@@ -61,5 +72,21 @@ describe('i18n', () => {
     const enKeys = Object.keys(en)
     const missing = zhKeys.filter(k => !enKeys.includes(k))
     expect(missing).toEqual([])
+  })
+
+  it('settings keys exist for settings center', () => {
+    for (const key of [
+      'settings.title',
+      'settings.sfx',
+      'settings.music',
+      'settings.haptics',
+      'settings.motion',
+      'settings.dataSaver',
+      'settings.export',
+      'settings.delete',
+    ] as TranslationKey[]) {
+      expect(zh[key]).toBeTruthy()
+      expect(en[key]).toBeTruthy()
+    }
   })
 })

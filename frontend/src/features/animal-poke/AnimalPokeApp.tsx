@@ -8,6 +8,7 @@ import CaptureScreen from './screens/CaptureScreen'
 import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
+import AccountSettingsPanel from './screens/AccountSettingsPanel'
 import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
 import { useLbs } from '../../lbs/useLbs'
@@ -22,11 +23,11 @@ import {
 import './animalPoke.css'
 import OnboardingOverlay from './components/OnboardingOverlay'
 
-const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store']
+const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store', 'settings']
 
 function parseHashScreen(): ScreenId {
   const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
-  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store']
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store', 'settings']
   return allowed.includes(h) ? h : 'discover'
 }
 
@@ -50,6 +51,7 @@ export default function AnimalPokeApp() {
   const currentStamina = staminaState.currentStamina
   const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [showAccount, setShowAccount] = useState(false)
   const toastTimer = useRef<number | null>(null)
 
   const [flow, dispatchFlow] = useReducer(reduceCaptureFlow, undefined, createInitialCaptureFlow)
@@ -147,6 +149,11 @@ export default function AnimalPokeApp() {
   )
 
   const renderScreen = () => {
+    if (showAccount) {
+      return (
+        <AccountSettingsPanel onToast={showToast} onClose={() => setShowAccount(false)} />
+      )
+    }
     switch (screen) {
       case 'discover':
         return (
@@ -157,6 +164,7 @@ export default function AnimalPokeApp() {
             dispatch={dispatch}
             onNavigate={navigate}
             onEnterCapture={handleEnterCapture}
+            onOpenAccount={() => setShowAccount(true)}
             city={
               lbs.state.cityName ||
               (lbs.state.geoStatus === 'locating'
@@ -223,6 +231,8 @@ export default function AnimalPokeApp() {
         return <BattleArenaScreen />
       case 'store':
         return <StoreScreen coins={gold} onCoinsChange={handleCoinsChange} onToast={showToast} />
+      case 'settings':
+        return <SettingsScreen onToast={showToast} />
       default:
         return null
     }

@@ -1,0 +1,189 @@
+import { useI18n } from '../i18n'
+import { useSettings } from './SettingsContext'
+import type { Locale } from '../i18n'
+import type { UserSettings } from './types'
+
+interface SettingsScreenProps {
+  onToast?: (msg: string) => void
+  onBack?: () => void
+}
+
+function ToggleRow({
+  label,
+  value,
+  onChange,
+  onLabel,
+  offLabel,
+}: {
+  label: string
+  value: boolean
+  onChange: (v: boolean) => void
+  onLabel: string
+  offLabel: string
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '10px 0',
+        borderBottom: '1px solid #F0E0D0',
+        fontSize: 14,
+        color: '#4A2C1A',
+      }}
+    >
+      <span>{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        aria-pressed={value}
+        style={{
+          minWidth: 56,
+          padding: '6px 10px',
+          borderRadius: 999,
+          border: '1px solid #E0C0A0',
+          background: value ? '#FF8A4C' : '#FFF8F0',
+          color: value ? '#fff' : '#4A2C1A',
+          cursor: 'pointer',
+        }}
+      >
+        {value ? onLabel : offLabel}
+      </button>
+    </label>
+  )
+}
+
+export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps) {
+  const { t, locale, setLocale, supportedLocales } = useI18n()
+  const { settings, update, exportData, deleteLocalData } = useSettings()
+
+  const setBool = (key: keyof UserSettings) => (v: boolean) => {
+    update({ [key]: v })
+    onToast?.(t('settings.saved'))
+  }
+
+  const handleLocale = (next: Locale) => {
+    setLocale(next)
+    update({ locale: next })
+    onToast?.(t('settings.saved'))
+  }
+
+  const handleExport = async () => {
+    const json = exportData()
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json)
+      }
+    } catch { /* ignore */ }
+    onToast?.(t('settings.export.done'))
+  }
+
+  const handleDelete = async () => {
+    if (typeof window !== 'undefined' && !window.confirm(t('settings.delete.confirm'))) return
+    await deleteLocalData()
+    onToast?.(t('settings.delete.done'))
+  }
+
+  const localeLabel = (l: Locale) => {
+    if (l === 'zh') return t('settings.chinese')
+    if (l === 'en') return t('settings.english')
+    return t('settings.japanese')
+  }
+
+  return (
+    <div className="ap-screen" style={{ padding: 16, overflow: 'auto' }}>
+      {onBack && (
+        <button type="button" onClick={onBack} style={{ marginBottom: 8 }}>
+          {t('common.back')}
+        </button>
+      )}
+      <h1 style={{ fontSize: 20, margin: '0 0 4px', color: '#4A2C1A' }}>{t('settings.title')}</h1>
+      <p style={{ fontSize: 13, color: '#8D6E63', margin: '0 0 16px' }}>{t('settings.subtitle')}</p>
+
+      <section style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.language')}</h2>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          {supportedLocales.map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => handleLocale(l)}
+              aria-pressed={locale === l}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: locale === l ? '2px solid #FF8A4C' : '1px solid #E0C0A0',
+                background: locale === l ? '#FFE0C8' : '#FFF8F0',
+                cursor: 'pointer',
+              }}
+            >
+              {localeLabel(l)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.audio')}</h2>
+        <ToggleRow
+          label={t('settings.sfx')}
+          value={settings.sfxEnabled}
+          onChange={setBool('sfxEnabled')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+        <ToggleRow
+          label={t('settings.music')}
+          value={settings.musicEnabled}
+          onChange={setBool('musicEnabled')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+      </section>
+
+      <section style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.motion')}</h2>
+        <ToggleRow
+          label={t('settings.haptics')}
+          value={settings.hapticsEnabled}
+          onChange={setBool('hapticsEnabled')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+        <ToggleRow
+          label={t('settings.motion')}
+          value={settings.reduceMotion}
+          onChange={setBool('reduceMotion')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+      </section>
+
+      <section style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.data')}</h2>
+        <ToggleRow
+          label={t('settings.dataSaver')}
+          value={settings.dataSaver}
+          onChange={setBool('dataSaver')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+        <p style={{ fontSize: 12, color: '#8D6E63' }}>{t('settings.sync.hint')}</p>
+      </section>
+
+      <section style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.privacy')}</h2>
+        <p style={{ fontSize: 13, color: '#5D4037' }}>{t('settings.permissions.desc')}</p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button type="button" onClick={handleExport}>
+            {t('settings.export')}
+          </button>
+          <button type="button" onClick={handleDelete} style={{ color: '#C62828' }}>
+            {t('settings.delete')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}

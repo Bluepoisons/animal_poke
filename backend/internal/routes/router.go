@@ -41,6 +41,16 @@ func unavailable(reason string) gin.HandlerFunc {
 // 所有业务路由始终注册；依赖缺失时返回 503 而非 404。
 func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r := gin.New()
+	// 可信代理：仅信任配置的上游，防止伪造 X-Forwarded-For 绕过 IP 限流
+	if len(cfg.TrustedProxies) > 0 {
+		if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+			// 配置错误不应静默吞掉；开发可继续，生产启动前应校验
+			_ = r.SetTrustedProxies(nil)
+		}
+	} else {
+		// 未配置时不信任任何代理头，ClientIP 使用直连地址
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
@@ -66,31 +76,48 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.GET("/metrics", middleware.MetricsHandler())
 
 	mockAllowed := cfg.MockAllowed()
-	sharedHTTP := services.DefaultHTTPClient(30 * time.Second)
+	geoProvider, weatherProvider, visionProvider, llmProvider := services.NewProvidersFromConfig(cfg.Upstream)
 
 	thirdParty := &cfg.ThirdParty
-	geoService := services.NewGeoServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
-	weatherService := services.NewWeatherServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
-	aiService := services.NewAIServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
+	geoService := services.NewGeoServiceWithProvider(thirdParty, mockAllowed, geoProvider)
+	weatherService := services.NewWeatherServiceWithProvider(thirdParty, mockAllowed, weatherProvider)
+	aiService := services.NewAIServiceWithProviders(thirdParty, mockAllowed, visionProvider, llmProvider)
 
 	var deviceRepo *repo.DeviceRepo
 	var animalRepo *repo.AnimalRepo
 	var auditService *services.AuditService
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
+	var accountRepo *repo.AccountRepo
 	if db != nil {
 		deviceRepo = repo.NewDeviceRepo(db)
 		animalRepo = repo.NewAnimalRepo(db)
 		auditRepo = repo.NewAuditLogRepo(db)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(db)
+		accountRepo = repo.NewAccountRepo(db, cfg.JWTSecret)
 	}
 
-	// 限流：优先共享存储接口（内存实现可替换 Redis）
-	sharedCounter := middleware.NewMemorySharedCounter()
+	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
+	// Fail 策略见 middleware 包注释（限流/配额 fail-open，nonce fail-closed）。
+	sharedCounter := middleware.SharedCounter(middleware.NewMemorySharedCounter())
+	if cfg.RedisURL != "" {
+		rc, err := middleware.NewRedisSharedCounter(cfg.RedisURL)
+		if err != nil {
+			slog.Warn("REDIS_URL 不可用，降级内存 SharedCounter", "err", err)
+		} else {
+			sharedCounter = rc
+			slog.Info("已启用 Redis SharedCounter")
+		}
+	}
+	// AI：device 维度 100/min burst 10；附带 digest 维度防同图刷
 	rateLimiter := middleware.NewRateLimiter(100.0/60.0, 10).WithShared(sharedCounter)
+	// 每日配额（detect/analyze/value）跨 Pod 一致
 	costCounter := middleware.NewDailyCallCounter(middleware.DefaultDailyLimits).WithShared(sharedCounter)
-	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5)
+	// 鉴权：IP 维度 20/min burst 5
+	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5).WithShared(sharedCounter)
+	// digest 维度独立桶（同图短时重复）
+	digestLimiter := middleware.NewRateLimiter(10.0/60.0, 3).WithShared(sharedCounter)
 
 	api := r.Group("/api/v1")
 	{
@@ -103,8 +130,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		api.GET("/time", timeHandler.GetTime)
 
 		// 设备鉴权：始终注册；无 DB 时 503
+		var authHandler *handlers.AuthHandler
+		var accountHandler *handlers.AccountHandler
 		if deviceRepo != nil {
-			authHandler := handlers.NewAuthHandlerFull(
+			authHandler = handlers.NewAuthHandlerFull(
 				deviceRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 			)
 			api.POST("/auth/device",
@@ -114,6 +143,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			)
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
+			api.POST("/auth/login", unavailable("db_unavailable"))
 		}
 
 		// JWT
@@ -122,7 +152,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			checker = deviceChecker{repo: deviceRepo}
 		}
 		auth := api.Group("")
-		auth.Use(middleware.JWTAuthWithChecker(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, checker))
+		auth.Use(middleware.JWTAuthWithConfig(middleware.JWTAuthConfig{
+			Secret:         cfg.JWTSecret,
+			PreviousSecret: cfg.JWTSecretPrevious,
+			Issuer:         cfg.JWTIssuer,
+			Audience:       cfg.JWTAudience,
+			Checker:        checker,
+		}))
 		{
 			geoHandler := handlers.NewGeoHandler(geoService)
 			weatherHandler := handlers.NewWeatherHandler(weatherService)
@@ -131,6 +167,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 			errHandler := handlers.NewErrorReportHandler()
 			auth.POST("/errors/report", middleware.BodyLimit(middleware.MaxBodyErrorReport), errHandler.Report)
+
+			// 账号绑定 / 设备管理
+			if accountHandler != nil {
+				auth.POST("/auth/bind", accountHandler.Bind)
+				auth.POST("/auth/logout", accountHandler.Logout)
+				auth.GET("/auth/devices", accountHandler.ListDevices)
+				auth.POST("/auth/devices/revoke", accountHandler.RevokeDevice)
+				auth.GET("/auth/account", accountHandler.GetAccount)
+			} else {
+				auth.POST("/auth/bind", unavailable("db_unavailable"))
+				auth.POST("/auth/logout", unavailable("db_unavailable"))
+				auth.GET("/auth/devices", unavailable("db_unavailable"))
+				auth.POST("/auth/devices/revoke", unavailable("db_unavailable"))
+				auth.GET("/auth/account", unavailable("db_unavailable"))
+			}
 
 			product := handlers.NewProductHandler()
 			auth.GET("/ranking/daily", product.RankingDaily)
@@ -141,15 +192,19 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 
 			ai := auth.Group("")
+			// device + digest 多维限流（account 维度在有 account_id 时由 RateLimitByAccount 扩展）
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
+			ai.Use(middleware.RateLimitByDigest(digestLimiter))
 			{
 				visionHandler := handlers.NewVisionHandlerWithOptions(aiService, handlers.VisionHandlerOptions{
-					InferenceRepo:  inferenceRepo,
-					DeviceRepo:     deviceRepo,
-					MaxBytes:       cfg.MaxImageBytes,
-					MaxPixels:      cfg.MaxImagePixels,
-					RequireConsent: cfg.IsProduction(),
-					ConsentVersion: "v1",
+					InferenceRepo:         inferenceRepo,
+					DeviceRepo:            deviceRepo,
+					MaxBytes:              cfg.MaxImageBytes,
+					MaxPixels:             cfg.MaxImagePixels,
+					RequireConsent:        cfg.IsProduction(),
+					ConsentVersion:        "v1",
+					ProviderNoTrainPolicy: cfg.ProviderNoTrainPolicy,
+					AllowSafetyFixture:    cfg.IsDevelopment() || cfg.MockAllowed(),
 				})
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
 				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
@@ -173,7 +228,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/sync/animals", unavailable("db_unavailable"))
 			}
 
-			// 隐私 / 安全 / 商业化
+			// 隐私 / 安全 / 商业化 / 内容审核
+			safetyH := handlers.NewSafetyHandler(db, cfg.StrictMinorDefaults)
+			auth.GET("/account/defaults", safetyH.AccountDefaults)
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
 				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
@@ -196,6 +253,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", unavailable("db_unavailable"))
 				auth.GET("/privacy/requests/:id", unavailable("db_unavailable"))
 				auth.POST("/security/report", unavailable("db_unavailable"))
+				auth.POST("/safety/report", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/fulfill", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/refund", unavailable("db_unavailable"))
@@ -212,12 +270,27 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				ah := handlers.NewAuditHandler(auditRepo)
 				admin.GET("/audit/logs", ah.List)
 				admin.POST("/audit/logs/:id/ack", ah.Ack)
+
+				if db != nil {
+					commerceAdmin := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
+						Production:  cfg.IsProduction(),
+						Enabled:     cfg.CommerceEnabled,
+						StoreVerify: cfg.CommerceStoreVerify,
+					})
+					admin.POST("/commerce/orders/refund", commerceAdmin.AdminRefundOrder)
+					admin.POST("/commerce/webhooks/refund", commerceAdmin.WebhookRefundOrder)
+				} else {
+					admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+					admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
+				}
 			}
 		} else {
 			admin := api.Group("/admin")
 			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey))
 			admin.GET("/audit/logs", unavailable("db_unavailable"))
 			admin.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
+			admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+			admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
 		}
 	}
 	return r

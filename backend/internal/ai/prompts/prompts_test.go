@@ -36,14 +36,9 @@ func TestValuePrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, ValuePrompt, "{{.Breed}}")
 	assert.Contains(t, ValuePrompt, "{{.Color}}")
 	assert.Contains(t, ValuePrompt, "{{.SubjectCompleteness}}")
-	assert.Contains(t, ValuePrompt, "rarity")
-	assert.Contains(t, ValuePrompt, "hp")
-	assert.Contains(t, ValuePrompt, "atk")
-	assert.Contains(t, ValuePrompt, "def")
-	assert.Contains(t, ValuePrompt, "spd")
-	assert.Contains(t, ValuePrompt, "class")
-	assert.Contains(t, ValuePrompt, "element")
 	assert.Contains(t, ValuePrompt, "narrative")
+	assert.NotContains(t, ValuePrompt, `"rarity"`)
+	assert.Contains(t, ValuePrompt, "Do NOT invent")
 }
 
 func TestValuePrompt_Render(t *testing.T) {
