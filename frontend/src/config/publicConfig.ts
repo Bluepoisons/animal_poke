@@ -19,6 +19,8 @@ declare global {
   interface Window {
     __AP_CONFIG__?: {
       apiBaseUrl?: string
+      /** optional non-sensitive feature toggles injected at runtime */
+      features?: Record<string, boolean>
     }
   }
 }

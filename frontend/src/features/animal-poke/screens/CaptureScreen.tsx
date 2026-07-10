@@ -34,6 +34,8 @@ interface CaptureScreenProps {
   species: SpeciesType
   detection: DetectionResult
   detectInferenceId: string
+  /** retained for pipeline handoff; throw UX currently does not re-upload */
+  photoBlob?: Blob | null
   targetId?: string | null
   captureAttemptId: string
   onSettled?: (ok: boolean) => void
@@ -45,10 +47,12 @@ export default function CaptureScreen({
   species,
   detection,
   detectInferenceId,
+  photoBlob: _photoBlob,
   captureAttemptId,
   onSettled,
   onInvalidAccess,
 }: CaptureScreenProps) {
+  void _photoBlob
   const { state: staminaState, consumeStamina } = useStamina()
   const currentStamina = staminaState.currentStamina
   const profile = SPECIES_THROW_PROFILES[species]
