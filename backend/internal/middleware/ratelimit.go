@@ -3,7 +3,6 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -106,11 +105,7 @@ func RateLimitByDevice(rl *RateLimiter) gin.HandlerFunc {
 			return
 		}
 		if !rl.allow(deviceID) {
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-			})
+			AbortTooMany(c, "rate_limited", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()
@@ -121,11 +116,7 @@ func RateLimitByDevice(rl *RateLimiter) gin.HandlerFunc {
 func RateLimitByIP(rl *RateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !rl.allow("ip:" + c.ClientIP()) {
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-			})
+			AbortTooMany(c, "rate_limited", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()

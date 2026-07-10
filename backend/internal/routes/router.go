@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"net/http"
 	"time"
 
 	"animalpoke/backend/internal/config"
@@ -34,12 +33,7 @@ func (d deviceChecker) TokenVersion(deviceID string) (int, error) {
 // unavailable 依赖不可用时返回结构化 503（避免 404）。
 func unavailable(reason string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Retry-After", "30")
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":       "service unavailable",
-			"reason_code": reason,
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.AbortUnavailable(c, reason, "service unavailable", 30)
 	}
 }
 
@@ -54,7 +48,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		AllowedOrigins: cfg.CORSAllowedOrigins,
 		DevOpen:        cfg.IsDevelopment(),
 	}))
+	// 全局 body 硬上限（可选兜底，略大于最大图片上传）。
+	r.Use(middleware.GlobalBodyLimit(middleware.MaxBodyGlobal))
 	r.MaxMultipartMemory = cfg.MaxImageBytes
+
 
 	// Liveness / Readiness
 	r.GET("/health", handlers.Health())
@@ -110,7 +107,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			authHandler := handlers.NewAuthHandlerFull(
 				deviceRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 			)
-			api.POST("/auth/device", middleware.RateLimitByIP(ipLimiter), authHandler.DeviceAuth)
+			api.POST("/auth/device",
+				middleware.RateLimitByIP(ipLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				authHandler.DeviceAuth,
+			)
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
 		}
@@ -129,14 +130,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/weather/week", weatherHandler.GetWeek)
 
 			errHandler := handlers.NewErrorReportHandler()
-			auth.POST("/errors/report", errHandler.Report)
+			auth.POST("/errors/report", middleware.BodyLimit(middleware.MaxBodyErrorReport), errHandler.Report)
 
 			product := handlers.NewProductHandler()
 			auth.GET("/ranking/daily", product.RankingDaily)
-			auth.POST("/pvp/match", product.PvPMatch)
-			auth.POST("/pvp/result", product.PvPReport)
+			auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
+			auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			auth.GET("/social/friends", product.FriendsList)
-			auth.POST("/social/share", product.ShareCreate)
+			auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 
 			ai := auth.Group("")
@@ -153,14 +154,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
 				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
 				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
-				ai.POST("/value/generate", middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
+				ai.POST("/value/generate",
+					middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.CostLimitByType(costCounter, "value"),
+					valueHandler.Generate,
+				)
 			}
 
 			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
 				syncHandler := handlers.NewSyncHandlerFull(animalRepo, auditService, inferenceRepo)
-				auth.POST("/sync/animal", syncHandler.SyncAnimal)
-				auth.POST("/sync/animals", syncHandler.SyncAnimalsBatch)
+				auth.POST("/sync/animal", middleware.BodyLimit(middleware.MaxBodyDefault), syncHandler.SyncAnimal)
+				auth.POST("/sync/animals", middleware.BodyLimit(middleware.MaxBodySyncBatch), syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
 			} else {
 				auth.POST("/sync/animal", unavailable("db_unavailable"))
@@ -171,18 +176,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			// 隐私 / 安全 / 商业化
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
-				auth.POST("/privacy/consent", privacy.PutConsent)
-				auth.POST("/privacy/export", privacy.ExportData)
-				auth.POST("/privacy/delete", privacy.DeleteData)
+				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
+				auth.POST("/privacy/export", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.ExportData)
+				auth.POST("/privacy/delete", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
 				sec := handlers.NewSecurityHandler(db, auditRepo)
-				auth.POST("/security/report", sec.Report)
+				auth.POST("/security/report", middleware.BodyLimit(middleware.MaxBodyDefault), sec.Report)
 
 				commerce := handlers.NewCommerceHandler(db)
-				auth.POST("/commerce/orders", commerce.CreateOrder)
-				auth.POST("/commerce/orders/fulfill", commerce.FulfillOrder)
-				auth.POST("/commerce/orders/refund", commerce.RefundOrder)
+				auth.POST("/commerce/orders", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.CreateOrder)
+				auth.POST("/commerce/orders/fulfill", middleware.BodyLimit(middleware.MaxBodyReceipt), commerce.FulfillOrder)
+				auth.POST("/commerce/orders/refund", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.RefundOrder)
 				auth.GET("/commerce/orders/:id", commerce.GetOrder)
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
 			} else {

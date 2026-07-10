@@ -11,8 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const maxErrorReportBytes = 16 * 1024
-
 type errorReportRequest struct {
 	Message   string            `json:"message"`
 	Stack     string            `json:"stack"`
@@ -30,14 +28,14 @@ func NewErrorReportHandler() *ErrorReportHandler { return &ErrorReportHandler{} 
 
 // Report POST /api/v1/errors/report
 func (h *ErrorReportHandler) Report(c *gin.Context) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxErrorReportBytes)
+	// Body 上限由路由 BodyLimit(MaxBodyErrorReport) 控制。
 	var req errorReportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "reason_code": "bad_request", "request_id": middleware.GetRequestID(c)})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if strings.TrimSpace(req.Message) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message required", "reason_code": "missing_message", "request_id": middleware.GetRequestID(c)})
+		middleware.AbortBadRequest(c, "missing_message", "message required", nil)
 		return
 	}
 	// 脱敏：截断、剔除疑似 token/key

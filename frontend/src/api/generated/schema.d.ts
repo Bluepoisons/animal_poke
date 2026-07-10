@@ -469,16 +469,35 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Error: {
-            error?: string;
-            reason_code?: string;
+            /**
+             * @description Human-readable error message (safe for clients)
+             * @example invalid JSON body
+             */
+            error: string;
+            /**
+             * @description Machine-readable reason code
+             * @example bad_request
+             */
+            reason_code: string;
+            /** @description Correlation ID (also returned as X-Request-ID) */
             request_id?: string;
+            /**
+             * @description Whether the client may safely retry
+             * @example false
+             */
+            retryable: boolean;
+            /** @description Optional structured details (never internal stack traces) */
+            details?: {
+                [key: string]: unknown;
+            };
         };
-        ServiceUnavailableError: {
+        ServiceUnavailableError: components["schemas"]["Error"] & {
             /** @example service unavailable */
             error: string;
             /** @example db_unavailable */
             reason_code: string;
-            request_id?: string;
+            /** @example true */
+            retryable: boolean;
         };
         HealthResponse: {
             /** @example ok */

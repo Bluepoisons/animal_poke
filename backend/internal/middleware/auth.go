@@ -3,7 +3,6 @@ package middleware
 
 import (
 	"log/slog"
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -36,13 +35,13 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			AbortUnauthorized(c, "missing_authorization", "missing authorization header")
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization format"})
+			AbortUnauthorized(c, "invalid_authorization", "invalid authorization format")
 			return
 		}
 
@@ -56,19 +55,19 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !token.Valid {
 			slog.Warn("无效 Token", "err", err)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			AbortUnauthorized(c, "invalid_token", "invalid token")
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
+			AbortUnauthorized(c, "invalid_token", "invalid token claims")
 			return
 		}
 
 		if issuer != "" {
 			if iss, _ := claims["iss"].(string); iss != "" && iss != issuer {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid issuer"})
+				AbortUnauthorized(c, "invalid_issuer", "invalid issuer")
 				return
 			}
 		}
@@ -76,7 +75,7 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 			switch aud := claims["aud"].(type) {
 			case string:
 				if aud != "" && aud != audience {
-					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid audience"})
+					AbortUnauthorized(c, "invalid_audience", "invalid audience")
 					return
 				}
 			case []interface{}:
@@ -88,7 +87,7 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 					}
 				}
 				if !okAud && len(aud) > 0 {
-					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid audience"})
+					AbortUnauthorized(c, "invalid_audience", "invalid audience")
 					return
 				}
 			}
@@ -102,7 +101,7 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 			}
 		}
 		if deviceID == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device_id missing in token"})
+			AbortUnauthorized(c, "device_id_missing", "device_id missing in token")
 			return
 		}
 
@@ -114,11 +113,11 @@ func JWTAuthWithChecker(secret, issuer, audience string, checker DeviceChecker) 
 		if checker != nil {
 			disabled, err := checker.IsDisabled(deviceID)
 			if err == nil && disabled {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "device disabled"})
+				AbortUnauthorized(c, "device_disabled", "device disabled")
 				return
 			}
 			if ver, err := checker.TokenVersion(deviceID); err == nil && ver > 0 && tokenVer < ver {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token revoked"})
+				AbortUnauthorized(c, "token_revoked", "token revoked")
 				return
 			}
 		}
@@ -145,12 +144,12 @@ func GetDeviceID(c *gin.Context) string {
 func AdminAuth(adminKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if adminKey == "" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin not configured"})
+			AbortForbidden(c, "admin_not_configured", "admin not configured")
 			return
 		}
 		key := c.GetHeader("X-Admin-Key")
 		if key == "" || key != adminKey {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			AbortForbidden(c, "forbidden", "forbidden")
 			return
 		}
 		c.Next()

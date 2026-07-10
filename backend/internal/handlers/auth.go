@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/repo"
 
 	"github.com/gin-gonic/gin"
@@ -62,14 +63,14 @@ type authResponse struct {
 // DeviceAuth POST /auth/device 注册设备并签发 JWT Token。
 func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 	var req authRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device_id is required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if !deviceIDPattern.MatchString(req.DeviceID) {
 		// 也允许标准 UUID
 		if _, err := uuid.Parse(req.DeviceID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "device_id must be UUID or 8-64 alphanumeric/_-"})
+			middleware.AbortBadRequest(c, "invalid_device_id", "device_id must be UUID or 8-64 alphanumeric/_-", nil)
 			return
 		}
 	}
@@ -77,11 +78,11 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 	dev, err := h.deviceRepo.FindOrCreate(req.DeviceID)
 	if err != nil {
 		slog.Error("设备注册失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "device registration failed"})
+		middleware.AbortInternal(c, "device_registration_failed", "device registration failed")
 		return
 	}
 	if dev.Disabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "device disabled"})
+		middleware.AbortForbidden(c, "device_disabled", "device disabled")
 		return
 	}
 
@@ -102,7 +103,7 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 	tokenStr, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
 		slog.Error("JWT 签发失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+		middleware.AbortInternal(c, "token_generation_failed", "token generation failed")
 		return
 	}
 

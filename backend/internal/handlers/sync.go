@@ -70,10 +70,11 @@ type syncResponse struct {
 // SyncAnimal POST /sync/animal 接收客户端上传的动物元数据。
 func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	var req syncRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: uuid, species, rarity, generated_at are required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
+
 
 	normSpecies, _ := taxonomy.Normalize(req.Species)
 	if !taxonomy.Capturable(normSpecies) {
@@ -283,14 +284,19 @@ type batchItemResult struct {
 // SyncAnimalsBatch POST /sync/animals
 func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
 	var req BatchSyncRequest
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Items) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "items required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
+		return
+	}
+	if len(req.Items) == 0 {
+		middleware.AbortBadRequest(c, "items_required", "items required", nil)
 		return
 	}
 	if len(req.Items) > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch"})
+		middleware.AbortBadRequest(c, "batch_too_large", "max 100 items per batch", nil)
 		return
 	}
+
 	results := make([]batchItemResult, 0, len(req.Items))
 	for _, item := range req.Items {
 		// 复用单条逻辑：构造临时 context 调用较重，这里内联简化

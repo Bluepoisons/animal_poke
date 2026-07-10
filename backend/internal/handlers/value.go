@@ -52,10 +52,11 @@ type valueRequest struct {
 // Generate POST /value/generate
 func (h *ValueHandler) Generate(c *gin.Context) {
 	var req valueRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: species is required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
+
 
 	input := services.ValueInput{
 		Species:             req.Species,
