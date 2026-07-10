@@ -79,7 +79,6 @@ func seedDetectInference(t *testing.T, inf *repo.InferenceRepo, id, device strin
 	}))
 }
 
-
 func TestVisionDetect_MissingFile(t *testing.T) {
 	r, _ := setupVisionTest()
 
@@ -243,7 +242,6 @@ func tinyPNG() []byte {
 	}
 }
 
-
 func TestVisionDetect_ReturnsTargetsAndStoresJSON(t *testing.T) {
 	r, _, inf := setupVisionWithRepo(t)
 	// device id via middleware is empty in bare router; Create still works with ""
@@ -368,4 +366,38 @@ func TestVisionAnalyze_SelectByBox(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
 	assert.Equal(t, "dog", result.Species)
 	assert.Equal(t, "1", result.TargetID)
+}
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+func createMultipartBodyWithFields(filename string, data []byte, fields map[string]string) (string, *bytes.Buffer) {
+	return createMultipartBodyFields("image", filename, data, fields)
+}
+
+func solidPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: 40, G: 180, B: 80, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
+}
+
+// jpegWithFakeEXIF builds a JPEG then injects a fake APP1/Exif marker for strip tests.
+func jpegWithFakeEXIF(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	var buf bytes.Buffer
+	require.NoError(t, jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}))
+	raw := buf.Bytes()
+	// Insert APP1 Exif segment after SOI (FFD8)
+	exif := []byte{0xFF, 0xE1, 0x00, 0x10, 'E', 'x', 'i', 'f', 0x00, 0x00, 0, 0, 0, 0, 0, 0}
+	out := append([]byte{}, raw[:2]...)
+	out = append(out, exif...)
+	out = append(out, raw[2:]...)
+	return out
 }

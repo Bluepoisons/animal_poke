@@ -595,7 +595,7 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 
 	order := models.Order{
 		OrderID: uuid.NewString(), DeviceID: deviceID, AccountID: accountID, ProductID: product.ProductID,
-		Status: "created", Platform: req.Platform, AmountCents: product.PriceCents,
+		Status: "created", Platform: platform, AmountCents: product.PriceCents,
 		Currency: product.Currency, IdempotencyKey: req.IdempotencyKey,
 	}
 	if err := h.db.Create(&order).Error; err != nil {
@@ -629,6 +629,10 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 	}
 	deviceID := middleware.GetDeviceID(c)
 	accountID := middleware.GetAccountID(c)
+	if len(strings.TrimSpace(req.Receipt)) < minReceiptLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "receipt too short", "reason_code": "receipt_too_short"})
+		return
+	}
 	sum := sha256.Sum256([]byte(req.Receipt))
 	receiptHash := hex.EncodeToString(sum[:])
 

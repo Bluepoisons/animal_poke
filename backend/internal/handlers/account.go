@@ -41,12 +41,12 @@ func NewAccountHandler(deviceRepo *repo.DeviceRepo, accountRepo *repo.AccountRep
 }
 
 type bindRequest struct {
-	Provider      string `json:"provider" binding:"required"` // email | mock_oauth
-	Email         string `json:"email"`
-	Password      string `json:"password"`
-	OAuthSubject  string `json:"oauth_subject"`
-	OAuthToken    string `json:"oauth_token"`
-	DisplayName   string `json:"display_name"`
+	Provider     string `json:"provider" binding:"required"` // email | mock_oauth
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	OAuthSubject string `json:"oauth_subject"`
+	OAuthToken   string `json:"oauth_token"`
+	DisplayName  string `json:"display_name"`
 }
 
 type loginRequest struct {

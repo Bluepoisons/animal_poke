@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,7 +83,9 @@ func TestSyncAnimal_MissingFields(t *testing.T) {
 	r, _ := setupSyncTest(t)
 	w := postJSON(r, "/api/v1/sync/animal", map[string]interface{}{})
 	assert.Equal(t, 400, w.Code)
-	assert.Contains(t, w.Body.String(), "invalid_request")
+	// Strict JSON envelope uses bad_request; domain validation uses invalid_request.
+	body := w.Body.String()
+	assert.True(t, strings.Contains(body, "invalid_request") || strings.Contains(body, "bad_request"), body)
 }
 
 func TestSyncAnimal_Success(t *testing.T) {

@@ -61,6 +61,13 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		return
 	}
 
+	// 稳定 seed：优先 parent/analyze/inference_request_id，其次 capture_id
+	seedID := firstNonEmpty(
+		req.ParentInferenceID,
+		req.AnalyzeInferenceID,
+		req.InferenceRequestID,
+		req.CaptureID,
+	)
 
 	input := services.ValueInput{
 		Species:             req.Species,
@@ -110,18 +117,18 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 			cfgVer = services.StatsConfigVersion
 		}
 		payload, _ := json.Marshal(map[string]interface{}{
-			"species":         req.Species,
-			"breed":           req.Breed,
-			"rarity":          result.Rarity,
-			"hp":              result.HP,
-			"atk":             result.ATK,
-			"def":             result.DEF,
-			"spd":             result.SPD,
-			"class":           result.Class,
-			"element":         result.Element,
-			"config_version":  cfgVer,
-			"seed_id":         result.SeedID,
-			"factors":         result.Factors,
+			"species":        req.Species,
+			"breed":          req.Breed,
+			"rarity":         result.Rarity,
+			"hp":             result.HP,
+			"atk":            result.ATK,
+			"def":            result.DEF,
+			"spd":            result.SPD,
+			"class":          result.Class,
+			"element":        result.Element,
+			"config_version": cfgVer,
+			"seed_id":        result.SeedID,
+			"factors":        result.Factors,
 		})
 		exp := time.Now().UTC().Add(24 * time.Hour)
 		_ = h.inferenceRepo.Create(&models.Inference{
