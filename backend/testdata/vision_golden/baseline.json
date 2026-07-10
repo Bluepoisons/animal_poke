@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "generated_by": "stub-perfect-provider",
+  "mode": "stub",
+  "fixture_count": 19,
+  "metrics": {
+    "per_class": {
+      "cat": { "precision": 1.0, "recall": 1.0, "support": 3, "tp": 3, "fp": 0, "fn": 0 },
+      "dog": { "precision": 1.0, "recall": 1.0, "support": 3, "tp": 3, "fp": 0, "fn": 0 },
+      "goose": { "precision": 1.0, "recall": 1.0, "support": 3, "tp": 3, "fp": 0, "fn": 0 }
+    },
+    "macro_precision": 1.0,
+    "macro_recall": 1.0,
+    "unknown_rejection": 1.0,
+    "unknown_rejection_support": 10,
+    "mean_iou": 1.0,
+    "iou_sample_count": 9,
+    "calibration_error": 0.0,
+    "latency_ms": {
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "mean": 0,
+      "count": 19
+    },
+    "cost": {
+      "currency": "USD",
+      "total": 0,
+      "per_call": 0,
+      "note": "stub has zero provider cost"
+    }
+  },
+  "trace": {
+    "model": "stub-golden-v1",
+    "prompt_version": "detect-stub",
+    "provider": "mock"
+  }
+}
