@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/ai/prompts"
+	"animalpoke/backend/internal/taxonomy"
 )
 
 // ---------- VLM 相关类型 ----------
@@ -24,6 +25,8 @@ import (
 // DetectBox 检测框。
 type DetectBox struct {
 	Species     string  `json:"species"`
+	Label       string  `json:"label,omitempty"` // 原始标签，仅审计
+	TargetID    string  `json:"target_id,omitempty"`
 	Confidence  float64 `json:"confidence"`
 	BoundingBox struct {
 		X      float64 `json:"x"`
@@ -103,6 +106,11 @@ func (in ValueInput) Validate() error {
 	if strings.TrimSpace(in.Species) == "" {
 		return fmt.Errorf("species is required")
 	}
+	norm, _ := taxonomy.Normalize(in.Species)
+	if !taxonomy.Capturable(norm) {
+		return fmt.Errorf("species not capturable: %s", in.Species)
+	}
+	in.Species = norm // note: caller should re-assign; normalize checked only
 	if len(in.Species) > 64 || len(in.Breed) > 64 || len(in.Color) > 64 || len(in.BodyType) > 64 {
 		return fmt.Errorf("string fields exceed max length 64")
 	}
@@ -379,10 +387,11 @@ func parseDetectJSON(jsonStr string) (*DetectResult, error) {
 }
 
 func validateDetectResult(r *DetectResult) error {
+	if r == nil {
+		return fmt.Errorf("nil detect result")
+	}
+	normalized := make([]DetectBox, 0, len(r.Animals))
 	for i, a := range r.Animals {
-		if a.Species == "" {
-			return fmt.Errorf("animal[%d] missing species", i)
-		}
 		if a.Confidence < 0 || a.Confidence > 1 {
 			return fmt.Errorf("animal[%d] confidence out of range", i)
 		}
@@ -392,7 +401,44 @@ func validateDetectResult(r *DetectResult) error {
 			bb.X+bb.Width > 1.0001 || bb.Y+bb.Height > 1.0001 {
 			return fmt.Errorf("animal[%d] bounding_box out of range", i)
 		}
+		// 权威 taxonomy：规范化物种，禁止静默映射为鹅
+		raw := a.Species
+		if raw == "" {
+			raw = a.Label
+		}
+		norm, orig := taxonomy.Normalize(raw)
+		a.Species = norm
+		if a.Label == "" {
+			a.Label = orig
+		}
+		if a.TargetID == "" {
+			a.TargetID = fmt.Sprintf("%d", i)
+		}
+		// 仅 capturable 进入返回列表；unknown/unsupported 不进入捕获
+		if taxonomy.Capturable(norm) {
+			normalized = append(normalized, a)
+		}
 	}
+	// 稳定排序：confidence desc, species, target_id
+	for i := 0; i < len(normalized); i++ {
+		for j := i + 1; j < len(normalized); j++ {
+			a, b := normalized[i], normalized[j]
+			swap := false
+			if b.Confidence > a.Confidence {
+				swap = true
+			} else if b.Confidence == a.Confidence {
+				if b.Species < a.Species {
+					swap = true
+				} else if b.Species == a.Species && b.TargetID < a.TargetID {
+					swap = true
+				}
+			}
+			if swap {
+				normalized[i], normalized[j] = normalized[j], normalized[i]
+			}
+		}
+	}
+	r.Animals = normalized
 	return nil
 }
 

@@ -58,7 +58,12 @@ func TestParseDetectJSON_EnvelopeAndArray(t *testing.T) {
 
 	arr, err := parseDetectJSON(`[{"species":"bird","confidence":0.7,"bounding_box":{"x":0,"y":0,"width":0.5,"height":0.5}}]`)
 	assert.NoError(t, err)
+	// parse only; taxonomy filter applied in validateDetectResult
 	assert.Equal(t, "bird", arr.Animals[0].Species)
+
+	filtered := &DetectResult{Animals: arr.Animals}
+	assert.NoError(t, validateDetectResult(filtered))
+	assert.Empty(t, filtered.Animals, "bird must not become goose or capturable")
 
 	empty, err := parseDetectJSON(`{"animals":[]}`)
 	assert.NoError(t, err)
@@ -74,4 +79,41 @@ func TestRenderValuePrompt_Complete(t *testing.T) {
 	assert.Contains(t, p, "cat")
 	assert.Contains(t, p, "completeness=8")
 	assert.NotContains(t, p, "{{")
+}
+
+
+func TestValidateDetectResult_NoSilentGoose(t *testing.T) {
+	mk := func(species string, conf float64) DetectBox {
+		var b DetectBox
+		b.Species = species
+		b.Confidence = conf
+		b.BoundingBox.X, b.BoundingBox.Y = 0.1, 0.1
+		b.BoundingBox.Width, b.BoundingBox.Height = 0.2, 0.2
+		return b
+	}
+	r := &DetectResult{Animals: []DetectBox{
+		mk("duck", 0.9),
+		mk("bird", 0.8),
+		mk("cat", 0.7),
+	}}
+	assert.NoError(t, validateDetectResult(r))
+	assert.Len(t, r.Animals, 1)
+	assert.Equal(t, "cat", r.Animals[0].Species)
+}
+
+func TestValidateDetectResult_EmptyAndIllegal(t *testing.T) {
+	mk := func(species string, conf float64) DetectBox {
+		var b DetectBox
+		b.Species = species
+		b.Confidence = conf
+		b.BoundingBox.X, b.BoundingBox.Y = 0, 0
+		b.BoundingBox.Width, b.BoundingBox.Height = 0.5, 0.5
+		return b
+	}
+	r := &DetectResult{Animals: []DetectBox{mk("", 0.5)}}
+	assert.NoError(t, validateDetectResult(r))
+	assert.Empty(t, r.Animals)
+
+	bad := &DetectResult{Animals: []DetectBox{mk("cat", 1.5)}}
+	assert.Error(t, validateDetectResult(bad))
 }
