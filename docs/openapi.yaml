@@ -1358,6 +1358,7 @@ paths:
   /api/v1/config/game:
     get:
       tags: [Ops]
+      operationId: getGameConfig
       summary: Get versioned game config (AP-059)
       security:
         - bearerAuth: []
@@ -1373,6 +1374,7 @@ paths:
   /api/v1/ops/game-config:
     put:
       tags: [Ops]
+      operationId: putGameConfig
       summary: Replace game config (ops only, hard bounds)
       security:
         - bearerAuth: []
@@ -1398,6 +1400,7 @@ paths:
   /api/v1/ops/game-config/rollback:
     post:
       tags: [Ops]
+      operationId: rollbackGameConfig
       summary: Rollback to previous game config version
       security:
         - bearerAuth: []
@@ -1528,6 +1531,42 @@ components:
             $ref: "#/components/schemas/FeatureUnavailableError"
 
   schemas:
+    GameConfig:
+      type: object
+      required: [version, economy]
+      properties:
+        version:
+          type: string
+        economy:
+          type: object
+          additionalProperties:
+            type: number
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        meta:
+          type: object
+          additionalProperties: true
+    GameConfigResponse:
+      type: object
+      required: [version, economy, request_id]
+      properties:
+        version:
+          type: string
+        economy:
+          type: object
+          additionalProperties:
+            type: number
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        meta:
+          type: object
+          additionalProperties: true
+        request_id:
+          type: string
     Error:
       type: object
       required: [error, reason_code, retryable]
