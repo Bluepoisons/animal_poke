@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import PageTitle from '../components/PageTitle'
 import DiscoveryPin from '../components/DiscoveryPin'
-import { huntTargets, getTargetById } from '../data/huntTargets'
+import { useLbs } from '../../../lbs/useLbs'
+import { discoveryToHuntTarget } from '../lbsMap'
+import type { HuntTarget } from '../data/types'
 
 interface HuntMapScreenProps {
   selectedTargetId: string
@@ -20,21 +22,38 @@ export default function HuntMapScreen({
   onSelectTarget,
   onBack,
 }: HuntMapScreenProps) {
-  const [seconds, setSeconds] = useState(272)
-  const selected = getTargetById(selectedTargetId) ?? huntTargets[2]
+  const lbs = useLbs()
+  const { state, requestLocation, refreshPoints, nextRefreshIn } = lbs
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setSeconds((prev) => {
-        if (prev <= 0) return 272
-        return prev - 1
-      })
-    }, 1000)
-    return () => window.clearInterval(interval)
-  }, [])
+    if (state.geoStatus === 'idle' || state.geoStatus === 'denied') {
+      requestLocation()
+    }
+  }, [state.geoStatus, requestLocation])
 
-  const minutes = String(Math.floor(seconds / 60)).padStart(2, '0')
-  const secs = String(seconds % 60).padStart(2, '0')
+  const targets: HuntTarget[] = useMemo(() => {
+    if (!state.playerLocation) return []
+    return state.discoveryPoints
+      .filter((p) => p.status !== 'expired')
+      .map((p) => discoveryToHuntTarget(p, state.playerLocation))
+  }, [state.discoveryPoints, state.playerLocation])
+
+  const selected =
+    targets.find((t) => t.id === selectedTargetId) || targets[0] || null
+
+  const minutes = String(Math.floor(Math.max(0, nextRefreshIn) / 60)).padStart(2, '0')
+  const secs = String(Math.max(0, nextRefreshIn) % 60).padStart(2, '0')
+
+  const statusLine = (() => {
+    if (state.geoStatus === 'locating') return '定位中…'
+    if (state.geoStatus === 'denied') return '定位被拒绝'
+    if (state.geoStatus === 'timeout') return '定位超时'
+    if (state.geoStatus === 'unsupported') return '设备不支持定位'
+    if (!state.playerLocation) return '等待定位'
+    const acc = state.playerLocation.accuracy
+    const accText = typeof acc === 'number' ? `±${Math.round(acc)}m` : '精度未知'
+    return `${state.cityName || '未知城市'} · ${accText} · ${targets.length} 个点`
+  })()
 
   return (
     <div className="ap-screen ap-screen--map">
@@ -44,7 +63,7 @@ export default function HuntMapScreen({
 
       <PageTitle
         title="HUNT MAP"
-        subtitle="附近发现点 · 手绘地图"
+        subtitle={statusLine}
         rightText={`刷新 ${minutes}:${secs}`}
         rightTone="blue"
       />
@@ -53,7 +72,7 @@ export default function HuntMapScreen({
         <div className="ap-road ap-road--blue" />
         <div className="ap-road ap-road--olive" />
 
-        {huntTargets.map((target) => (
+        {targets.map((target) => (
           <DiscoveryPin
             key={target.id}
             target={target}
@@ -80,10 +99,32 @@ export default function HuntMapScreen({
         </div>
 
         <div className="ap-map-card">
-          <h2>
-            {speciesNames[selected.species]} · {selected.label}
-          </h2>
-          <p>500m 范围内 7 个目标，诱饵会提升稀有出现率。</p>
+          {state.geoStatus === 'denied' || state.geoStatus === 'unsupported' ? (
+            <>
+              <h2>无法定位</h2>
+              <p>{state.errorMsg || '请开启定位权限后重试。'}</p>
+              <button type="button" className="ap-map-chip" onClick={() => requestLocation()}>
+                重新定位
+              </button>
+            </>
+          ) : !selected ? (
+            <>
+              <h2>附近暂无发现点</h2>
+              <p>定位成功后会生成可探索目标。低精度或极端天气时可能为空。</p>
+              <button type="button" className="ap-map-chip" onClick={() => refreshPoints()}>
+                手动刷新
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>
+                {speciesNames[selected.species]} · {selected.distanceMeters}m · {selected.rarity}
+              </h2>
+              <p>
+                {selected.label}。超出捕获范围时无法开始捕获；服务端权威校验见后续接口。
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
