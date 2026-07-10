@@ -223,6 +223,12 @@ test.describe('AP-014 production capture hard gate', () => {
     await installApiMocks(page, log)
 
     await page.addInitScript(() => {
+      try {
+        localStorage.setItem(
+          'animal-poke-onboarding-v1',
+          JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
+        )
+      } catch {}
       // Do NOT set __AP_FORCE_CAMERA_READY — we want denied path
       Object.defineProperty(navigator, 'mediaDevices', {
         configurable: true,
