@@ -1,5 +1,9 @@
 import type { RarityTier, SpeciesType } from '../types'
 import type { ElementType, StrategyType, WeatherType, BattleStats } from './types'
+import type { ItemId } from '../shop/constants'
+
+// AP-032: single source of truth for ItemId lives in shop/constants.
+export type { ItemId }
 
 // ===== 稀有度基础属性表 =====
 export const RARITY_BASE_STATS: Record<RarityTier, BattleStats> = {
@@ -100,9 +104,6 @@ export const WEATHER_ELEMENT_BONUS: Record<WeatherType, Partial<Record<ElementTy
   foggy:   {},
   extreme: {},
 }
-
-// ===== ItemId 类型（与 ShopContext 一致） =====
-export type ItemId = 'toy_ball' | 'premium_toy_ball' | 'cold_medicine' | 'bait' | 'stamina_potion' | 'food_pack'
 
 // ===== 物种列表 =====
 export const SPECIES_LIST: SpeciesType[] = ['cat', 'goose', 'dog']
