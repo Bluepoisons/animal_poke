@@ -57,7 +57,7 @@ func setupCommerce(t *testing.T, opts CommerceOptions) (*gin.Engine, *gorm.DB, *
 	return r, db, h
 }
 
-func postJSON(r *gin.Engine, path string, body map[string]interface{}, device string) *httptest.ResponseRecorder {
+func postCommerceJSON(r *gin.Engine, path string, body map[string]interface{}, device string) *httptest.ResponseRecorder {
 	b, _ := json.Marshal(body)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, path, bytes.NewReader(b))
@@ -72,7 +72,7 @@ func postJSON(r *gin.Engine, path string, body map[string]interface{}, device st
 func TestCommerce_DisabledReturns501(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: false})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k1", "platform": "mock",
 	}, "dev-1")
 	assert.Equal(t, http.StatusNotImplemented, w.Code)
@@ -85,7 +85,7 @@ func TestCommerce_DisabledReturns501(t *testing.T) {
 func TestCommerce_UnknownProduct404(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "unknown_sku", "idempotency_key": "k-unknown", "platform": "mock",
 	}, "dev-1")
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -98,7 +98,7 @@ func TestCommerce_UnknownProduct404(t *testing.T) {
 func TestCommerce_CrossDeviceSameIdempotencyKey(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w1 := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w1 := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "shared-key", "platform": "mock",
 	}, "device-a")
 	assert.Equal(t, http.StatusCreated, w1.Code)
@@ -107,7 +107,7 @@ func TestCommerce_CrossDeviceSameIdempotencyKey(t *testing.T) {
 	require.NotEmpty(t, o1.OrderID)
 
 	// 同 key 不同设备 → 独立订单，不返回 device-a 的订单
-	w2 := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w2 := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "shared-key", "platform": "mock",
 	}, "device-b")
 	assert.Equal(t, http.StatusCreated, w2.Code)
@@ -117,7 +117,7 @@ func TestCommerce_CrossDeviceSameIdempotencyKey(t *testing.T) {
 	assert.Equal(t, "device-b", o2.DeviceID)
 
 	// 同设备同 key → 幂等返回原订单
-	w3 := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w3 := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "shared-key", "platform": "mock",
 	}, "device-a")
 	assert.Equal(t, http.StatusOK, w3.Code)
@@ -130,14 +130,14 @@ func TestCommerce_DeviceRefundForbidden(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
 	// 先建单
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-refund", "platform": "mock",
 	}, "dev-1")
 	require.Equal(t, http.StatusCreated, w.Code)
 	var order models.Order
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &order))
 
-	wr := postJSON(r, "/api/v1/commerce/orders/refund", map[string]interface{}{
+	wr := postCommerceJSON(r, "/api/v1/commerce/orders/refund", map[string]interface{}{
 		"order_id": order.OrderID,
 	}, "dev-1")
 	assert.Equal(t, http.StatusForbidden, wr.Code)
@@ -149,7 +149,7 @@ func TestCommerce_DeviceRefundForbidden(t *testing.T) {
 func TestCommerce_AdminRefundWorks(t *testing.T) {
 	r, db, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-admin-refund", "platform": "mock",
 	}, "dev-1")
 	require.Equal(t, http.StatusCreated, w.Code)
@@ -162,7 +162,7 @@ func TestCommerce_AdminRefundWorks(t *testing.T) {
 		DeviceID: order.DeviceID, ProductID: order.ProductID, OrderID: order.OrderID, Active: true,
 	}).Error)
 
-	wr := postJSON(r, "/api/v1/admin/commerce/orders/refund", map[string]interface{}{
+	wr := postCommerceJSON(r, "/api/v1/admin/commerce/orders/refund", map[string]interface{}{
 		"order_id": order.OrderID, "reason": "test",
 	}, "")
 	assert.Equal(t, http.StatusOK, wr.Code)
@@ -182,14 +182,14 @@ func TestCommerce_AdminRefundWorks(t *testing.T) {
 func TestCommerce_ShortReceiptRejected(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-short", "platform": "mock",
 	}, "dev-1")
 	require.Equal(t, http.StatusCreated, w.Code)
 	var order models.Order
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &order))
 
-	wf := postJSON(r, "/api/v1/commerce/orders/fulfill", map[string]interface{}{
+	wf := postCommerceJSON(r, "/api/v1/commerce/orders/fulfill", map[string]interface{}{
 		"order_id": order.OrderID, "receipt": "short",
 	}, "dev-1")
 	assert.Equal(t, http.StatusBadRequest, wf.Code)
@@ -201,7 +201,7 @@ func TestCommerce_ShortReceiptRejected(t *testing.T) {
 func TestCommerce_ProductionWithoutStoreVerifyDisabled(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Production: true, Enabled: true, StoreVerify: false})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-prod", "platform": "apple",
 	}, "dev-1")
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
@@ -213,14 +213,14 @@ func TestCommerce_ProductionWithoutStoreVerifyDisabled(t *testing.T) {
 func TestCommerce_FulfillMockHappyPath(t *testing.T) {
 	r, db, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-fulfill", "platform": "mock",
 	}, "dev-1")
 	require.Equal(t, http.StatusCreated, w.Code)
 	var order models.Order
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &order))
 
-	wf := postJSON(r, "/api/v1/commerce/orders/fulfill", map[string]interface{}{
+	wf := postCommerceJSON(r, "/api/v1/commerce/orders/fulfill", map[string]interface{}{
 		"order_id": order.OrderID, "receipt": "mock-receipt-ok-12345",
 	}, "dev-1")
 	assert.Equal(t, http.StatusOK, wf.Code)
@@ -234,7 +234,7 @@ func TestCommerce_FulfillMockHappyPath(t *testing.T) {
 func TestCommerce_GetOrderDeviceScoped(t *testing.T) {
 	r, _, _ := setupCommerce(t, CommerceOptions{Enabled: true})
 
-	w := postJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
+	w := postCommerceJSON(r, "/api/v1/commerce/orders", map[string]interface{}{
 		"product_id": "month_card", "idempotency_key": "k-get", "platform": "mock",
 	}, "dev-owner")
 	require.Equal(t, http.StatusCreated, w.Code)
