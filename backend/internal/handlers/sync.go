@@ -98,8 +98,8 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	}
 	if exists {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "animal already exists",
-			"uuid": req.UUID,
+			"error":       "animal already exists",
+			"uuid":        req.UUID,
 			"reason_code": "duplicate_animal",
 		})
 		return
@@ -223,8 +223,8 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
 			c.JSON(http.StatusConflict, gin.H{
-				"error": "animal already exists",
-				"uuid": req.UUID,
+				"error":       "animal already exists",
+				"uuid":        req.UUID,
 				"reason_code": "duplicate_animal",
 			})
 			return
@@ -428,11 +428,11 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
 	hasMore := len(items) >= limit
 	c.JSON(http.StatusOK, gin.H{
-		"items": items,
+		"items":        items,
 		"next_version": next,
-		"next_cursor": next,
-		"has_more": hasMore,
-		"limit": limit,
+		"next_cursor":  next,
+		"has_more":     hasMore,
+		"limit":        limit,
 	})
 }
 
