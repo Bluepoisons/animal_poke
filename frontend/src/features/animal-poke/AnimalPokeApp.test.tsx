@@ -1,3 +1,4 @@
+import { grantConsent } from '../../compliance'
 import { AppProviders } from '../../providers/AppProviders'
 /**
  * AnimalPokeApp entry smoke tests (#137)
@@ -9,6 +10,7 @@ import AnimalPokeApp from './AnimalPokeApp'
 
 describe('AnimalPokeApp production entry', () => {
   beforeEach(() => {
+    grantConsent()
     vi.useFakeTimers()
   })
   afterEach(() => {
