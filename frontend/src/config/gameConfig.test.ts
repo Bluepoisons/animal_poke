@@ -31,16 +31,16 @@ describe('gameConfig (AP-059)', () => {
   })
 
   it('clamps remote overrides into bounds', () => {
-    applyGameConfig({ economy: { captureStaminaCost: 9999, toyBallPrice: 1 } })
+    applyGameConfig({ economy: { captureStaminaCost: 9999, toyBallPrice: 1 } as Partial<import("./gameConfig").GameEconomyConfig> })
     const e = getEconomyConfig()
     expect(e.captureStaminaCost).toBe(GAME_CONFIG_BOUNDS.captureStaminaCost[1])
     expect(e.toyBallPrice).toBe(1)
   })
 
   it('supports rollback to previous version payload without rebuild', () => {
-    applyGameConfig({ version: 'game-config.v1-bad', economy: { captureStaminaCost: 30 } })
+    applyGameConfig({ version: 'game-config.v1-bad', economy: { captureStaminaCost: 30 } as Partial<import('./gameConfig').GameEconomyConfig> })
     expect(getEconomyConfig().captureStaminaCost).toBe(30)
-    applyGameConfig({ version: 'game-config.v1', economy: { captureStaminaCost: 20 } })
+    applyGameConfig({ version: 'game-config.v1', economy: { captureStaminaCost: 20 } as Partial<import('./gameConfig').GameEconomyConfig> })
     expect(getEconomyConfig().captureStaminaCost).toBe(20)
   })
 })

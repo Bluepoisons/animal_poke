@@ -48,9 +48,7 @@ async function bootstrap() {
     if (rootEl) {
       rootEl.innerHTML =
         '<pre style="padding:16px;color:#4A2C1A;background:#FFF8F0;white-space:pre-wrap;font-family:ui-monospace,monospace">' +
-        'Config error: ' + message + '
-
-See frontend/.env.example</pre>'
+        'Config error: ' + message + '\n\nSee frontend/.env.example</pre>'
     }
     throw err
   }

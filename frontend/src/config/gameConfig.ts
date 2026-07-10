@@ -110,7 +110,7 @@ export function getEconomyConfig(): GameEconomyConfig {
  * Merge remote/runtime config over defaults. Invalid fields are clamped or ignored.
  * Returns validation errors (empty if fully valid before clamp).
  */
-export function applyGameConfig(partial: Partial<GameConfig> & { economy?: Partial<GameEconomyConfig> }): string[] {
+export function applyGameConfig(partial: Partial<Omit<GameConfig, "economy">> & { economy?: Partial<GameEconomyConfig> }): string[] {
   const base = defaultGameConfig()
   const next: GameConfig = {
     version: partial.version || base.version,
