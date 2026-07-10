@@ -13,7 +13,12 @@ import { useStamina } from '../../stamina/useStamina'
 import './animalPoke.css'
 
 export default function AnimalPokeApp() {
-  const [screen, setScreen] = useState<ScreenId>('discover')
+  const initialScreen = ((): ScreenId => {
+  const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store']
+  return allowed.includes(h) ? h : 'discover'
+})()
+  const [screen, setScreen] = useState<ScreenId>(initialScreen)
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
   const { currentStamina, gold, addGold } = useStamina()
   const [toastMessage, setToastMessage] = useState<string | null>(null)
