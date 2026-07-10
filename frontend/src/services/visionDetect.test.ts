@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mockVisionDetector } from './visionDetect'
+import { mockVisionDetector, mapSpecies, isCapturableSpecies } from './visionDetect'
 import type { SpeciesType } from '../types'
 
 const VALID_SPECIES: SpeciesType[] = ['cat', 'goose', 'dog']
@@ -42,9 +42,7 @@ describe('visionDetect', () => {
   it('detect 模拟网络延迟 ≥ 300ms', async () => {
     const start = Date.now()
     const promise = mockVisionDetector.detect('data:image/jpeg;base64,xxx')
-    // 推进 300ms
     vi.advanceTimersByTime(300)
-    // 推进更多以确保完成
     vi.advanceTimersByTime(1000)
     await promise
     const elapsed = Date.now() - start
@@ -59,8 +57,31 @@ describe('visionDetect', () => {
       const result = await promise
       results.push(`${result.species}_${result.confidence}`)
     }
-    // 5 次调用不应全相同（概率极低）
     const unique = new Set(results)
     expect(unique.size).toBeGreaterThan(1)
+  })
+})
+
+describe('mapSpecies taxonomy (AP-007)', () => {
+  it('maps cat/dog/goose aliases including Chinese', () => {
+    expect(mapSpecies('cat')).toBe('cat')
+    expect(mapSpecies('小猫')).toBe('cat')
+    expect(mapSpecies('dog')).toBe('dog')
+    expect(mapSpecies('狗')).toBe('dog')
+    expect(mapSpecies('goose')).toBe('goose')
+    expect(mapSpecies('大鹅')).toBe('goose')
+  })
+
+  it('never maps duck/swan/bird/human/toy/empty to goose', () => {
+    for (const raw of ['duck', 'swan', 'bird', '鸟', '鸭子', '天鹅', 'human', 'person', '人', 'toy', '玩偶', 'screen', '', '  ', 'horse']) {
+      expect(mapSpecies(raw)).toBeNull()
+    }
+  })
+
+  it('isCapturableSpecies only allows cat/dog/goose', () => {
+    expect(isCapturableSpecies('cat')).toBe(true)
+    expect(isCapturableSpecies('goose')).toBe(true)
+    expect(isCapturableSpecies(null)).toBe(false)
+    expect(isCapturableSpecies('bird')).toBe(false)
   })
 })

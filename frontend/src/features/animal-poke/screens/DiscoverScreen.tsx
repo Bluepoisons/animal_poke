@@ -9,6 +9,8 @@ import { compressImageForUpload } from '../../../performance'
 import { detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
+import WelfareNotice from '../components/WelfareNotice'
+import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
 
 interface DiscoverScreenProps {
   energy: number
@@ -115,7 +117,10 @@ export default function DiscoverScreen({
     if (camera.status === 'busy') return '相机被占用'
     if (camera.status === 'unavailable') return '设备无可用相机 · 使用占位预览'
     if (camera.status === 'requesting') return '正在打开相机…'
-    if (camera.status === 'ready') return '相机就绪 · 点击开始识别'
+    if (camera.status === 'ready') {
+      const b = loadScanBudget()
+      return `相机就绪 · ${scanModeCopy(b.mode)} · 今日剩余 ${Math.max(0, b.dailyQuota - b.usedToday)}`
+    }
     return '准备相机…'
   })()
 
@@ -140,13 +145,42 @@ export default function DiscoverScreen({
       return
     }
 
+    const gate = canStartScan()
+    if (!gate.ok) {
+      dispatch({
+        type: 'DETECT_FAIL',
+        code: gate.reason,
+        message:
+          gate.reason === 'quota_exhausted'
+            ? `今日识别次数已用完（${gate.state.dailyQuota}）`
+            : gate.reason === 'too_fast'
+              ? '扫描过快，请稍候再试'
+              : '当前仅允许手动扫描',
+      })
+      return
+    }
+
     const blob = await camera.captureFrame()
     if (!blob) {
       dispatch({ type: 'DETECT_FAIL', code: 'no_frame', message: '未获取到有效画面' })
       return
     }
 
+    const quality = await localFrameQualityGate(blob)
+    if (!quality.ok) {
+      dispatch({
+        type: 'DETECT_FAIL',
+        code: quality.reason || 'quality',
+        message:
+          quality.reason === 'duplicate_frame'
+            ? '画面几乎未变化，请调整角度后再扫'
+            : '画面质量不足，请靠近并保持稳定',
+      })
+      return
+    }
+
     setBusy(true)
+    recordScanAttempt()
     dispatch({ type: 'START_DETECT', photoBlob: blob })
     try {
       const result = await detectAnimals(blob)
@@ -305,6 +339,43 @@ export default function DiscoverScreen({
         </div>
       )}
 
+
+      {flow.phase === 'target_confirmed' && flow.selectedBox && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
+          <button
+            type="button"
+            className="ap-map-chip"
+            onClick={() => {
+              dispatch({ type: 'RESET' })
+            }}
+          >
+            识别错了 · 重新扫描
+          </button>
+          {(['cat', 'dog', 'goose'] as const)
+            .filter((s) => s !== flow.selectedBox?.species)
+            .map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="ap-map-chip"
+                onClick={() => {
+                  // 纠正：用玩家声明物种覆盖 selectedBox
+                  const corrected = {
+                    ...flow.selectedBox!,
+                    species: s,
+                    id: `correct-${s}`,
+                    confidence: Math.min(flow.selectedBox!.confidence, 0.84),
+                    label: `user_correct:${s}`,
+                  }
+                  dispatch({ type: 'DETECT_SUCCESS', detectInferenceId: flow.detectInferenceId || 'user-correct', detections: [corrected] })
+                }}
+              >
+                改成{s === 'cat' ? '猫' : s === 'dog' ? '狗' : '鹅'}
+              </button>
+            ))}
+        </div>
+      )}
+
       {flow.phase === 'failed' && (
         <button
           type="button"
@@ -315,6 +386,8 @@ export default function DiscoverScreen({
           重新开始
         </button>
       )}
+
+      <WelfareNotice />
 
       <ActionButton
         onClick={onPrimary}

@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -43,6 +44,9 @@ type valueRequest struct {
 	Composition         int    `json:"composition"`
 	Pose                int    `json:"pose"`
 	Angle               int    `json:"angle"`
+	// ParentInferenceID 应为 analyze 推理 ID（生产链路）；可选兼容旧客户端
+	ParentInferenceID  string `json:"parent_inference_id"`
+	AnalyzeInferenceID string `json:"analyze_inference_id"`
 }
 
 // Generate POST /value/generate
@@ -90,17 +94,46 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 
 	if h.inferenceRepo != nil {
 		id := uuid.NewString()
+		parent := req.ParentInferenceID
+		if parent == "" {
+			parent = req.AnalyzeInferenceID
+		}
+		// 校验父链路：若提供 parent，须为同设备 analyze/detect 成功记录
+		if parent != "" {
+			p, err := h.inferenceRepo.FindForDevice(parent, deviceID)
+			if err != nil || (p.Kind != "analyze" && p.Kind != "detect") || (p.Status != "success" && p.Status != "consumed") {
+				c.JSON(http.StatusConflict, gin.H{"error": "invalid parent inference", "reason_code": "lineage_invalid"})
+				return
+			}
+		}
+		payload, _ := json.Marshal(map[string]interface{}{
+			"species": req.Species,
+			"breed":   req.Breed,
+			"rarity":  result.Rarity,
+			"hp":      result.HP,
+			"atk":     result.ATK,
+			"def":     result.DEF,
+			"spd":     result.SPD,
+			"class":   result.Class,
+			"element": result.Element,
+		})
+		exp := time.Now().UTC().Add(24 * time.Hour)
 		_ = h.inferenceRepo.Create(&models.Inference{
-			InferenceID:   id,
-			DeviceID:      deviceID,
-			Kind:          "value",
-			Provider:      "llm",
-			Model:         result.Model,
-			PromptVersion: result.PromptVersion,
-			InputDigest:   sha256Hex([]byte(fmt.Sprintf("%s|%s|%s", req.Species, req.Breed, req.Color))),
-			OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d|%d|%s", result.Rarity, result.HP, result.Class))),
-			Status:        "success",
-			DurationMs:    time.Since(start).Milliseconds(),
+			InferenceID:       id,
+			DeviceID:          deviceID,
+			Kind:              "value",
+			ParentInferenceID: parent,
+			Provider:          "llm",
+			Model:             result.Model,
+			PromptVersion:     result.PromptVersion,
+			InputDigest:       sha256Hex([]byte(fmt.Sprintf("%s|%s|%s", req.Species, req.Breed, req.Color))),
+			OutputDigest:      sha256Hex([]byte(fmt.Sprintf("%d|%d|%s", result.Rarity, result.HP, result.Class))),
+			ResultJSON:        string(payload),
+			Species:           req.Species,
+			ConfigVersion:     "value-v1",
+			Status:            "success",
+			DurationMs:        time.Since(start).Milliseconds(),
+			ExpiresAt:         &exp,
 		})
 		result.InferenceID = id
 	}

@@ -123,11 +123,45 @@ type BackendDetectResponse = {
   source?: string
 }
 
-function mapSpecies(raw?: string): SpeciesType {
-  const s = (raw || '').toLowerCase()
-  if (s.includes('cat') || s.includes('猫')) return 'cat'
-  if (s.includes('dog') || s.includes('狗')) return 'dog'
-  return 'goose'
+/** 权威可捕获物种；未知不默认为鹅 */
+export type TaxonomySpecies = SpeciesType | 'unknown' | 'unsupported'
+
+const CAPTURABLE: SpeciesType[] = ['cat', 'dog', 'goose']
+
+/**
+ * 将后端/模型原始标签映射为权威物种。
+ * 有限别名表；鸭/天鹅/鸟/人/玩偶/空标签 → null（不进入捕获），禁止默认 goose。
+ */
+export function mapSpecies(raw?: string): SpeciesType | null {
+  const original = (raw || '').trim()
+  const s = original.toLowerCase().replace(/_/g, ' ')
+  if (!s) return null
+
+  const unsupportedExact = new Set([
+    'bird', 'duck', 'swan', 'chicken', 'rooster', 'hen', 'pigeon', 'dove', 'parrot',
+    'human', 'person', 'people', 'man', 'woman', 'child', 'baby',
+    'toy', 'doll', 'plush', 'statue', 'screen', 'phone',
+    '鸟', '鸭', '鸭子', '天鹅', '鸡', '人', '人类', '玩偶', '玩具', '屏幕',
+  ])
+  if (unsupportedExact.has(s)) return null
+  if (['duck', 'swan', 'bird', 'chicken', 'human', 'person', 'toy', 'doll', 'screen', '鸭', '天鹅', '鸟', '人', '玩偶', '屏幕'].some((k) => s.includes(k))) {
+    return null
+  }
+
+  if (s === 'cat' || s === 'kitten' || s === 'feline' || s.includes('猫')) return 'cat'
+  if (s.includes('cat') && !s.includes('cattle') && !s.includes('caterpillar')) return 'cat'
+
+  if (s === 'dog' || s === 'puppy' || s === 'canine' || s.includes('狗') || s.includes('犬')) return 'dog'
+  if (s.includes('dog')) return 'dog'
+
+  if (s === 'goose' || s === 'geese' || s === 'gander' || s === 'gosling') return 'goose'
+  if ((s.includes('goose') || s.includes('geese') || s.includes('鹅')) && !s.includes('mongoose')) return 'goose'
+
+  return null
+}
+
+export function isCapturableSpecies(s: string | null | undefined): s is SpeciesType {
+  return !!s && (CAPTURABLE as string[]).includes(s)
 }
 
 function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
@@ -138,20 +172,27 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
     (typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `detect-${Date.now()}`)
-  const animals: DetectionResult[] = (data.animals || []).map((a) => {
+  const animals: DetectionResult[] = []
+  for (const a of data.animals || []) {
+    const mapped = mapSpecies(a.species || a.label)
+    if (!mapped) {
+      // 未知/不支持：保留 label 仅用于审计，不进入捕获列表
+      continue
+    }
     const bb = a.bounding_box || {}
-    return {
-      species: mapSpecies(a.species || a.label),
+    animals.push({
+      species: mapped,
       confidence: Math.round((a.confidence || 0) * 1000) / 1000,
       boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
       label: a.label || a.species,
       inferenceId,
-    }
-  })
+    })
+  }
+  animals.sort((x, y) => y.confidence - x.confidence || x.species.localeCompare(y.species))
   return {
     animals,
     inferenceId,
-    degraded: data.degraded,
+    degraded: data.degraded || data.source === 'mock',
     source: data.source,
   }
 }

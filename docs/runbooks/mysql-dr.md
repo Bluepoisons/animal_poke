@@ -14,7 +14,7 @@
 3. 备份账号最小权限；凭据只在 Secret Manager。
 
 ## 逻辑备份（集群内 CronJob）
-见 `deploy/k8s/mysql-backup-cronjob.yaml`。将产物上传到加密对象存储。
+见 `deploy/k8s/overlays/production/mysql-backup-cronjob.yaml`（仅 production overlay，禁止引入 staging）。将产物上传到加密对象存储。
 
 ## 季度恢复演练清单
 1. 在隔离 namespace 创建临时 MySQL。

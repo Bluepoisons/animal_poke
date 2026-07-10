@@ -1,3 +1,70 @@
+
+/* ===== Safe area + fixed chrome layout (#190) ===== */
+.ap-root {
+  --ap-safe-top: env(safe-area-inset-top, 0px);
+  --ap-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ap-safe-left: env(safe-area-inset-left, 0px);
+  --ap-safe-right: env(safe-area-inset-right, 0px);
+  --ap-tab-h: 64px;
+  --ap-top-h: 52px;
+  padding-top: max(12px, var(--ap-safe-top));
+  padding-bottom: max(12px, var(--ap-safe-bottom));
+  padding-left: max(12px, var(--ap-safe-left));
+  padding-right: max(12px, var(--ap-safe-right));
+}
+
+.ap-phone {
+  display: flex;
+  flex-direction: column;
+  height: min(100dvh - 24px - var(--ap-safe-top) - var(--ap-safe-bottom), var(--frame-min-h, 780px));
+  max-height: 100dvh;
+}
+
+.ap-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(var(--ap-tab-h) + var(--ap-safe-bottom) + 12px);
+  padding-top: 8px;
+}
+
+.ap-screen--map {
+  padding-bottom: calc(12px + var(--ap-safe-bottom));
+}
+
+.ap-bottom-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  flex: 0 0 auto;
+  min-height: var(--ap-tab-h);
+  padding-bottom: max(6px, var(--ap-safe-bottom));
+  background: rgba(255, 253, 248, 0.94);
+  backdrop-filter: blur(8px);
+  border-top: 2px solid rgba(43, 43, 43, 0.12);
+}
+
+.ap-top-bar,
+.ap-page-title {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: rgba(255, 253, 248, 0.92);
+  backdrop-filter: blur(6px);
+  padding-top: max(4px, calc(var(--ap-safe-top) * 0.25));
+}
+
+/* touch targets */
+.ap-bottom-tabs button,
+.ap-action-button,
+.ap-map-chip {
+  min-height: 44px;
+  min-width: 44px;
+}
+
 /* Animal Poke — Studygram Notebook Kawaii */
 
 .ap-root {
@@ -1259,5 +1326,48 @@
 @media (min-width: 431px) {
   .ap-phone {
     width: min(100vw - 24px, var(--frame-max));
+  }
+}
+
+.ap-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ap-main > .ap-screen {
+  flex: 1;
+}
+
+/* ===== A11y (#191) ===== */
+.ap-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: #2B2B2B;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.ap-skip-link:focus {
+  left: 12px;
+  top: 12px;
+}
+.ap-bottom-tabs button:focus-visible,
+.ap-action-button:focus-visible,
+.ap-map-chip:focus-visible,
+.ap-pokedex-tabs button:focus-visible,
+.ap-strategy-row button:focus-visible {
+  outline: 3px solid #6FA3D2;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-scan-line,
+  .ap-toast,
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
