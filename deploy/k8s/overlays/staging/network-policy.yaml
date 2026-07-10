@@ -1,0 +1,88 @@
+# Staging network isolation: deny cross-namespace traffic by default.
+# Staging must not reach production Services (e.g. mysql.production).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: staging-default-deny-ingress
+  namespace: staging
+  labels:
+    app.kubernetes.io/part-of: animal-poke
+    environment: staging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Allow DNS within cluster
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow traffic within the staging namespace only
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: staging
+    # Allow egress to public HTTPS (external APIs); never to production namespace
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # RFC1918 private ranges are still allowed for in-cluster Services
+              # in the same namespace via the rule above; production namespace
+              # traffic is blocked by the absence of a cross-namespace allow.
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+  ingress:
+    # Ingress controller / same-namespace only
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: staging
+        - namespaceSelector:
+            matchLabels:
+              # typical ingress-nginx namespace label; adjust per cluster
+              app.kubernetes.io/name: ingress-nginx
+---
+# Explicit deny: staging pods cannot talk to production namespace Services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: staging-deny-production-namespace
+  namespace: staging
+  labels:
+    app.kubernetes.io/part-of: animal-poke
+    environment: staging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # Empty egress with a separate deny is not how NPs work; the default-deny
+    # above already blocks production. This policy documents intent and is a
+    # no-op allow-list reminder: only kube-system DNS + staging + public HTTPS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: staging
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

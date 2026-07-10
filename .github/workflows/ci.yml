@@ -137,14 +137,35 @@ jobs:
         run: |
           curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz | tar xz
           sudo mv kustomize /usr/local/bin/
-      - name: Build production overlay
+          kustomize version
+      - name: Render & assert overlays (IMAGE_TAG=$GITHUB_SHA)
+        env:
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          # 替换镜像占位后 build
-          sed -i 's/__IMAGE_TAG__/ci/g' deploy/k8s/base/backend.yaml deploy/k8s/base/frontend.yaml
-          sed -i 's/__API_HOST__/api.animal-poke.example.com/g; s/__APP_HOST__/app.animal-poke.example.com/g' deploy/k8s/base/ingress.yaml
-          kustomize build deploy/k8s/overlays/production > /tmp/prod.yaml
-          test -s /tmp/prod.yaml
-          grep -q animal-poke-backend /tmp/prod.yaml
+          set -euo pipefail
+          chmod +x deploy/k8s/scripts/assert-manifests.sh
+          # Build both overlays with immutable commit SHA and fail on any isolation/tag violation.
+          deploy/k8s/scripts/assert-manifests.sh
+      - name: Extra staging isolation grep (belt-and-suspenders)
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          cp -a deploy/k8s/. "$work/k8s/"
+          (
+            cd "$work/k8s/overlays/staging"
+            kustomize edit set image \
+              "registry.cn-beijing.aliyuncs.com/animal-poke/backend:${IMAGE_TAG}" \
+              "registry.cn-beijing.aliyuncs.com/animal-poke/frontend:${IMAGE_TAG}"
+            kustomize build . > /tmp/staging.yaml
+          )
+          # Fail hard if any production host / mutable tag / placeholder leaks in.
+          ! grep -E 'mysql\.production\.svc|:dev|:latest|:ci|__IMAGE_TAG__|0\.0\.0-unset' /tmp/staging.yaml
+          grep -q 'mysql.staging.svc.cluster.local' /tmp/staging.yaml
+          grep -q "backend:${IMAGE_TAG}" /tmp/staging.yaml
+          grep -q "frontend:${IMAGE_TAG}" /tmp/staging.yaml
+          grep -q 'staging-backend-secrets' /tmp/staging.yaml
 
   secret-scan:
     name: Secret scan

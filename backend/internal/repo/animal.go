@@ -195,32 +195,88 @@ func (r *InferenceRepo) Find(inferenceID string) (*models.Inference, error) {
 	return &inf, nil
 }
 
-// Consume 一次性消费成功推理（幂等：已 consumed 返回错误）。
+// Sentinel errors for inference consume / lineage.
+var (
+	ErrInferenceNotFound        = errors.New("inference not found")
+	ErrInferenceAlreadyUsed     = errors.New("inference already consumed")
+	ErrInferenceNotSuccess      = errors.New("inference not successful")
+	ErrInferenceWrongKind       = errors.New("inference kind not allowed")
+	ErrInferenceExpired         = errors.New("inference expired")
+	ErrInferenceDeviceMismatch  = errors.New("inference device mismatch")
+	ErrInferenceSpeciesMismatch = errors.New("inference species mismatch")
+	ErrInferenceTampered        = errors.New("inference result mismatch")
+)
+
+// Consume 原子消费成功推理：条件 UPDATE status=success → consumed，要求 RowsAffected==1。
+// 仅允许 kind=value 用于创建动物（detect/analyze 不可消费落库）。
 func (r *InferenceRepo) Consume(tx *gorm.DB, inferenceID, deviceID string) (*models.Inference, error) {
+	return r.ConsumeValue(tx, inferenceID, deviceID, "")
+}
+
+// ConsumeValue 原子消费 value 推理，可选校验 species。
+func (r *InferenceRepo) ConsumeValue(tx *gorm.DB, inferenceID, deviceID, expectedSpecies string) (*models.Inference, error) {
 	db := r.db
 	if tx != nil {
 		db = tx
 	}
+	if inferenceID == "" {
+		return nil, ErrInferenceNotFound
+	}
+	now := time.Now().UTC()
+
+	// 先读出权威结果（同事务内），再条件更新
 	var inf models.Inference
 	err := db.Where("inference_id = ? AND device_id = ?", inferenceID, deviceID).First(&inf).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrInferenceNotFound
+		}
 		return nil, err
+	}
+	if inf.DeviceID != deviceID {
+		return nil, ErrInferenceDeviceMismatch
+	}
+	if inf.Kind != "value" {
+		return nil, ErrInferenceWrongKind
 	}
 	if inf.Status == "consumed" {
-		return nil, errors.New("inference already consumed")
+		return nil, ErrInferenceAlreadyUsed
 	}
 	if inf.Status != "success" {
-		return nil, errors.New("inference not successful")
+		return nil, ErrInferenceNotSuccess
 	}
-	now := time.Now().UTC()
-	if err := db.Model(&inf).Updates(map[string]interface{}{
-		"status":      "consumed",
-		"consumed_at": now,
-	}).Error; err != nil {
-		return nil, err
+	if inf.ExpiresAt != nil && !inf.ExpiresAt.IsZero() && now.After(*inf.ExpiresAt) {
+		return nil, ErrInferenceExpired
+	}
+	if expectedSpecies != "" && inf.Species != "" && inf.Species != expectedSpecies {
+		return nil, ErrInferenceSpeciesMismatch
+	}
+
+	res := db.Model(&models.Inference{}).
+		Where("inference_id = ? AND device_id = ? AND status = ? AND kind = ?", inferenceID, deviceID, "success", "value").
+		Updates(map[string]interface{}{
+			"status":      "consumed",
+			"consumed_at": now,
+		})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected != 1 {
+		// 并发下另一请求已消费
+		return nil, ErrInferenceAlreadyUsed
 	}
 	inf.Status = "consumed"
 	inf.ConsumedAt = &now
+	return &inf, nil
+}
+
+// FindForDevice 按设备作用域查找。
+func (r *InferenceRepo) FindForDevice(inferenceID, deviceID string) (*models.Inference, error) {
+	var inf models.Inference
+	err := r.db.Where("inference_id = ? AND device_id = ?", inferenceID, deviceID).First(&inf).Error
+	if err != nil {
+		return nil, err
+	}
 	return &inf, nil
 }
 

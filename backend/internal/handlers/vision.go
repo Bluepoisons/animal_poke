@@ -153,6 +153,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		// 不保留原图；仅摘要
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
+			exp := time.Now().UTC().Add(2 * time.Hour)
 			_ = h.inferenceRepo.Create(&models.Inference{
 				InferenceID:   id,
 				DeviceID:      deviceID,
@@ -162,8 +163,10 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				PromptVersion: pver,
 				InputDigest:   digest,
 				OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d", len(r.Animals)))),
+				ConfigVersion: "detect-v1",
 				Status:        "success",
 				DurationMs:    time.Since(start).Milliseconds(),
+				ExpiresAt:     &exp,
 			})
 			r.InferenceID = id
 		}
@@ -178,17 +181,25 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		model, pver = r.Model, r.PromptVersion
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
+			exp := time.Now().UTC().Add(2 * time.Hour)
+			parent := c.PostForm("parent_inference_id")
+			if parent == "" {
+				parent = c.PostForm("detect_inference_id")
+			}
 			_ = h.inferenceRepo.Create(&models.Inference{
-				InferenceID:   id,
-				DeviceID:      deviceID,
-				Kind:          "analyze",
-				Provider:      "vision",
-				Model:         model,
-				PromptVersion: pver,
-				InputDigest:   digest,
-				OutputDigest:  sha256Hex([]byte(r.Breed + r.Color)),
-				Status:        "success",
-				DurationMs:    time.Since(start).Milliseconds(),
+				InferenceID:       id,
+				DeviceID:          deviceID,
+				Kind:              "analyze",
+				ParentInferenceID: parent,
+				Provider:          "vision",
+				Model:             model,
+				PromptVersion:     pver,
+				InputDigest:       digest,
+				OutputDigest:      sha256Hex([]byte(r.Breed + r.Color)),
+				ConfigVersion:     "analyze-v1",
+				Status:            "success",
+				DurationMs:        time.Since(start).Milliseconds(),
+				ExpiresAt:         &exp,
 			})
 			r.InferenceID = id
 		}

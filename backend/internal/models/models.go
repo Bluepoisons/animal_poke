@@ -76,18 +76,24 @@ func (AuditLog) TableName() string { return "audit_logs" }
 
 // Inference 服务端推理凭证与 provenance。
 type Inference struct {
-	ID            uint       `gorm:"primaryKey" json:"id"`
-	InferenceID   string     `gorm:"uniqueIndex;size:64;not null" json:"inference_id"`
-	DeviceID      string     `gorm:"index;size:64;not null" json:"device_id"`
-	Kind          string     `gorm:"size:32;not null" json:"kind"` // detect|analyze|value
-	Provider      string     `gorm:"size:64" json:"provider"`
-	Model         string     `gorm:"size:128" json:"model"`
-	PromptVersion string     `gorm:"size:32" json:"prompt_version"`
-	PromptHash    string     `gorm:"size:64" json:"prompt_hash"`
-	InputDigest   string     `gorm:"size:64" json:"input_digest"`                    // 图片/输入摘要，不含原图
-	OutputDigest  string     `gorm:"size:64" json:"output_digest"`                   // 输出摘要
+	ID                uint   `gorm:"primaryKey" json:"id"`
+	InferenceID       string `gorm:"uniqueIndex;size:64;not null" json:"inference_id"`
+	DeviceID          string `gorm:"index;size:64;not null" json:"device_id"`
+	Kind              string `gorm:"size:32;not null" json:"kind"` // detect|analyze|value
+	ParentInferenceID string `gorm:"index;size:64" json:"parent_inference_id,omitempty"`
+	Provider          string `gorm:"size:64" json:"provider"`
+	Model             string `gorm:"size:128" json:"model"`
+	PromptVersion     string `gorm:"size:32" json:"prompt_version"`
+	PromptHash        string `gorm:"size:64" json:"prompt_hash"`
+	InputDigest       string `gorm:"size:64" json:"input_digest"`  // 图片/输入摘要，不含原图
+	OutputDigest      string `gorm:"size:64" json:"output_digest"` // 输出摘要
+	// ResultJSON 权威结果摘要（value: rarity/stats/species；detect/analyze: 关键字段）
+	ResultJSON    string     `gorm:"type:text" json:"result_json,omitempty"`
+	Species       string     `gorm:"size:32" json:"species,omitempty"`
+	ConfigVersion string     `gorm:"size:32" json:"config_version,omitempty"`
 	Status        string     `gorm:"size:32;not null;default:success" json:"status"` // success|failed|consumed
 	DurationMs    int64      `json:"duration_ms"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	ConsumedAt    *time.Time `json:"consumed_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 }

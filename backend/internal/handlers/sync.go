@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -97,8 +98,8 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	}
 	if exists {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "animal already exists",
-			"uuid": req.UUID,
+			"error":       "animal already exists",
+			"uuid":        req.UUID,
 			"reason_code": "duplicate_animal",
 		})
 		return
@@ -140,17 +141,73 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 		animal.PreciseExpiresAt = &exp
 	}
 
-	// 事务：消费 inference + 落库 + 审计
+	// 服务端权威：有 InferenceRepo 时强制 value inference
+	if h.inferenceRepo != nil && req.InferenceRequestID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "inference_request_id required", "reason_code": "inference_required"})
+		return
+	}
+
+	// 事务：原子消费 value inference + 用服务端结果覆盖关键字段 + 落库 + 审计
 	var review string
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		animalRepo := h.animalRepo.WithTx(tx)
 		auditRepo := repo.NewAuditLogRepo(tx)
 		audit := h.auditService.WithTx(animalRepo, auditRepo)
 
-		if req.InferenceRequestID != "" && h.inferenceRepo != nil {
-			if _, err := h.inferenceRepo.WithTx(tx).Consume(tx, req.InferenceRequestID, deviceID); err != nil {
-				// 允许 value 凭证缺失时仅告警路径；严格模式拒绝
+		if h.inferenceRepo != nil {
+			inf, err := h.inferenceRepo.WithTx(tx).ConsumeValue(tx, req.InferenceRequestID, deviceID, req.Species)
+			if err != nil {
 				return err
+			}
+			// 从服务端 ResultJSON 构造权威字段，拒绝客户端重抽稀有度
+			if inf.ResultJSON != "" {
+				var auth struct {
+					Species string `json:"species"`
+					Breed   string `json:"breed"`
+					Rarity  int    `json:"rarity"`
+					HP      int    `json:"hp"`
+					ATK     int    `json:"atk"`
+					DEF     int    `json:"def"`
+					SPD     int    `json:"spd"`
+					Class   string `json:"class"`
+					Element string `json:"element"`
+				}
+				if err := json.Unmarshal([]byte(inf.ResultJSON), &auth); err == nil {
+					// 严格比对或覆盖：客户端伪造 legendary/超范围属性将被覆盖为服务端值
+					if auth.Species != "" {
+						animal.Species = auth.Species
+					}
+					if auth.Breed != "" {
+						animal.Breed = auth.Breed
+					}
+					if auth.Rarity > 0 {
+						animal.Rarity = auth.Rarity
+					}
+					if auth.HP > 0 {
+						animal.HP = auth.HP
+					}
+					if auth.ATK > 0 {
+						animal.ATK = auth.ATK
+					}
+					if auth.DEF > 0 {
+						animal.DEF = auth.DEF
+					}
+					if auth.SPD > 0 {
+						animal.SPD = auth.SPD
+					}
+					if auth.Class != "" {
+						animal.Class = auth.Class
+					}
+					if auth.Element != "" {
+						animal.Element = auth.Element
+					}
+				}
+			} else if inf.Species != "" {
+				animal.Species = inf.Species
+			}
+			// 范围校验（服务端权威后仍保证边界）
+			if animal.Rarity < 1 || animal.Rarity > 5 {
+				return repo.ErrInferenceTampered
 			}
 		}
 
@@ -166,22 +223,30 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
 			c.JSON(http.StatusConflict, gin.H{
-				"error": "animal already exists",
-				"uuid": req.UUID,
+				"error":       "animal already exists",
+				"uuid":        req.UUID,
 				"reason_code": "duplicate_animal",
 			})
 			return
 		}
-		if req.InferenceRequestID != "" {
-			msg := err.Error()
+		if req.InferenceRequestID != "" || h.inferenceRepo != nil {
 			switch {
-			case msg == "inference already consumed" || contains(msg, "already consumed"):
+			case errors.Is(err, repo.ErrInferenceAlreadyUsed):
 				c.JSON(http.StatusConflict, gin.H{"error": "inference already consumed", "reason_code": "inference_consumed"})
 				return
-			case contains(msg, "expired"):
+			case errors.Is(err, repo.ErrInferenceExpired):
 				c.JSON(http.StatusConflict, gin.H{"error": "inference expired", "reason_code": "inference_expired"})
 				return
-			case msg == "inference not successful" || errors.Is(err, gorm.ErrRecordNotFound) || contains(msg, "inference"):
+			case errors.Is(err, repo.ErrInferenceWrongKind):
+				c.JSON(http.StatusConflict, gin.H{"error": "detect/analyze inference cannot create animals", "reason_code": "inference_wrong_kind"})
+				return
+			case errors.Is(err, repo.ErrInferenceSpeciesMismatch), errors.Is(err, repo.ErrInferenceTampered):
+				c.JSON(http.StatusConflict, gin.H{"error": "forged or mismatched stats rejected", "reason_code": "inference_tampered"})
+				return
+			case errors.Is(err, repo.ErrInferenceNotFound), errors.Is(err, repo.ErrInferenceNotSuccess), errors.Is(err, gorm.ErrRecordNotFound):
+				c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
+				return
+			case contains(err.Error(), "inference"):
 				c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
 				return
 			}
@@ -262,9 +327,51 @@ func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string)
 		ar := h.animalRepo.WithTx(tx)
 		auditRepo := repo.NewAuditLogRepo(tx)
 		audit := h.auditService.WithTx(ar, auditRepo)
-		if req.InferenceRequestID != "" && h.inferenceRepo != nil {
-			if _, err := h.inferenceRepo.WithTx(tx).Consume(tx, req.InferenceRequestID, deviceID); err != nil {
+		if h.inferenceRepo != nil {
+			if req.InferenceRequestID == "" {
+				return errors.New("inference_request_id required")
+			}
+			inf, err := h.inferenceRepo.WithTx(tx).ConsumeValue(tx, req.InferenceRequestID, deviceID, req.Species)
+			if err != nil {
 				return err
+			}
+			if inf.ResultJSON != "" {
+				var auth struct {
+					Species string `json:"species"`
+					Rarity  int    `json:"rarity"`
+					HP      int    `json:"hp"`
+					ATK     int    `json:"atk"`
+					DEF     int    `json:"def"`
+					SPD     int    `json:"spd"`
+					Class   string `json:"class"`
+					Element string `json:"element"`
+				}
+				if json.Unmarshal([]byte(inf.ResultJSON), &auth) == nil {
+					if auth.Species != "" {
+						animal.Species = auth.Species
+					}
+					if auth.Rarity > 0 {
+						animal.Rarity = auth.Rarity
+					}
+					if auth.HP > 0 {
+						animal.HP = auth.HP
+					}
+					if auth.ATK > 0 {
+						animal.ATK = auth.ATK
+					}
+					if auth.DEF > 0 {
+						animal.DEF = auth.DEF
+					}
+					if auth.SPD > 0 {
+						animal.SPD = auth.SPD
+					}
+					if auth.Class != "" {
+						animal.Class = auth.Class
+					}
+					if auth.Element != "" {
+						animal.Element = auth.Element
+					}
+				}
 			}
 		}
 		_ = audit.CheckAnomaly(deviceID, animal)
@@ -294,6 +401,15 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 		}
 	}
 	limit := 50
+	if v := c.Query("limit"); v != "" {
+		var n int64
+		if _, err := parseInt64(v, &n); err == nil && n > 0 {
+			limit = int(n)
+			if limit > 200 {
+				limit = 200
+			}
+		}
+	}
 	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed"})
@@ -305,11 +421,19 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 		items[i].PreciseLng = nil
 		items[i].PreciseExpiresAt = nil
 	}
-	var next int64
+	var next int64 = since
 	if len(items) > 0 {
 		next = items[len(items)-1].ServerVersion
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "next_version": next})
+	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
+	hasMore := len(items) >= limit
+	c.JSON(http.StatusOK, gin.H{
+		"items":        items,
+		"next_version": next,
+		"next_cursor":  next,
+		"has_more":     hasMore,
+		"limit":        limit,
+	})
 }
 
 func isDuplicate(err error) bool {
