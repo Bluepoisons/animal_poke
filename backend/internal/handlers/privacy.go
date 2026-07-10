@@ -178,15 +178,20 @@ func (h *PrivacyHandler) GetDataRequest(c *gin.Context) {
 }
 
 // SecurityHandler 安全报告。
+// Nonce 使用 SharedCounter.SetNX（Redis SET NX EX 或内存 TTL map），禁止无界 map。
+// Fail-closed：共享存储错误时返回 503，避免跨 Pod 重放穿透；已知重放返回 409。
 type SecurityHandler struct {
 	db        *gorm.DB
 	auditRepo *repo.AuditLogRepo
-	nonces    map[string]time.Time // 简单重放防护；生产用 Redis
+	nonces    middleware.SharedCounter
 }
 
-// NewSecurityHandler 构造。
-func NewSecurityHandler(db *gorm.DB, audit *repo.AuditLogRepo) *SecurityHandler {
-	return &SecurityHandler{db: db, auditRepo: audit, nonces: map[string]time.Time{}}
+// NewSecurityHandler 构造；counter 为 nil 时使用进程内 MemorySharedCounter。
+func NewSecurityHandler(db *gorm.DB, audit *repo.AuditLogRepo, counter middleware.SharedCounter) *SecurityHandler {
+	if counter == nil {
+		counter = middleware.NewMemorySharedCounter()
+	}
+	return &SecurityHandler{db: db, auditRepo: audit, nonces: counter}
 }
 
 type securityReportRequest struct {
@@ -195,6 +200,7 @@ type securityReportRequest struct {
 }
 
 // Report POST /security/report
+// Nonce 策略：SET NX EX 5m；fail-closed on store error。
 func (h *SecurityHandler) Report(c *gin.Context) {
 	var req securityReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -205,12 +211,22 @@ func (h *SecurityHandler) Report(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nonce too long"})
 		return
 	}
-	// 重放检查
-	if exp, ok := h.nonces[req.Nonce]; ok && time.Now().Before(exp) {
+	// 重放检查：SharedCounter.SetNX（Redis 或内存 TTL）
+	nonceKey := middleware.KeyPrefixNonce + req.Nonce
+	ok, err := h.nonces.SetNX(c.Request.Context(), nonceKey, 5*time.Minute)
+	if err != nil {
+		// fail-closed：无法确认唯一性时拒绝
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":       "nonce store unavailable",
+			"reason_code": "nonce_store_error",
+		})
+		return
+	}
+	if !ok {
+		middleware.ObserveNonceReplay()
 		c.JSON(http.StatusConflict, gin.H{"error": "nonce replay", "reason_code": "replay"})
 		return
 	}
-	h.nonces[req.Nonce] = time.Now().Add(5 * time.Minute)
 
 	deviceID := middleware.GetDeviceID(c)
 	// 服务端重算风险：不信任客户端 score

@@ -41,6 +41,8 @@ tags:
     description: Admin audit APIs
   - name: Observability
     description: Metrics and operational endpoints
+  - name: Analytics
+    description: Privacy-friendly funnel event ingest
 
 paths:
   /health:
@@ -302,6 +304,33 @@ paths:
                 image:
                   type: string
                   format: binary
+                  description: Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
+                crop_x:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  description: Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region.
+                crop_y:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  description: Optional normalized crop origin Y (0..1).
+                crop_w:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1
+                  description: Optional normalized crop width (0..1).
+                crop_h:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1
+                  description: Optional normalized crop height (0..1).
+                parent_inference_id:
+                  type: string
+                  description: Optional parent detect inference id for audit linkage.
+                detect_inference_id:
+                  type: string
+                  description: Alias of parent_inference_id.
       responses:
         "200":
           description: Analysis result
@@ -310,10 +339,14 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        "400":
+          description: Invalid image or crop box
         "401":
           $ref: "#/components/responses/Unauthorized"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -392,6 +425,10 @@ paths:
     post:
       tags: [Sync]
       summary: Upsert single animal (idempotent)
+      description: |
+        Validates and persists one animal. Single and batch share the same
+        validateAndSyncOne domain path. Returns stable reason_code on failure;
+        never leaks raw database errors.
       operationId: syncAnimal
       security:
         - bearerAuth: []
@@ -402,16 +439,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: "#/components/schemas/SyncAnimalRequest"
       responses:
-        "200":
+        "201":
           description: Synced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/SyncAnimalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
@@ -422,7 +459,12 @@ paths:
   /api/v1/sync/animals:
     post:
       tags: [Sync]
-      summary: Batch upsert animals
+      summary: Batch upsert animals (non-atomic per-item results)
+      description: |
+        Non-atomic batch: each item is validated and synced independently via
+        the same validateAndSyncOne path as POST /sync/animal. Max 100 items.
+        Response is always a results array with per-item status and reason_code;
+        raw DB errors are never returned.
       operationId: syncAnimalsBatch
       security:
         - bearerAuth: []
@@ -431,16 +473,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: "#/components/schemas/BatchSyncRequest"
       responses:
         "200":
-          description: Batch result
+          description: Per-item batch results
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/BatchSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -574,6 +616,94 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+
+
+  /api/v1/analytics/events:
+    post:
+      tags: [Analytics]
+      summary: Ingest privacy-safe funnel analytics events
+      operationId: ingestAnalyticsEvents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                schema_version:
+                  type: integer
+                  description: Client schema registry version
+                events:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [session_id, name, event_id, ts]
+                    properties:
+                      schema_version:
+                        type: integer
+                      session_id:
+                        type: string
+                        description: Pseudo-anonymous session id (not device token)
+                      name:
+                        type: string
+                        enum:
+                          - auth
+                          - camera_ok
+                          - scan
+                          - detect_result
+                          - capture_attempt
+                          - generate_stage
+                          - collection_complete
+                          - trade
+                          - battle_end
+                      ts:
+                        type: integer
+                        format: int64
+                      event_id:
+                        type: string
+                      coarse_location:
+                        type: object
+                        description: City/region only when location consented; never lat/lng
+                        properties:
+                          city:
+                            type: string
+                          region:
+                            type: string
+                          country:
+                            type: string
+                        additionalProperties: false
+                      experiment_id:
+                        type: string
+                      experiment_variant:
+                        type: string
+                      props:
+                        type: object
+                        additionalProperties: true
+                        description: Non-sensitive props; server drops photo/token/coords
+      responses:
+        "202":
+          description: Accepted (some events may be dropped)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: integer
+                  dropped:
+                    type: integer
+                  schema_version:
+                    type: integer
+                  request_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/v1/commerce/orders:
     post:
@@ -941,3 +1071,109 @@ components:
             additionalProperties: true
         inference_id:
           type: string
+    SyncAnimalRequest:
+      type: object
+      required: [uuid, species, rarity, generated_at]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        species:
+          type: string
+          description: capturable species (cat|dog|goose after normalize)
+        breed:
+          type: string
+          maxLength: 64
+        rarity:
+          type: integer
+          minimum: 1
+          maximum: 5
+        hp:
+          type: integer
+          minimum: 10
+          maximum: 100
+        atk:
+          type: integer
+          minimum: 5
+          maximum: 50
+        def:
+          type: integer
+          minimum: 5
+          maximum: 50
+        spd:
+          type: integer
+          minimum: 5
+          maximum: 50
+        class:
+          type: string
+          enum: [Warrior, Mage, Ranger, Tank, Support, Assassin]
+        element:
+          type: string
+          enum: [Fire, Water, Grass, Electric, Ice, Dark, Light, Earth, Wind]
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        city:
+          type: string
+          maxLength: 64
+        generated_at:
+          type: string
+          format: date-time
+        inference_request_id:
+          type: string
+          maxLength: 128
+        keep_precise_location:
+          type: boolean
+    SyncAnimalResponse:
+      type: object
+      required: [status, uuid]
+      properties:
+        status:
+          type: string
+          example: synced
+        uuid:
+          type: string
+          format: uuid
+        review_status:
+          type: string
+    BatchSyncRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SyncAnimalRequest"
+    BatchSyncItemResult:
+      type: object
+      required: [uuid, status]
+      properties:
+        uuid:
+          type: string
+        status:
+          type: string
+          enum: [synced, conflict, error]
+        error:
+          type: string
+        reason_code:
+          type: string
+          description: |
+            Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
+            invalid_class, invalid_element, invalid_coords, invalid_time,
+            invalid_string_length, species_unsupported, duplicate_animal,
+            batch_duplicate, inference_*, sync_failed, batch_too_large
+    BatchSyncResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchSyncItemResult"
