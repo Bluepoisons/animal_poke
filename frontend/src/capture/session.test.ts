@@ -10,7 +10,7 @@ describe('capture session', () => {
 
   it('settles only once', () => {
     let stamina = 100
-    const s = createCaptureSession({ power: 55 })
+    const s = createCaptureSession({ species: 'cat', power: 55 })
     const r1 = settleCapture({
       session: s,
       online: true,
@@ -35,7 +35,7 @@ describe('capture session', () => {
   })
 
   it('blocks offline and no stamina', () => {
-    const s = createCaptureSession({})
+    const s = createCaptureSession({ species: 'cat' })
     const offline = settleCapture({
       session: s,
       online: false,
@@ -44,7 +44,7 @@ describe('capture session', () => {
     })
     expect(offline.ok).toBe(false)
     const noSta = settleCapture({
-      session: createCaptureSession({}),
+      session: createCaptureSession({ species: 'cat' }),
       online: true,
       stamina: 10,
       consumeStamina: () => false,
