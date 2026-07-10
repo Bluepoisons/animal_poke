@@ -1,4 +1,4 @@
-.PHONY: run build tidy db-up db-down db-logs test test-integration test-cover
+.PHONY: run build tidy db-up db-down db-logs test test-integration test-cover test-vision-golden vision-golden-stub
 
 # 本地启动后端(需先起 MySQL)
 run:
@@ -36,3 +36,8 @@ test-integration:
 test-cover:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
+
+# AP-047: vision golden set contract tests (stub provider, no API keys)
+test-vision-golden vision-golden-stub:
+	@chmod +x scripts/vision-golden-stub.sh
+	./scripts/vision-golden-stub.sh

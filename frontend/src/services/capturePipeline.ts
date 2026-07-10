@@ -53,6 +53,21 @@ export interface AnalysisResult {
   degraded?: boolean
 }
 
+export interface ValueFactors {
+  photo_quality: number
+  completeness: number
+  species_weight: number
+  breed_weight: number
+  color_weight: number
+  base_score: number
+  random_jitter: number
+  final_score: number
+  roll?: number
+  quality_band: string
+  config_version?: string
+  seed_id?: string
+}
+
 export interface ValueResult {
   rarity: number // 1-5
   hp: number
@@ -62,6 +77,10 @@ export interface ValueResult {
   class: string
   element: string
   narrative: string
+  /** 生成依据（拍摄质量/完整度/物种规则/有限随机） */
+  factors?: ValueFactors
+  config_version?: string
+  seed_id?: string
   /** 服务端 value 阶段 inference_id（同步必须用此 ID） */
   inference_id?: string
   model?: string
@@ -149,6 +168,29 @@ export function validateAnalysis(raw: unknown): AnalysisResult {
   }
 }
 
+function parseFactors(raw: unknown): ValueFactors | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const f = raw as Record<string, unknown>
+  const num = (v: unknown, fb = 0) => {
+    const n = typeof v === 'number' ? v : Number(v)
+    return Number.isFinite(n) ? n : fb
+  }
+  return {
+    photo_quality: num(f.photo_quality),
+    completeness: num(f.completeness),
+    species_weight: num(f.species_weight),
+    breed_weight: num(f.breed_weight),
+    color_weight: num(f.color_weight),
+    base_score: num(f.base_score),
+    random_jitter: num(f.random_jitter),
+    final_score: num(f.final_score),
+    roll: f.roll === undefined ? undefined : num(f.roll),
+    quality_band: asString(f.quality_band, 'good'),
+    config_version: asString(f.config_version, '') || undefined,
+    seed_id: asString(f.seed_id, '') || undefined,
+  }
+}
+
 export function validateValue(raw: unknown): ValueResult {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   let petClass = asString(o.class, 'Ranger')
@@ -164,6 +206,9 @@ export function validateValue(raw: unknown): ValueResult {
     class: petClass,
     element,
     narrative: asString(o.narrative, 'A mysterious companion found in the wild.'),
+    factors: parseFactors(o.factors),
+    config_version: asString(o.config_version ?? o.configVersion, '') || undefined,
+    seed_id: asString(o.seed_id ?? o.seedId, '') || undefined,
     inference_id: pickInferenceId(o),
     model: asString(o.model, '') || undefined,
     prompt_version: asString(o.prompt_version ?? o.promptVersion, '') || undefined,
@@ -314,7 +359,14 @@ export async function runCaptureGeneration(
         composition: analysis!.composition,
         pose: analysis!.pose,
         angle: analysis!.angle,
-        ...(parentInference ? { inference_request_id: parentInference } : {}),
+        capture_id: sessionId,
+        ...(parentInference
+          ? {
+              parent_inference_id: parentInference,
+              analyze_inference_id: parentInference,
+              inference_request_id: parentInference,
+            }
+          : {}),
       }
       const raw = await authedRequest<unknown>({
         method: 'POST',
