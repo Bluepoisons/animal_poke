@@ -13,6 +13,9 @@ import WelfareNotice from '../components/WelfareNotice'
 import { announceRareReveal } from '../feedbackPrefs'
 import { registerCapture } from '../collectionValue'
 import { isForceCaptureSuccess } from '../../../e2eFlags'
+import { runCaptureGeneration } from '../../../services/capturePipeline'
+import { enqueueGeneratedAnimal, flushSyncQueue } from '../../../services/syncQueue'
+import { AnimalRepository } from '../../../db/repositories/animal-repository'
 import {
   BEST_MAX,
   BEST_MIN,
@@ -47,12 +50,12 @@ export default function CaptureScreen({
   species,
   detection,
   detectInferenceId,
-  photoBlob: _photoBlob,
+  photoBlob,
+  targetId,
   captureAttemptId,
   onSettled,
   onInvalidAccess,
 }: CaptureScreenProps) {
-  void _photoBlob
   const { state: staminaState, consumeStamina } = useStamina()
   const currentStamina = staminaState.currentStamina
   const profile = SPECIES_THROW_PROFILES[species]
@@ -164,7 +167,57 @@ export default function CaptureScreen({
         if (rare) onToast(rare)
         if (!settledOnce.current) {
           settledOnce.current = true
-          onSettled?.(true)
+          // Fire-and-forget analyze→value→sync pipeline (AP-014 hard gate)
+          void (async () => {
+            try {
+              let photoDataUrl = ''
+              if (photoBlob) {
+                photoDataUrl = await new Promise<string>((resolve, reject) => {
+                  const fr = new FileReader()
+                  fr.onload = () => resolve(String(fr.result || ''))
+                  fr.onerror = () => reject(fr.error || new Error('read_failed'))
+                  fr.readAsDataURL(photoBlob)
+                })
+              } else {
+                // E2E/minimal path: tiny jpeg data URL so FormData still posts
+                photoDataUrl =
+                  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGcP//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAQUCf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQMBAT8Bf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQIBAT8Bf//Z'
+              }
+              const generated = await runCaptureGeneration({
+                sessionId: captureAttemptId,
+                species,
+                photoDataUrl,
+                detectInferenceId,
+                targetId: targetId || detection.targetId,
+                boundingBox: detection.boundingBox,
+              })
+              await AnimalRepository.add({
+                id: generated.sessionId,
+                uuid: generated.sessionId,
+                species: generated.species as SpeciesType,
+                rarity: generated.value.rarity,
+                breed: generated.analysis.breed,
+                hp: generated.value.hp,
+                atk: generated.value.atk,
+                def: generated.value.def,
+                spd: generated.value.spd,
+                className: generated.value.class,
+                element: generated.value.element,
+                narrative: generated.value.narrative,
+                capturedAt: Date.now(),
+                inferenceRequestId: generated.valueInferenceId || generated.inferenceRequestId,
+                synced: false,
+              } as never)
+              await enqueueGeneratedAnimal(generated)
+              await flushSyncQueue()
+              onToast('捕获成功')
+              onSettled?.(true)
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'pipeline_failed'
+              onToast(`生成失败：${msg}`)
+              onSettled?.(false)
+            }
+          })()
         }
       } else if (result.reason === 'no_stamina') {
         onToast('体力不足')
@@ -180,7 +233,7 @@ export default function CaptureScreen({
       }
       return next
     })
-  }, [att?.phase, currentStamina, consumeStamina, onToast, onSettled, species, profile.bestMin, profile.bestMax])
+  }, [att?.phase, currentStamina, consumeStamina, onToast, onSettled, species, profile.bestMin, profile.bestMax, photoBlob, detectInferenceId, targetId, detection, captureAttemptId])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!outdoor.allowed) return

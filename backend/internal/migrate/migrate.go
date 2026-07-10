@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0008_commerce_security"
+const CurrentVersion = "0009_check_constraints"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -75,6 +75,7 @@ func allMigrations() []migrationSpec {
 		{"0006_inference_lineage", migrate0006},
 		{"0007_idempotency_keys", migrate0007},
 		{"0008_commerce_security", migrate0008},
+		{"0009_check_constraints", migrate0009},
 	}
 }
 
@@ -203,4 +204,30 @@ func WriteStatus(w io.Writer, db *gorm.DB) error {
 	}
 	_, err = io.WriteString(w, FormatStatus(s))
 	return err
+}
+
+// migrate0009 业务 CHECK 约束（MySQL 8.0.16+ 强制执行；SQLite 测试忽略失败）。
+func migrate0009(db *gorm.DB) error {
+	// 用原生 SQL 加约束；重复执行时忽略已存在错误。
+	stmts := []string{
+		`ALTER TABLE animals ADD CONSTRAINT chk_animals_rarity CHECK (rarity >= 1 AND rarity <= 5)`,
+		`ALTER TABLE animals ADD CONSTRAINT chk_animals_species CHECK (species IN ('cat','dog','goose'))`,
+		`ALTER TABLE products ADD CONSTRAINT chk_products_price CHECK (price_cents >= 0)`,
+	}
+	for _, s := range stmts {
+		if err := db.Exec(s).Error; err != nil {
+			msg := strings.ToLower(err.Error())
+			// MySQL: Duplicate check constraint name / already exists
+			if strings.Contains(msg, "duplicate") || strings.Contains(msg, "already exists") || strings.Contains(msg, "check constraint") && strings.Contains(msg, "exists") {
+				continue
+			}
+			// SQLite AutoMigrate path may not support ALTER CHECK the same way — soft skip in non-mysql
+			if strings.Contains(msg, "syntax") || strings.Contains(msg, "near") {
+				slog.Warn("skip CHECK constraint on non-MySQL dialect", "err", err)
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
