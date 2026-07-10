@@ -1,0 +1,11 @@
+# CODEOWNERS — 关键路径需要对应 owner 评审
+# 用户名需与 GitHub 账号一致
+
+* @Bluepoisons @isaac-sun @ji233-Sun
+
+/backend/ @ji233-Sun @isaac-sun
+/deploy/ @isaac-sun
+/.github/ @isaac-sun
+/docs/openapi.yaml @isaac-sun @ji233-Sun
+/frontend/ @Bluepoisons
+/docs/游戏开发计划.md @Bluepoisons
