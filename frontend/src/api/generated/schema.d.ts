@@ -132,8 +132,118 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register device and issue JWT */
+        /**
+         * Register device and issue JWT
+         * @description First registration generates an `installation_secret` (returned once).
+         *     Subsequent token refresh must include the secret; knowing only `device_id` is insufficient.
+         */
         post: operations["authDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind current device to email or mock OAuth account
+         * @description Guest remains default. Binding creates or attaches an account, merges guest
+         *     animals/entitlements without double-granting rewards. Credentials are stored hashed.
+         */
+        post: operations["authBind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login with email/mock OAuth to recover after clearing local data */
+        post: operations["authLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout current device (bump token version, clear refresh hash) */
+        post: operations["authLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current account profile (guest if unbound) */
+        get: operations["authAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List devices linked to current account */
+        get: operations["authListDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/devices/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a lost device */
+        post: operations["authRevokeDevice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -200,7 +310,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Analyze animal image */
+        /** Analyze selected animal target from a prior detect */
         post: operations["visionAnalyze"];
         delete?: never;
         options?: never;
@@ -356,7 +466,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/analytics/events": {
+    "/api/v1/safety/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -365,8 +475,29 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ingest privacy-safe funnel analytics events */
-        post: operations["ingestAnalyticsEvents"];
+        /**
+         * Report abuse, injured animals, or other moderation concerns
+         * @description Structured safety report path. Never accepts original images.
+         *     Decision codes are public and stable; model internals are not returned.
+         */
+        post: operations["safetyReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Account privacy/social defaults (stricter for minors) */
+        get: operations["accountDefaults"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -499,6 +630,8 @@ export interface components {
         Error: {
             error?: string;
             reason_code?: string;
+            /** @description Whether the client may retry the request */
+            retryable?: boolean;
             request_id?: string;
         };
         ServiceUnavailableError: {
@@ -506,6 +639,7 @@ export interface components {
             error: string;
             /** @example db_unavailable */
             reason_code: string;
+            retryable?: boolean;
             request_id?: string;
         };
         HealthResponse: {
@@ -533,12 +667,72 @@ export interface components {
         AuthDeviceRequest: {
             /** @description UUID or 8-64 alphanumeric/_- */
             device_id: string;
+            /** @description Required after first registration; proves device ownership */
+            installation_secret?: string;
         };
         AuthDeviceResponse: {
             token: string;
             expires_at: string;
             /** @example Bearer */
             token_type: string;
+            account_id?: string;
+            guest?: boolean;
+        };
+        AuthBindRequest: {
+            /** @enum {string} */
+            provider: "email" | "mock_oauth";
+            /** Format: email */
+            email?: string;
+            password?: string;
+            oauth_subject?: string;
+            /** @description Mock OAuth secret; server stores only a hash */
+            oauth_token?: string;
+            display_name?: string;
+        };
+        AuthLoginRequest: {
+            device_id: string;
+            /** @enum {string} */
+            provider: "email" | "mock_oauth";
+            email?: string;
+            password?: string;
+            oauth_subject?: string;
+            oauth_token?: string;
+        };
+        AuthAccountResponse: {
+            token: string;
+            expires_at: string;
+            token_type: string;
+            account_id?: string;
+            /** @description Returned once; server stores only hash */
+            refresh_token?: string;
+            guest?: boolean;
+            merge?: {
+                animals_moved?: number;
+                animals_skipped?: number;
+                entitlements_moved?: number;
+                entitlements_merged?: number;
+                orders_moved?: number;
+            };
+        };
+        AuthAccountInfo: {
+            guest?: boolean;
+            account_id?: string;
+            display_name?: string;
+            status?: string;
+            device_id?: string;
+        };
+        AuthDeviceList: {
+            guest?: boolean;
+            account_id?: string;
+            items?: {
+                device_id?: string;
+                device_label?: string;
+                status?: string;
+                linked_at?: string;
+                last_seen_at?: string;
+                revoked_at?: string;
+                current?: boolean;
+            }[];
         };
         CityResponse: {
             city?: string;
@@ -555,62 +749,81 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        VisionDetectBox: {
+            /** @enum {string} */
+            species: "cat" | "dog" | "goose";
+            label?: string;
+            target_id: string;
+            confidence: number;
+            bounding_box: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
+        };
         VisionDetectResponse: {
-            animals?: {
-                [key: string]: unknown;
-            }[];
+            /** @description Backward-compatible alias of targets */
+            animals?: components["schemas"]["VisionDetectBox"][];
+            /** @description Multi-animal targets with stable target_id */
+            targets?: components["schemas"]["VisionDetectBox"][];
             inference_id?: string;
+            /** @description Public reason when empty or rejected (e.g. reject_portrait) */
+            reason_code?: string;
+            source?: string;
+            safety?: components["schemas"]["SafetySummary"];
         } & {
             [key: string]: unknown;
         };
-        SyncAnimalRequest: {
-            /** Format: uuid */
-            uuid: string;
-            /** @description capturable species (cat|dog|goose after normalize) */
-            species: string;
-            breed?: string;
-            rarity: number;
-            hp?: number;
-            atk?: number;
-            def?: number;
-            spd?: number;
-            /** @enum {string} */
-            class?: "Warrior" | "Mage" | "Ranger" | "Tank" | "Support" | "Assassin";
-            /** @enum {string} */
-            element?: "Fire" | "Water" | "Grass" | "Electric" | "Ice" | "Dark" | "Light" | "Earth" | "Wind";
-            latitude?: number;
-            longitude?: number;
-            city?: string;
-            /** Format: date-time */
-            generated_at: string;
-            inference_request_id?: string;
-            keep_precise_location?: boolean;
-        };
-        SyncAnimalResponse: {
-            /** @example synced */
-            status: string;
-            /** Format: uuid */
-            uuid: string;
-            review_status?: string;
-        };
-        BatchSyncRequest: {
-            items: components["schemas"]["SyncAnimalRequest"][];
-        };
-        BatchSyncItemResult: {
-            uuid: string;
-            /** @enum {string} */
-            status: "synced" | "conflict" | "error";
-            error?: string;
+        SafetySummary: {
+            allowed: boolean;
+            collectable: boolean;
             /**
-             * @description Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
-             *     invalid_class, invalid_element, invalid_coords, invalid_time,
-             *     invalid_string_length, species_unsupported, duplicate_animal,
-             *     batch_duplicate, inference_*, sync_failed, batch_too_large
+             * @description Public moderation code (no model internals)
+             * @enum {string}
              */
-            reason_code?: string;
+            decision_code: "ok" | "reject_portrait" | "reject_child_focus" | "reject_sensitive" | "reject_unsafe" | "flag_sensitive" | "flag_abuse" | "flag_injured";
+            /** @enum {string} */
+            action: "allow" | "reject" | "flag";
+            flags?: ("face" | "child" | "plate" | "house" | "abuse" | "injured")[];
+            /** @enum {string} */
+            report_path?: "abuse" | "injured";
         };
-        BatchSyncResponse: {
-            results: components["schemas"]["BatchSyncItemResult"][];
+        SafetyReportRequest: {
+            /** @enum {string} */
+            category: "abuse" | "injured" | "portrait" | "sensitive" | "other";
+            inference_id?: string;
+            note?: string;
+            decision_code?: string;
+        };
+        SafetyReportResponse: {
+            /** @example accepted */
+            status: string;
+            report_id: string;
+            decision_code: string;
+            category: string;
+            request_id?: string;
+        };
+        AccountDefaultsResponse: {
+            defaults?: {
+                /** @enum {string} */
+                audience?: "minor" | "adult";
+                strict?: boolean;
+                play_hours_start?: number;
+                play_hours_end?: number;
+                daily_limit_min?: number;
+                /** @enum {string} */
+                location_scope?: "none" | "city" | "precise";
+                social_enabled?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            config?: {
+                strict_minor_defaults?: boolean;
+            };
+            request_id?: string;
+            /** Format: date-time */
+            server_time?: string;
         };
     };
     responses: {
@@ -895,8 +1108,168 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authBind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthBindRequest"];
+            };
+        };
+        responses: {
+            /** @description Bound and token re-issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in; guest assets on device_id merged into account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example logged_out */
+                        status?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account or guest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authListDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthDeviceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    authRevokeDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    device_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Device revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        device_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Device not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getCity: {
@@ -996,43 +1369,46 @@ export interface operations {
                      * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
                      */
                     image: string;
-                    /** @description Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region. */
-                    crop_x?: number;
-                    /** @description Optional normalized crop origin Y (0..1). */
-                    crop_y?: number;
-                    /** @description Optional normalized crop width (0..1). */
-                    crop_w?: number;
-                    /** @description Optional normalized crop height (0..1). */
-                    crop_h?: number;
-                    /** @description Optional parent detect inference id for audit linkage. */
-                    parent_inference_id?: string;
-                    /** @description Alias of parent_inference_id. */
+                    /** @description Parent detect inference id (required when provenance is enabled) */
                     detect_inference_id?: string;
+                    /** @description Alias of detect_inference_id */
+                    parent_inference_id?: string;
+                    /** @description Stable target id from detect.targets */
+                    target_id?: string;
+                    /** @description Claimed species; must match locked detect target */
+                    species?: string;
+                    /** @description JSON bounding box {x,y,width,height} fractions 0-1 */
+                    box?: string;
+                    box_x?: number;
+                    box_y?: number;
+                    box_width?: number;
+                    box_height?: number;
                 };
             };
         };
         responses: {
-            /** @description Analysis result */
+            /** @description Analysis result for the locked target */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VisionAnalyzeResponse"];
                 };
             };
-            /** @description Invalid image or crop box */
-            400: {
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            /** @description Invalid model analysis output */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
-            401: components["responses"]["Unauthorized"];
-            413: components["responses"]["PayloadTooLarge"];
-            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
         };
     };
@@ -1268,7 +1644,7 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    ingestAnalyticsEvents: {
+    safetyReport: {
         parameters: {
             query?: never;
             header?: never;
@@ -1277,50 +1653,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description Client schema registry version */
-                    schema_version?: number;
-                    events: {
-                        schema_version?: number;
-                        /** @description Pseudo-anonymous session id (not device token) */
-                        session_id: string;
-                        /** @enum {string} */
-                        name: "auth" | "camera_ok" | "scan" | "detect_result" | "capture_attempt" | "generate_stage" | "collection_complete" | "trade" | "battle_end";
-                        /** Format: int64 */
-                        ts: number;
-                        event_id: string;
-                        /** @description City/region only when location consented; never lat/lng */
-                        coarse_location?: {
-                            city?: string;
-                            region?: string;
-                            country?: string;
-                        };
-                        experiment_id?: string;
-                        experiment_variant?: string;
-                        /** @description Non-sensitive props; server drops photo/token/coords */
-                        props?: {
-                            [key: string]: unknown;
-                        };
-                    }[];
-                };
+                "application/json": components["schemas"]["SafetyReportRequest"];
             };
         };
         responses: {
-            /** @description Accepted (some events may be dropped) */
+            /** @description Report accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        accepted?: number;
-                        dropped?: number;
-                        schema_version?: number;
-                        request_id?: string;
-                    };
+                    "application/json": components["schemas"]["SafetyReportResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    accountDefaults: {
+        parameters: {
+            query?: {
+                /** @description When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled) */
+                minor?: "0" | "1" | "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Defaults */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDefaultsResponse"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
         };
     };

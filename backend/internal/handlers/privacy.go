@@ -108,6 +108,8 @@ func (h *PrivacyHandler) PutConsent(c *gin.Context) {
 }
 
 // ExportData POST /privacy/export
+// 默认完整导出（分页循环 ListByDevice 直至空）；可选 ?cursor=<after_id> 仅返回一页便于大包分片。
+// 导出始终脱敏精确坐标；安全报告仅元数据（不含 payload 密钥/原文）。
 func (h *PrivacyHandler) ExportData(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
 	reqID := uuid.NewString()
@@ -119,15 +121,119 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
 		return
 	}
-	// 同步导出（小规模）
-	dev, _ := h.deviceRepo.Find(deviceID)
-	animals, _ := h.animalRepo.ListByDevice(deviceID, 0, 200)
+
+	pageOnly := false
+	var afterID uint
+	if v := strings.TrimSpace(c.Query("cursor")); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+			return
+		}
+		afterID = uint(n)
+		pageOnly = true
+	}
+
+	animals, nextCursor, err := h.collectExportAnimals(deviceID, afterID, pageOnly)
+	if err != nil {
+		now := time.Now().UTC()
+		_ = h.db.Model(&dr).Updates(map[string]interface{}{
+			"status": "failed", "error_msg": err.Error(), "completed_at": now,
+		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "export animals failed"})
+		return
+	}
+
 	// 脱敏精确坐标
 	for i := range animals {
 		animals[i].PreciseLat = nil
 		animals[i].PreciseLng = nil
+		animals[i].PreciseExpiresAt = nil
 	}
-	payload, _ := json.Marshal(gin.H{"device": dev, "animals": animals})
+
+	dev, _ := h.deviceRepo.Find(deviceID)
+	consent := gin.H{}
+	if dev != nil {
+		consent = gin.H{
+			"version":    dev.ConsentVersion,
+			"scope":      dev.ConsentScope,
+			"consent_at": dev.ConsentAt,
+			"revoked_at": dev.ConsentRevoked,
+		}
+	}
+
+	// 安全报告：仅 count + 元数据，不含 payload
+	var secCount int64
+	_ = h.db.Model(&models.SecurityReport{}).Where("device_id = ?", deviceID).Count(&secCount).Error
+	var secRows []models.SecurityReport
+	_ = h.db.Select("report_id", "risk_score", "created_at").
+		Where("device_id = ?", deviceID).
+		Order("id asc").Limit(500).
+		Find(&secRows).Error
+	secMeta := make([]gin.H, 0, len(secRows))
+	for _, s := range secRows {
+		secMeta = append(secMeta, gin.H{
+			"report_id":  s.ReportID,
+			"risk_score": s.RiskScore,
+			"created_at": s.CreatedAt,
+		})
+	}
+
+	// data_requests 历史：不含 payload，避免循环嵌套与体积膨胀
+	var reqRows []models.DataRequest
+	_ = h.db.Select("request_id", "type", "status", "requested_at", "completed_at", "created_at").
+		Where("device_id = ?", deviceID).
+		Order("id asc").Limit(200).
+		Find(&reqRows).Error
+	reqHist := make([]gin.H, 0, len(reqRows))
+	for _, r := range reqRows {
+		reqHist = append(reqHist, gin.H{
+			"request_id":   r.RequestID,
+			"type":         r.Type,
+			"status":       r.Status,
+			"requested_at": r.RequestedAt,
+			"completed_at": r.CompletedAt,
+			"created_at":   r.CreatedAt,
+		})
+	}
+
+	var orders []models.Order
+	_ = h.db.Where("device_id = ?", deviceID).Order("id asc").Limit(500).Find(&orders).Error
+	var entitlements []models.Entitlement
+	_ = h.db.Where("device_id = ?", deviceID).Order("id asc").Limit(200).Find(&entitlements).Error
+
+	tokenVersion := 0
+	disabled := false
+	var createdAt interface{}
+	if dev != nil {
+		tokenVersion = dev.TokenVersion
+		disabled = dev.Disabled
+		createdAt = dev.CreatedAt
+	}
+
+	payloadObj := gin.H{
+		"device": gin.H{
+			"device_id":     deviceID,
+			"token_version": tokenVersion,
+			"disabled":      disabled,
+			"created_at":    createdAt,
+		},
+		"consent": consent,
+		"animals": animals,
+		"security_reports": gin.H{
+			"count": secCount,
+			"items": secMeta,
+		},
+		"data_requests": reqHist,
+		"orders":        orders,
+		"entitlements":  entitlements,
+	}
+	if pageOnly {
+		payloadObj["next_cursor"] = nextCursor
+		payloadObj["page_only"] = true
+	}
+
+	payload, _ := json.Marshal(payloadObj)
 	now := time.Now().UTC()
 	_ = h.db.Model(&dr).Updates(map[string]interface{}{
 		"status": "completed", "payload": string(payload), "completed_at": now,
@@ -135,7 +241,37 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"request_id": reqID, "status": "completed", "data": json.RawMessage(payload)})
 }
 
+// collectExportAnimals 分页拉取动物；pageOnly 时只取一页并返回 next_cursor（0 表示无更多）。
+func (h *PrivacyHandler) collectExportAnimals(deviceID string, afterID uint, pageOnly bool) ([]models.Animal, uint, error) {
+	const pageSize = 200
+	var all []models.Animal
+	cur := afterID
+	for {
+		batch, err := h.animalRepo.ListByDevice(deviceID, cur, pageSize)
+		if err != nil {
+			return nil, 0, err
+		}
+		if len(batch) == 0 {
+			return all, 0, nil
+		}
+		all = append(all, batch...)
+		cur = batch[len(batch)-1].ID
+		if pageOnly {
+			next := uint(0)
+			if len(batch) == pageSize {
+				next = cur
+			}
+			return all, next, nil
+		}
+		if len(batch) < pageSize {
+			return all, 0, nil
+		}
+	}
+}
+
 // DeleteData POST /privacy/delete
+// 事务内：软删动物（tombstone 版本提升）、删推理与安全报告、清空历史导出 payload、
+// 权益失效、撤销授权、吊销 Token。订单依法保留不硬删。
 func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
 	reqID := uuid.NewString()
@@ -143,9 +279,18 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 		RequestID: reqID, DeviceID: deviceID, Type: "delete", Status: "processing",
 		RequestedAt: time.Now().UTC(),
 	}
-	_ = h.db.Create(&dr).Error
+	if err := h.db.Create(&dr).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
+		return
+	}
+
 	err := h.db.Transaction(func(tx *gorm.DB) error {
-		if err := h.animalRepo.WithTx(tx).SoftDeleteByDevice(deviceID); err != nil {
+		ar := h.animalRepo.WithTx(tx)
+		if err := ar.SoftDeleteByDevice(deviceID); err != nil {
+			return err
+		}
+		// 清理已过期精确坐标（维护钩子；软删时亦已清空该设备精确字段）
+		if err := ar.ClearExpiredPreciseLocation(time.Now().UTC()); err != nil {
 			return err
 		}
 		if h.inferenceRepo != nil {
@@ -153,16 +298,50 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 				return err
 			}
 		}
+		// 安全报告：删除设备侧诊断数据
+		if err := tx.Where("device_id = ?", deviceID).Delete(&models.SecurityReport{}).Error; err != nil {
+			return err
+		}
+		// 清空历史导出 payload（避免删除后仍可从旧 data_requests 恢复内容）
+		if err := tx.Model(&models.DataRequest{}).
+			Where("device_id = ? AND type = ?", deviceID, "export").
+			Updates(map[string]interface{}{"payload": ""}).Error; err != nil {
+			return err
+		}
+		// 权益标记失效
+		if err := tx.Model(&models.Entitlement{}).
+			Where("device_id = ?", deviceID).
+			Update("active", false).Error; err != nil {
+			return err
+		}
+		// 订单依法保留：不硬删。device_id 保留用于财务/审计对账；用户权益已失效。
+		// 若监管要求匿名化链路，可后续将 device_id 替换为 hash 标记并保留 order_id 维度。
+
+		drRepo := h.deviceRepo.WithTx(tx)
 		// 撤销授权
-		return h.deviceRepo.UpdateConsent(deviceID, "", "", true)
+		if err := drRepo.UpdateConsent(deviceID, "", "", true); err != nil {
+			return err
+		}
+		// 吊销已有 Token（使旧 JWT 失效）；不 Disable 设备以便用户可重新授权注册。
+		if err := drRepo.BumpTokenVersion(deviceID); err != nil {
+			return err
+		}
+		return nil
 	})
+
 	now := time.Now().UTC()
 	status := "completed"
+	errMsg := ""
 	if err != nil {
 		status = "failed"
+		errMsg = err.Error()
 		slog.Error("删除失败", "err", err)
 	}
-	_ = h.db.Model(&dr).Updates(map[string]interface{}{"status": status, "completed_at": now})
+	updates := map[string]interface{}{"status": status, "completed_at": now}
+	if errMsg != "" {
+		updates["error_msg"] = errMsg
+	}
+	_ = h.db.Model(&dr).Updates(updates)
 	c.JSON(http.StatusOK, gin.H{"request_id": reqID, "status": status})
 }
 
@@ -386,12 +565,7 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
-	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "device required", "reason_code": "unauthorized"})
-		return
-	}
-
-	// 幂等：按设备隔离，禁止跨设备复用 key 命中他人订单
+	accountID := middleware.GetAccountID(c)
 	var existing models.Order
 	if err := h.db.Where("device_id = ? AND idempotency_key = ?", deviceID, req.IdempotencyKey).First(&existing).Error; err == nil {
 		c.JSON(http.StatusOK, existing)
@@ -420,8 +594,8 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 	}
 
 	order := models.Order{
-		OrderID: uuid.NewString(), DeviceID: deviceID, ProductID: product.ProductID,
-		Status: "created", Platform: platform, AmountCents: product.PriceCents,
+		OrderID: uuid.NewString(), DeviceID: deviceID, AccountID: accountID, ProductID: product.ProductID,
+		Status: "created", Platform: req.Platform, AmountCents: product.PriceCents,
 		Currency: product.Currency, IdempotencyKey: req.IdempotencyKey,
 	}
 	if err := h.db.Create(&order).Error; err != nil {
@@ -454,17 +628,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
-	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "device required", "reason_code": "unauthorized"})
-		return
-	}
-
-	// 短回执一律拒绝
-	if len(strings.TrimSpace(req.Receipt)) < minReceiptLen {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid receipt", "reason_code": "receipt_too_short"})
-		return
-	}
-
+	accountID := middleware.GetAccountID(c)
 	sum := sha256.Sum256([]byte(req.Receipt))
 	receiptHash := hex.EncodeToString(sum[:])
 
@@ -544,7 +708,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		}
 		if err == gorm.ErrRecordNotFound {
 			ent = models.Entitlement{
-				DeviceID: deviceID, ProductID: order.ProductID, OrderID: order.OrderID,
+				DeviceID: deviceID, AccountID: accountID, ProductID: order.ProductID, OrderID: order.OrderID,
 				Active: true, StartsAt: now, ExpiresAt: exp,
 			}
 			return tx.Create(&ent).Error
@@ -674,7 +838,13 @@ func (h *CommerceHandler) GetOrder(c *gin.Context) {
 
 // ListEntitlements GET /commerce/entitlements
 func (h *CommerceHandler) ListEntitlements(c *gin.Context) {
+	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 	var ents []models.Entitlement
-	_ = h.db.Where("device_id = ?", middleware.GetDeviceID(c)).Find(&ents).Error
+	q := h.db.Where("device_id = ?", deviceID)
+	if accountID != "" {
+		q = h.db.Where("device_id = ? OR (account_id = ? AND active = ?)", deviceID, accountID, true)
+	}
+	_ = q.Find(&ents).Error
 	c.JSON(http.StatusOK, gin.H{"items": ents})
 }

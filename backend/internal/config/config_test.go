@@ -443,3 +443,30 @@ func TestSetupLogger_LevelFilter(t *testing.T) {
 	assert.False(t, strings.Contains(s, "info_should_be_filtered"),
 		"INFO 级别在 ERROR 阈值下应被过滤")
 }
+
+
+func TestLoad_UpstreamDefaults(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	assert.Equal(t, 8*time.Second, cfg.Upstream.Geo.TotalDeadline)
+	assert.Equal(t, 3*time.Second, cfg.Upstream.Geo.Timeout)
+	assert.Equal(t, 1, cfg.Upstream.Geo.MaxRetries)
+	assert.Equal(t, 45*time.Second, cfg.Upstream.Vision.TotalDeadline)
+	assert.Equal(t, 5*time.Second, cfg.Upstream.MaxRetryAfter)
+	assert.Equal(t, 5, cfg.Upstream.CircuitFailureThreshold)
+}
+
+func TestLoad_UpstreamOverrides(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("UPSTREAM_VISION_DEADLINE", "12s")
+	t.Setenv("UPSTREAM_VISION_TIMEOUT", "4s")
+	t.Setenv("UPSTREAM_VISION_MAX_RETRIES", "1")
+	t.Setenv("UPSTREAM_VISION_CONCURRENCY", "3")
+	t.Setenv("UPSTREAM_MAX_RETRY_AFTER", "2s")
+	cfg := Load()
+	assert.Equal(t, 12*time.Second, cfg.Upstream.Vision.TotalDeadline)
+	assert.Equal(t, 4*time.Second, cfg.Upstream.Vision.Timeout)
+	assert.Equal(t, 1, cfg.Upstream.Vision.MaxRetries)
+	assert.Equal(t, 3, cfg.Upstream.Vision.MaxConcurrent)
+	assert.Equal(t, 2*time.Second, cfg.Upstream.MaxRetryAfter)
+}

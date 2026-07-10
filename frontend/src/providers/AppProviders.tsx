@@ -10,6 +10,7 @@ import { ShopProvider } from '../shop/ShopContext'
 import { StatusProvider } from '../status/StatusContext'
 import { BattleProvider } from '../battle/BattleContext'
 import { DispatchProvider } from '../economy/DispatchContext'
+import { ProgressionProvider } from '../progression'
 import PokedexScreen from '../features/animal-poke/screens/PokedexScreen'
 
 function GameProviders({ children }: { children: ReactNode }) {
@@ -17,15 +18,17 @@ function GameProviders({ children }: { children: ReactNode }) {
     <LbsProvider>
       <WeatherProvider>
         <StaminaProvider>
-          <EconomyProvider>
-            <ShopProvider>
-              <StatusProvider>
-                <BattleProvider>
-                  <DispatchProvider>{children}</DispatchProvider>
-                </BattleProvider>
-              </StatusProvider>
-            </ShopProvider>
-          </EconomyProvider>
+          <ProgressionProvider>
+            <EconomyProvider>
+              <ShopProvider>
+                <StatusProvider>
+                  <BattleProvider>
+                    <DispatchProvider>{children}</DispatchProvider>
+                  </BattleProvider>
+                </StatusProvider>
+              </ShopProvider>
+            </EconomyProvider>
+          </ProgressionProvider>
         </StaminaProvider>
       </WeatherProvider>
     </LbsProvider>
