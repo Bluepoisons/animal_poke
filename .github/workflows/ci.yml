@@ -17,6 +17,9 @@ permissions:
 env:
   GO_VERSION: "1.25.12"
   NODE_VERSION: "22"
+  # Pin security / analysis tools — never use @latest in CI (AP-041)
+  GOVULNCHECK_VERSION: "v1.1.4"
+  STATICCHECK_VERSION: "2026.1"
 
 jobs:
   backend:
@@ -41,11 +44,11 @@ jobs:
         run: go test -race ./...
       - name: Staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2026.1
+          go install honnef.co/go/tools/cmd/staticcheck@${{ env.STATICCHECK_VERSION }}
           staticcheck ./...
       - name: Govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           govulncheck ./...
 
   vision-golden-stub:
@@ -76,9 +79,26 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install
+      - name: Assert npm lockfile (single package manager)
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          set -euo pipefail
+          test -f package-lock.json
+          if [ -f pnpm-lock.yaml ] || [ -f yarn.lock ]; then
+            echo "Only npm is supported; remove pnpm-lock.yaml / yarn.lock (AP-041)"
+            exit 1
+          fi
+      - name: Install
+        run: npm ci
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+      - name: Generate SBOM (CycloneDX)
+        run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom
+          path: frontend/sbom.cdx.json
+          if-no-files-found: error
       - name: Typecheck & build
         run: npm run build
         env:
