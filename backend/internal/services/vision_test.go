@@ -116,3 +116,82 @@ func TestValidateDetectResult_EmptyAndIllegal(t *testing.T) {
 	bad := &DetectResult{Animals: []DetectBox{mk("cat", 1.5)}}
 	assert.Error(t, validateDetectResult(bad))
 }
+
+
+func TestValidateDetectResult_InvalidBoxArea(t *testing.T) {
+	var b DetectBox
+	b.Species = "cat"
+	b.Confidence = 0.9
+	b.BoundingBox = BoundingBox{X: 0.1, Y: 0.1, Width: 0.001, Height: 0.001} // area 1e-6 < min
+	r := &DetectResult{Animals: []DetectBox{b}}
+	assert.Error(t, validateDetectResult(r))
+}
+
+func TestValidateDetectResult_MultiTargetIDs(t *testing.T) {
+	mk := func(species, tid string, conf float64) DetectBox {
+		return DetectBox{
+			Species: species, TargetID: tid, Confidence: conf,
+			BoundingBox: BoundingBox{X: 0.1, Y: 0.1, Width: 0.2, Height: 0.2},
+		}
+	}
+	r := &DetectResult{Animals: []DetectBox{
+		mk("dog", "dog-1", 0.8),
+		mk("cat", "cat-1", 0.95),
+	}}
+	assert.NoError(t, validateDetectResult(r))
+	assert.Len(t, r.Animals, 2)
+	assert.Len(t, r.Targets, 2)
+	assert.Equal(t, r.Animals, r.Targets)
+	// sorted by confidence desc → cat first
+	assert.Equal(t, "cat", r.Targets[0].Species)
+	assert.Equal(t, "cat-1", r.Targets[0].TargetID)
+	assert.Equal(t, "dog-1", r.Targets[1].TargetID)
+}
+
+func TestValidateAnalysisResult_StrictScores(t *testing.T) {
+	ok := mockAnalyze()
+	assert.NoError(t, validateAnalysisResult(ok))
+
+	bad := *ok
+	bad.QualityScore = 11
+	assert.Error(t, validateAnalysisResult(&bad))
+
+	missing := *ok
+	missing.Breed = ""
+	assert.Error(t, validateAnalysisResult(&missing))
+}
+
+func TestParseAnalysisJSON_RejectMultiAndMarkdown(t *testing.T) {
+	var r AnalysisResult
+	assert.Error(t, parseAnalysisJSON("```json\n{\"breed\":\"x\"}\n```", &r))
+	assert.Error(t, parseAnalysisJSON(`{"breed":"a","color":"b","body_type":"c","quality_score":5,"subject_completeness":5,"clarity":5,"lighting":5,"composition":5,"pose":5,"angle":5}{"extra":1}`, &r))
+}
+
+func TestFindTarget_ByIDAndBox(t *testing.T) {
+	targets := []DetectBox{
+		{Species: "cat", TargetID: "0", Confidence: 0.9, BoundingBox: BoundingBox{X: 0.1, Y: 0.1, Width: 0.3, Height: 0.4}},
+		{Species: "dog", TargetID: "1", Confidence: 0.85, BoundingBox: BoundingBox{X: 0.5, Y: 0.2, Width: 0.3, Height: 0.4}},
+	}
+	t0, err := FindTarget(targets, "0", nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "cat", t0.Species)
+
+	box := BoundingBox{X: 0.52, Y: 0.22, Width: 0.28, Height: 0.38}
+	t1, err := FindTarget(targets, "", &box)
+	assert.NoError(t, err)
+	assert.Equal(t, "dog", t1.Species)
+
+	_, err = FindTarget(targets, "missing", nil)
+	assert.Error(t, err)
+
+	bad := BoundingBox{X: 0.9, Y: 0.9, Width: 0.2, Height: 0.2} // out of range
+	_, err = FindTarget(targets, "", &bad)
+	assert.Error(t, err)
+}
+
+func TestMockDetect_HasTargets(t *testing.T) {
+	r := mockDetect()
+	assert.NotEmpty(t, r.Targets)
+	assert.Equal(t, r.Animals[0].TargetID, r.Targets[0].TargetID)
+	assert.NotEmpty(t, r.Targets[0].TargetID)
+}

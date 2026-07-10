@@ -48,3 +48,8 @@ test-integration-ci:
 test-cover:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
+
+# AP-047: vision golden set contract tests (stub provider, no API keys)
+test-vision-golden vision-golden-stub:
+	@chmod +x scripts/vision-golden-stub.sh
+	./scripts/vision-golden-stub.sh

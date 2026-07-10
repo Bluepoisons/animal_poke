@@ -9,6 +9,10 @@ export const zh = {
   'common.close': '关闭',
   'common.save': '保存',
   'common.back': '返回',
+  'common.on': '开',
+  'common.off': '关',
+  'common.export': '导出',
+  'common.delete': '删除',
 
   // 导航
   'tab.camera': '发现',
@@ -17,6 +21,8 @@ export const zh = {
   'tab.store': '商店',
   'tab.dispatch': '派遣',
   'tab.achievement': '成就',
+  'tab.settings': '设置',
+  'tab.map': '地图',
 
   // 体力
   'stamina.label': '体力',
@@ -30,12 +36,16 @@ export const zh = {
   'discover.error': '检测失败，请重试',
   'discover.cameraDenied': '摄像头权限被拒绝',
   'discover.cameraPrompt': '请允许摄像头权限以发现动物',
+  'discover.title': '发现',
+  'discover.subtitle': '用镜头寻找身边的小伙伴',
 
   // 捕获
   'capture.throw': '投掷',
   'capture.success': '捕获成功！',
   'capture.fail': '差一点！再试一次',
   'capture.power': '力度',
+  'capture.title': '捕获',
+  'capture.stopFirst': '请先停下再操作，避免边走边看屏幕',
 
   // 图鉴
   'collection.title': '图鉴',
@@ -71,10 +81,35 @@ export const zh = {
   'error.reload': '重新加载',
   'error.provider': '模块暂时不可用',
 
-  // 设置
+  // 设置中心
+  'settings.title': '设置',
+  'settings.subtitle': '语言、声音、权限与数据',
   'settings.language': '语言',
   'settings.chinese': '中文',
   'settings.english': 'English',
+  'settings.japanese': '日本語（预留）',
+  'settings.section.audio': '声音',
+  'settings.section.motion': '动效与触觉',
+  'settings.section.data': '流量与数据',
+  'settings.section.privacy': '权限与隐私',
+  'settings.sfx': '音效',
+  'settings.music': '音乐',
+  'settings.haptics': '触觉反馈',
+  'settings.motion': '减少动效',
+  'settings.dataSaver': '节省流量',
+  'settings.permissions': '系统权限说明',
+  'settings.permissions.desc': '相机用于发现与捕获；定位用于附近发现点。可在系统设置中管理。',
+  'settings.export': '导出本地数据',
+  'settings.export.done': '已导出到剪贴板/下载',
+  'settings.delete': '删除本地数据',
+  'settings.delete.confirm': '确定删除本地设置与缓存？此操作不可撤销。',
+  'settings.delete.done': '本地数据已清除',
+  'settings.sync.hint': '账号绑定后可安全同步非敏感偏好（语言、音效等）',
+  'settings.saved': '已保存',
+  'map.title': '猎取地图',
+  'map.subtitle': '附近发现点 · 手绘地图',
+  'map.you': '你的位置',
+  'map.back': '返回手账',
 } as const
 
 export type TranslationKey = keyof typeof zh

@@ -1,5 +1,6 @@
 import type { ScreenId } from '../data/types'
 import { FEATURE_FLAGS } from '../featureFlags'
+import { useI18n } from '../../../i18n'
 
 interface BottomTabBarProps {
   active: ScreenId
@@ -7,21 +8,22 @@ interface BottomTabBarProps {
   onAchievement?: () => void
 }
 
-const tabs: { id: ScreenId | 'achievement'; label: string; icon: string }[] = [
-  { id: 'discover', label: '发现', icon: '◎' },
-  { id: 'pokedex', label: '图鉴', icon: '▣' },
-  { id: 'battle', label: '战斗', icon: '✦' },
-  { id: 'store', label: '商店', icon: '◇' },
-  { id: 'achievement', label: '成就', icon: '☆' },
-]
-
 export default function BottomTabBar({
   active,
   onChange,
   onAchievement,
 }: BottomTabBarProps) {
+  const { t } = useI18n()
+  const tabs: { id: ScreenId | 'achievement'; label: string; icon: string }[] = [
+    { id: 'discover', label: t('tab.camera'), icon: '◎' },
+    { id: 'pokedex', label: t('tab.collection'), icon: '▣' },
+    { id: 'battle', label: t('tab.fight'), icon: '✦' },
+    { id: 'store', label: t('tab.store'), icon: '◇' },
+    { id: 'settings', label: t('tab.settings'), icon: '⚙' },
+  ]
+
   return (
-    <nav className="ap-bottom-tabs" aria-label="底部导航">
+    <nav className="ap-bottom-tabs" aria-label="bottom navigation">
       {tabs.filter((tab) => tab.id !== 'achievement' || FEATURE_FLAGS.achievements).map((tab) => {
         if (tab.id === 'achievement') {
           return (

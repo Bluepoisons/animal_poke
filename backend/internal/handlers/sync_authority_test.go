@@ -13,6 +13,7 @@ import (
 	"animalpoke/backend/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -22,7 +23,7 @@ import (
 func setupSyncAuthority(t *testing.T) (*gin.Engine, *repo.InferenceRepo) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	db, err := gorm.Open(sqlite.Open("file:syncauth_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("file:syncauth_"+uuid.NewString()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&models.Animal{}, &models.AuditLog{}, &models.Inference{}))
 
@@ -37,19 +38,24 @@ func setupSyncAuthority(t *testing.T) (*gin.Engine, *repo.InferenceRepo) {
 		c.Set("device_id", "dev-1")
 		handler.SyncAnimal(c)
 	})
+	r.POST("/api/v1/sync/animals", func(c *gin.Context) {
+		c.Set("device_id", "dev-1")
+		handler.SyncAnimalsBatch(c)
+	})
 	return r, infRepo
 }
 
 func TestSyncAnimal_RequiresInference(t *testing.T) {
 	r, _ := setupSyncAuthority(t)
 	body, _ := json.Marshal(map[string]interface{}{
-		"uuid": "u1", "species": "cat", "rarity": 3, "generated_at": time.Now().Format(time.RFC3339),
+		"uuid": uuid.NewString(), "species": "cat", "rarity": 3, "generated_at": time.Now().Format(time.RFC3339),
 	})
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/v1/sync/animal", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
+	assert.Contains(t, w.Body.String(), "inference_required")
 }
 
 func TestSyncAnimal_RejectDetectInference(t *testing.T) {
@@ -58,7 +64,7 @@ func TestSyncAnimal_RejectDetectInference(t *testing.T) {
 		InferenceID: "det-1", DeviceID: "dev-1", Kind: "detect", Status: "success",
 	}))
 	body, _ := json.Marshal(map[string]interface{}{
-		"uuid": "u2", "species": "cat", "rarity": 5, "generated_at": time.Now().Format(time.RFC3339),
+		"uuid": uuid.NewString(), "species": "cat", "rarity": 5, "generated_at": time.Now().Format(time.RFC3339),
 		"inference_request_id": "det-1",
 	})
 	w := httptest.NewRecorder()
@@ -80,7 +86,7 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 		Species: "cat", ResultJSON: string(payload), ExpiresAt: &exp,
 	}))
 	body, _ := json.Marshal(map[string]interface{}{
-		"uuid": "u3", "species": "cat", "rarity": 5, "hp": 100, "atk": 50, "def": 50, "spd": 50,
+		"uuid": uuid.NewString(), "species": "cat", "rarity": 5, "hp": 100, "atk": 50, "def": 50, "spd": 50,
 		"class": "Warrior", "element": "Fire",
 		"generated_at":         time.Now().Format(time.RFC3339),
 		"inference_request_id": "val-1",
@@ -93,7 +99,7 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 
 	// second consume fails
 	body2, _ := json.Marshal(map[string]interface{}{
-		"uuid": "u4", "species": "cat", "rarity": 2,
+		"uuid": uuid.NewString(), "species": "cat", "rarity": 2,
 		"generated_at":         time.Now().Format(time.RFC3339),
 		"inference_request_id": "val-1",
 	})
@@ -102,4 +108,38 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w2, req2)
 	assert.Equal(t, 409, w2.Code)
+	assert.Contains(t, w2.Body.String(), "inference_consumed")
+}
+
+func TestSyncAnimal_BadInference_BatchAndSingleSame(t *testing.T) {
+	// 错 inference：单条与 batch 同一 item 一致 reason_code
+	r, _ := setupSyncAuthority(t)
+	id := uuid.NewString()
+	item := map[string]interface{}{
+		"uuid": id, "species": "cat", "rarity": 3,
+		"generated_at":         time.Now().Format(time.RFC3339),
+		"inference_request_id": "missing-inf",
+	}
+	// single
+	b, _ := json.Marshal(item)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/sync/animal", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 409, w.Code)
+	assert.Contains(t, w.Body.String(), "inference_invalid")
+
+	// batch (fresh handler/db)
+	r2, _ := setupSyncAuthority(t)
+	bb, _ := json.Marshal(map[string]interface{}{"items": []map[string]interface{}{item}})
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("POST", "/api/v1/sync/animals", bytes.NewReader(bb))
+	req2.Header.Set("Content-Type", "application/json")
+	r2.ServeHTTP(w2, req2)
+	assert.Equal(t, 200, w2.Code)
+	var resp BatchSyncResponse
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &resp))
+	require.Len(t, resp.Results, 1)
+	assert.Equal(t, "conflict", resp.Results[0].Status)
+	assert.Equal(t, "inference_invalid", resp.Results[0].ReasonCode)
 }
