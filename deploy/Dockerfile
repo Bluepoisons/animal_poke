@@ -4,7 +4,7 @@
 # 上下文必须是 backend/（含 go.mod），勿用仓库根目录。
 
 # syntax=docker/dockerfile:1.6
-FROM golang:1.23.12-alpine AS builder
+FROM golang:1.25.12-alpine AS builder
 
 WORKDIR /src
 RUN apk add --no-cache ca-certificates git

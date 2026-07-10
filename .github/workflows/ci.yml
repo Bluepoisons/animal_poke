@@ -15,7 +15,7 @@ permissions:
   pull-requests: read
 
 env:
-  GO_VERSION: "1.23.12"
+  GO_VERSION: "1.25.12"
   NODE_VERSION: "22"
 
 jobs:
@@ -41,12 +41,11 @@ jobs:
         run: go test -race ./...
       - name: Staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install honnef.co/go/tools/cmd/staticcheck@2026.1
           staticcheck ./...
       - name: Govulncheck
         run: |
-          # govulncheck@latest may require a newer Go to *build* the tool.
-          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
   frontend:

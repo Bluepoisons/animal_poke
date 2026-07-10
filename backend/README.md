@@ -1,4 +1,4 @@
-# animal_poke 后端服务(Go 1.23)
+# animal_poke 后端服务(Go 1.25)
 
 所有联网服务的总枢纽(Gin + Gorm + godotenv + MySQL)。客户端只与本后端通信,
 任何第三方 Key(腾讯地图/彩云/Vision/LLM)只存于本工程 `.env`, 客户端永不含第三方 Key。
@@ -12,7 +12,7 @@ backend/
 ├── Makefile
 ├── .env.example              # 服务端配置唯一本地来源
 ├── .dockerignore
-├── go.mod                    # go 1.23
+├── go.mod                    # go 1.25
 └── internal/
     ├── config/               # 配置 + Validate + ReadyErrors + CORS 白名单
     ├── middleware/           # RequestID / Logger / Recovery / CORS / JWT / RateLimit / Metrics
