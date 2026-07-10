@@ -799,12 +799,14 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
-
-  /api/v1/analytics/events:
+  /api/v1/safety/report:
     post:
-      tags: [Analytics]
-      summary: Ingest privacy-safe funnel analytics events
-      operationId: ingestAnalyticsEvents
+      tags: [Security]
+      summary: Report abuse, injured animals, or other moderation concerns
+      description: |
+        Structured safety report path. Never accepts original images.
+        Decision codes are public and stable; model internals are not returned.
+      operationId: safetyReport
       security:
         - bearerAuth: []
       requestBody:
@@ -812,78 +814,43 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [events]
-              properties:
-                schema_version:
-                  type: integer
-                  description: Client schema registry version
-                events:
-                  type: array
-                  maxItems: 50
-                  items:
-                    type: object
-                    required: [session_id, name, event_id, ts]
-                    properties:
-                      schema_version:
-                        type: integer
-                      session_id:
-                        type: string
-                        description: Pseudo-anonymous session id (not device token)
-                      name:
-                        type: string
-                        enum:
-                          - auth
-                          - camera_ok
-                          - scan
-                          - detect_result
-                          - capture_attempt
-                          - generate_stage
-                          - collection_complete
-                          - trade
-                          - battle_end
-                      ts:
-                        type: integer
-                        format: int64
-                      event_id:
-                        type: string
-                      coarse_location:
-                        type: object
-                        description: City/region only when location consented; never lat/lng
-                        properties:
-                          city:
-                            type: string
-                          region:
-                            type: string
-                          country:
-                            type: string
-                        additionalProperties: false
-                      experiment_id:
-                        type: string
-                      experiment_variant:
-                        type: string
-                      props:
-                        type: object
-                        additionalProperties: true
-                        description: Non-sensitive props; server drops photo/token/coords
+              $ref: "#/components/schemas/SafetyReportRequest"
       responses:
         "202":
-          description: Accepted (some events may be dropped)
+          description: Report accepted
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  accepted:
-                    type: integer
-                  dropped:
-                    type: integer
-                  schema_version:
-                    type: integer
-                  request_id:
-                    type: string
+                $ref: "#/components/schemas/SafetyReportResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/account/defaults:
+    get:
+      tags: [Security]
+      summary: Account privacy/social defaults (stricter for minors)
+      operationId: accountDefaults
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: minor
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["0", "1", "true", "false"]
+          description: When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled)
+      responses:
+        "200":
+          description: Defaults
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDefaultsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1503,38 +1470,103 @@ components:
           description: Multi-animal targets with stable target_id
         inference_id:
           type: string
-        source:
-          type: string
-        degraded:
-          type: boolean
         reason_code:
           type: string
-        model:
+          description: Public reason when empty or rejected (e.g. reject_portrait)
+        source:
           type: string
-        prompt_version:
-          type: string
-    VisionAnalyzeResponse:
+        safety:
+          $ref: "#/components/schemas/SafetySummary"
+    SafetySummary:
       type: object
-      additionalProperties: true
+      required: [allowed, collectable, decision_code, action]
       properties:
-        breed: { type: string }
-        color: { type: string }
-        body_type: { type: string }
-        quality_score: { type: integer, minimum: 1, maximum: 10 }
-        subject_completeness: { type: integer, minimum: 1, maximum: 10 }
-        clarity: { type: integer, minimum: 1, maximum: 10 }
-        lighting: { type: integer, minimum: 1, maximum: 10 }
-        composition: { type: integer, minimum: 1, maximum: 10 }
-        pose: { type: integer, minimum: 1, maximum: 10 }
-        angle: { type: integer, minimum: 1, maximum: 10 }
-        species: { type: string }
-        target_id: { type: string }
-        detect_inference_id: { type: string }
-        inference_id: { type: string }
-        box:
+        allowed:
+          type: boolean
+        collectable:
+          type: boolean
+        decision_code:
+          type: string
+          description: Public moderation code (no model internals)
+          enum:
+            - ok
+            - reject_portrait
+            - reject_child_focus
+            - reject_sensitive
+            - reject_unsafe
+            - flag_sensitive
+            - flag_abuse
+            - flag_injured
+        action:
+          type: string
+          enum: [allow, reject, flag]
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [face, child, plate, house, abuse, injured]
+        report_path:
+          type: string
+          enum: [abuse, injured]
+    SafetyReportRequest:
+      type: object
+      required: [category]
+      properties:
+        category:
+          type: string
+          enum: [abuse, injured, portrait, sensitive, other]
+        inference_id:
+          type: string
+        note:
+          type: string
+          maxLength: 1000
+        decision_code:
+          type: string
+    SafetyReportResponse:
+      type: object
+      required: [status, report_id, decision_code, category]
+      properties:
+        status:
+          type: string
+          example: accepted
+        report_id:
+          type: string
+        decision_code:
+          type: string
+        category:
+          type: string
+        request_id:
+          type: string
+    AccountDefaultsResponse:
+      type: object
+      properties:
+        defaults:
+          type: object
+          additionalProperties: true
+          properties:
+            audience:
+              type: string
+              enum: [minor, adult]
+            strict:
+              type: boolean
+            play_hours_start:
+              type: integer
+            play_hours_end:
+              type: integer
+            daily_limit_min:
+              type: integer
+            location_scope:
+              type: string
+              enum: [none, city, precise]
+            social_enabled:
+              type: boolean
+        config:
           type: object
           properties:
-            x: { type: number }
-            y: { type: number }
-            width: { type: number }
-            height: { type: number }
+            strict_minor_defaults:
+              type: boolean
+        request_id:
+          type: string
+        server_time:
+          type: string
+          format: date-time

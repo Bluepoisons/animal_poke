@@ -33,66 +33,13 @@ type Config struct {
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string
-	Database           DatabaseConfig
-	ThirdParty         ThirdPartyConfig
-	Server             ServerTimeouts
-	Upstream           UpstreamConfig
-}
-
-// ProviderBudget 单个上游供应商的超时/重试/并发预算。
-type ProviderBudget struct {
-	// TotalDeadline 覆盖重试在内的总预算；0 表示不额外裁剪。
-	TotalDeadline time.Duration
-	// Timeout 单次 HTTP 请求超时（http.Client.Timeout）。
-	Timeout time.Duration
-	// MaxRetries 最大重试次数（不含首次请求）。
-	MaxRetries int
-	// MaxConcurrent 并发 bulkhead 上限。
-	MaxConcurrent int
-}
-
-// UpstreamConfig 上游韧性：按 provider 的预算 + 全局 Retry-After 硬上限。
-type UpstreamConfig struct {
-	Geo                     ProviderBudget
-	Weather                 ProviderBudget
-	Vision                  ProviderBudget
-	LLM                     ProviderBudget
-	MaxRetryAfter           time.Duration // 上游 Retry-After 硬上限
-	CircuitFailureThreshold int           // 连续失败触发熔断
-	CircuitOpenTimeout      time.Duration // 熔断打开后的冷却时间
-}
-
-// DefaultUpstreamConfig 返回安全默认预算（可被环境变量覆盖）。
-func DefaultUpstreamConfig() UpstreamConfig {
-	return UpstreamConfig{
-		Geo: ProviderBudget{
-			TotalDeadline: 8 * time.Second,
-			Timeout:       3 * time.Second,
-			MaxRetries:    1,
-			MaxConcurrent: 32,
-		},
-		Weather: ProviderBudget{
-			TotalDeadline: 8 * time.Second,
-			Timeout:       3 * time.Second,
-			MaxRetries:    1,
-			MaxConcurrent: 32,
-		},
-		Vision: ProviderBudget{
-			TotalDeadline: 45 * time.Second,
-			Timeout:       20 * time.Second,
-			MaxRetries:    2,
-			MaxConcurrent: 8,
-		},
-		LLM: ProviderBudget{
-			TotalDeadline: 30 * time.Second,
-			Timeout:       15 * time.Second,
-			MaxRetries:    2,
-			MaxConcurrent: 16,
-		},
-		MaxRetryAfter:           5 * time.Second,
-		CircuitFailureThreshold: 5,
-		CircuitOpenTimeout:      30 * time.Second,
-	}
+	// StrictMinorDefaults 未成年人更严格的时间/位置/社交默认（AP-056）。
+	StrictMinorDefaults bool
+	// ProviderNoTrainPolicy 断言 Provider 不训练/不保留原图并写审计（AP-056）。
+	ProviderNoTrainPolicy bool
+	Database              DatabaseConfig
+	ThirdParty            ThirdPartyConfig
+	Server                ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -204,7 +151,9 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
-		TrustedProxies:     splitCSV(getEnv("TRUSTED_PROXIES", "")),
+		// 默认开启：未成年人严格默认 + Provider 不训练审计
+		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
+		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),
@@ -441,12 +390,14 @@ func (c *Config) ReadyErrors() []string {
 // CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
 func (c *Config) CapabilityStatus() map[string]interface{} {
 	return map[string]interface{}{
-		"vision_configured":  c.ThirdParty.VisionConfigured(),
-		"vision_source":      c.ThirdParty.VisionSource,
-		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),
-		"llm_configured":     c.ThirdParty.LLMConfigured(),
-		"mock_allowed":       c.MockAllowed(),
-		"vision_reuse_llm":   c.ThirdParty.VisionReuseLLM,
+		"vision_configured":        c.ThirdParty.VisionConfigured(),
+		"vision_source":            c.ThirdParty.VisionSource,
+		"vision_fingerprint":       c.ThirdParty.VisionFingerprint(),
+		"llm_configured":           c.ThirdParty.LLMConfigured(),
+		"mock_allowed":             c.MockAllowed(),
+		"vision_reuse_llm":         c.ThirdParty.VisionReuseLLM,
+		"strict_minor_defaults":    c.StrictMinorDefaults,
+		"provider_no_train_policy": c.ProviderNoTrainPolicy,
 	}
 }
 

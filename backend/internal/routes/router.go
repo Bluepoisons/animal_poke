@@ -202,12 +202,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			ai.Use(middleware.RateLimitByDigest(digestLimiter))
 			{
 				visionHandler := handlers.NewVisionHandlerWithOptions(aiService, handlers.VisionHandlerOptions{
-					InferenceRepo:  inferenceRepo,
-					DeviceRepo:     deviceRepo,
-					MaxBytes:       cfg.MaxImageBytes,
-					MaxPixels:      cfg.MaxImagePixels,
-					RequireConsent: cfg.IsProduction(),
-					ConsentVersion: "v1",
+					InferenceRepo:         inferenceRepo,
+					DeviceRepo:            deviceRepo,
+					MaxBytes:              cfg.MaxImageBytes,
+					MaxPixels:             cfg.MaxImagePixels,
+					RequireConsent:        cfg.IsProduction(),
+					ConsentVersion:        "v1",
+					ProviderNoTrainPolicy: cfg.ProviderNoTrainPolicy,
+					AllowSafetyFixture:    cfg.IsDevelopment() || cfg.MockAllowed(),
 				})
 				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
 				ai.POST("/vision/detect", middleware.Idempotency(idempotencyRepo, "vision.detect"), middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
@@ -227,7 +229,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/sync/animals", unavailable("db_unavailable"))
 			}
 
-			// 隐私 / 安全 / 商业化
+			// 隐私 / 安全 / 商业化 / 内容审核
+			safetyH := handlers.NewSafetyHandler(db, cfg.StrictMinorDefaults)
+			auth.GET("/account/defaults", safetyH.AccountDefaults)
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
 				auth.POST("/privacy/consent", privacy.PutConsent)
@@ -237,6 +241,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
 				auth.POST("/security/report", sec.Report)
+				auth.POST("/safety/report", safetyH.Report)
 
 				commerce := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
 					Production:  cfg.IsProduction(),
@@ -255,6 +260,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/privacy/delete", unavailable("db_unavailable"))
 				auth.GET("/privacy/requests/:id", unavailable("db_unavailable"))
 				auth.POST("/security/report", unavailable("db_unavailable"))
+				auth.POST("/safety/report", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/fulfill", unavailable("db_unavailable"))
 				auth.POST("/commerce/orders/refund", unavailable("db_unavailable"))

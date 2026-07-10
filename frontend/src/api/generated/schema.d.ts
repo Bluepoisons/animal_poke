@@ -466,7 +466,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/analytics/events": {
+    "/api/v1/safety/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -475,8 +475,29 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ingest privacy-safe funnel analytics events */
-        post: operations["ingestAnalyticsEvents"];
+        /**
+         * Report abuse, injured animals, or other moderation concerns
+         * @description Structured safety report path. Never accepts original images.
+         *     Decision codes are public and stable; model internals are not returned.
+         */
+        post: operations["safetyReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Account privacy/social defaults (stricter for minors) */
+        get: operations["accountDefaults"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -747,86 +768,62 @@ export interface components {
             /** @description Multi-animal targets with stable target_id */
             targets?: components["schemas"]["VisionDetectBox"][];
             inference_id?: string;
+            /** @description Public reason when empty or rejected (e.g. reject_portrait) */
+            reason_code?: string;
             source?: string;
-            degraded?: boolean;
-            reason_code?: string;
-            model?: string;
-            prompt_version?: string;
+            safety?: components["schemas"]["SafetySummary"];
         } & {
             [key: string]: unknown;
         };
-        VisionAnalyzeResponse: {
-            breed?: string;
-            color?: string;
-            body_type?: string;
-            quality_score?: number;
-            subject_completeness?: number;
-            clarity?: number;
-            lighting?: number;
-            composition?: number;
-            pose?: number;
-            angle?: number;
-            species?: string;
-            target_id?: string;
-            detect_inference_id?: string;
-            inference_id?: string;
-            box?: {
-                x?: number;
-                y?: number;
-                width?: number;
-                height?: number;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        SyncAnimalRequest: {
-            /** Format: uuid */
-            uuid: string;
-            /** @description capturable species (cat|dog|goose after normalize) */
-            species: string;
-            breed?: string;
-            rarity: number;
-            hp?: number;
-            atk?: number;
-            def?: number;
-            spd?: number;
-            /** @enum {string} */
-            class?: "Warrior" | "Mage" | "Ranger" | "Tank" | "Support" | "Assassin";
-            /** @enum {string} */
-            element?: "Fire" | "Water" | "Grass" | "Electric" | "Ice" | "Dark" | "Light" | "Earth" | "Wind";
-            latitude?: number;
-            longitude?: number;
-            city?: string;
-            /** Format: date-time */
-            generated_at: string;
-            inference_request_id?: string;
-            keep_precise_location?: boolean;
-        };
-        SyncAnimalResponse: {
-            /** @example synced */
-            status: string;
-            /** Format: uuid */
-            uuid: string;
-            review_status?: string;
-        };
-        BatchSyncRequest: {
-            items: components["schemas"]["SyncAnimalRequest"][];
-        };
-        BatchSyncItemResult: {
-            uuid: string;
-            /** @enum {string} */
-            status: "synced" | "conflict" | "error";
-            error?: string;
+        SafetySummary: {
+            allowed: boolean;
+            collectable: boolean;
             /**
-             * @description Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
-             *     invalid_class, invalid_element, invalid_coords, invalid_time,
-             *     invalid_string_length, species_unsupported, duplicate_animal,
-             *     batch_duplicate, inference_*, sync_failed, batch_too_large
+             * @description Public moderation code (no model internals)
+             * @enum {string}
              */
-            reason_code?: string;
+            decision_code: "ok" | "reject_portrait" | "reject_child_focus" | "reject_sensitive" | "reject_unsafe" | "flag_sensitive" | "flag_abuse" | "flag_injured";
+            /** @enum {string} */
+            action: "allow" | "reject" | "flag";
+            flags?: ("face" | "child" | "plate" | "house" | "abuse" | "injured")[];
+            /** @enum {string} */
+            report_path?: "abuse" | "injured";
         };
-        BatchSyncResponse: {
-            results: components["schemas"]["BatchSyncItemResult"][];
+        SafetyReportRequest: {
+            /** @enum {string} */
+            category: "abuse" | "injured" | "portrait" | "sensitive" | "other";
+            inference_id?: string;
+            note?: string;
+            decision_code?: string;
+        };
+        SafetyReportResponse: {
+            /** @example accepted */
+            status: string;
+            report_id: string;
+            decision_code: string;
+            category: string;
+            request_id?: string;
+        };
+        AccountDefaultsResponse: {
+            defaults?: {
+                /** @enum {string} */
+                audience?: "minor" | "adult";
+                strict?: boolean;
+                play_hours_start?: number;
+                play_hours_end?: number;
+                daily_limit_min?: number;
+                /** @enum {string} */
+                location_scope?: "none" | "city" | "precise";
+                social_enabled?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            config?: {
+                strict_minor_defaults?: boolean;
+            };
+            request_id?: string;
+            /** Format: date-time */
+            server_time?: string;
         };
     };
     responses: {
@@ -1647,7 +1644,7 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    ingestAnalyticsEvents: {
+    safetyReport: {
         parameters: {
             query?: never;
             header?: never;
@@ -1656,50 +1653,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @description Client schema registry version */
-                    schema_version?: number;
-                    events: {
-                        schema_version?: number;
-                        /** @description Pseudo-anonymous session id (not device token) */
-                        session_id: string;
-                        /** @enum {string} */
-                        name: "auth" | "camera_ok" | "scan" | "detect_result" | "capture_attempt" | "generate_stage" | "collection_complete" | "trade" | "battle_end";
-                        /** Format: int64 */
-                        ts: number;
-                        event_id: string;
-                        /** @description City/region only when location consented; never lat/lng */
-                        coarse_location?: {
-                            city?: string;
-                            region?: string;
-                            country?: string;
-                        };
-                        experiment_id?: string;
-                        experiment_variant?: string;
-                        /** @description Non-sensitive props; server drops photo/token/coords */
-                        props?: {
-                            [key: string]: unknown;
-                        };
-                    }[];
-                };
+                "application/json": components["schemas"]["SafetyReportRequest"];
             };
         };
         responses: {
-            /** @description Accepted (some events may be dropped) */
+            /** @description Report accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        accepted?: number;
-                        dropped?: number;
-                        schema_version?: number;
-                        request_id?: string;
-                    };
+                    "application/json": components["schemas"]["SafetyReportResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    accountDefaults: {
+        parameters: {
+            query?: {
+                /** @description When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled) */
+                minor?: "0" | "1" | "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Defaults */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDefaultsResponse"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
         };
     };

@@ -44,38 +44,47 @@ type BoundingBox struct {
 // animals 保留兼容；targets 为多目标权威列表（与 animals 同步）。
 type DetectResult struct {
 	Animals       []DetectBox `json:"animals"`
-	Targets       []DetectBox `json:"targets"`
-	Source        string      `json:"source,omitempty"` // real|mock|cache
+	Source        string      `json:"source,omitempty"` // real|mock|cache|safety
 	Degraded      bool        `json:"degraded,omitempty"`
 	ReasonCode    string      `json:"reason_code,omitempty"`
 	InferenceID   string      `json:"inference_id,omitempty"`
 	Model         string      `json:"model,omitempty"`
 	PromptVersion string      `json:"prompt_version,omitempty"`
+	// Safety is the public moderation decision (AP-056); never includes model internals or images.
+	Safety *SafetySummary `json:"safety,omitempty"`
+	// SafetyLabels free-text signals for moderation only (never serialized to clients).
+	SafetyLabels []string `json:"-"`
+}
+
+// SafetySummary public moderation fields attached to vision responses.
+type SafetySummary struct {
+	Allowed      bool     `json:"allowed"`
+	Collectable  bool     `json:"collectable"`
+	DecisionCode string   `json:"decision_code"`
+	Action       string   `json:"action"`
+	Flags        []string `json:"flags,omitempty"`
+	ReportPath   string   `json:"report_path,omitempty"`
 }
 
 // AnalysisResult 深度分析结果。
 type AnalysisResult struct {
-	Breed               string       `json:"breed"`
-	Color               string       `json:"color"`
-	BodyType            string       `json:"body_type"`
-	QualityScore        int          `json:"quality_score"`
-	SubjectCompleteness int          `json:"subject_completeness"`
-	Clarity             int          `json:"clarity"`
-	Lighting            int          `json:"lighting"`
-	Composition         int          `json:"composition"`
-	Pose                int          `json:"pose"`
-	Angle               int          `json:"angle"`
-	// 多目标一致性：回传锁定目标
-	Species           string       `json:"species,omitempty"`
-	TargetID          string       `json:"target_id,omitempty"`
-	DetectInferenceID string       `json:"detect_inference_id,omitempty"`
-	Box               *BoundingBox `json:"box,omitempty"`
-	Source            string       `json:"source,omitempty"`
-	Degraded          bool         `json:"degraded,omitempty"`
-	ReasonCode        string       `json:"reason_code,omitempty"`
-	InferenceID       string       `json:"inference_id,omitempty"`
-	Model             string       `json:"model,omitempty"`
-	PromptVersion     string       `json:"prompt_version,omitempty"`
+	Breed               string         `json:"breed"`
+	Color               string         `json:"color"`
+	BodyType            string         `json:"body_type"`
+	QualityScore        int            `json:"quality_score"`
+	SubjectCompleteness int            `json:"subject_completeness"`
+	Clarity             int            `json:"clarity"`
+	Lighting            int            `json:"lighting"`
+	Composition         int            `json:"composition"`
+	Pose                int            `json:"pose"`
+	Angle               int            `json:"angle"`
+	Source              string         `json:"source,omitempty"`
+	Degraded            bool           `json:"degraded,omitempty"`
+	ReasonCode          string         `json:"reason_code,omitempty"`
+	InferenceID         string         `json:"inference_id,omitempty"`
+	Model               string         `json:"model,omitempty"`
+	PromptVersion       string         `json:"prompt_version,omitempty"`
+	Safety              *SafetySummary `json:"safety,omitempty"`
 }
 
 // ---------- LLM 相关类型 ----------
@@ -459,7 +468,7 @@ func validateDetectResult(r *DetectResult) error {
 		r.Animals = r.Targets
 	}
 	normalized := make([]DetectBox, 0, len(r.Animals))
-	seenIDs := make(map[string]int, len(r.Animals))
+	safetyLabels := make([]string, 0, len(r.Animals)*2)
 	for i, a := range r.Animals {
 		if a.Confidence < 0 || a.Confidence > 1 {
 			return fmt.Errorf("animal[%d] confidence out of range", i)
@@ -472,6 +481,12 @@ func validateDetectResult(r *DetectResult) error {
 		raw := a.Species
 		if raw == "" {
 			raw = a.Label
+		}
+		if raw != "" {
+			safetyLabels = append(safetyLabels, raw)
+		}
+		if a.Label != "" && a.Label != raw {
+			safetyLabels = append(safetyLabels, a.Label)
 		}
 		norm, orig := taxonomy.Normalize(raw)
 		a.Species = norm
@@ -491,6 +506,8 @@ func validateDetectResult(r *DetectResult) error {
 		// 仅 capturable 进入返回列表；unknown/unsupported 不进入捕获
 		if taxonomy.Capturable(norm) {
 			normalized = append(normalized, a)
+		} else if orig != "" {
+			safetyLabels = append(safetyLabels, orig, norm)
 		}
 	}
 	// 稳定排序：confidence desc, species, target_id
@@ -513,7 +530,7 @@ func validateDetectResult(r *DetectResult) error {
 		}
 	}
 	r.Animals = normalized
-	r.Targets = append([]DetectBox(nil), normalized...)
+	r.SafetyLabels = safetyLabels
 	return nil
 }
 
