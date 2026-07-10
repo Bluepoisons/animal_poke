@@ -1355,6 +1355,62 @@ paths:
           $ref: "#/components/responses/Unauthorized"
 
 
+  /api/v1/config/game:
+    get:
+      tags: [Ops]
+      summary: Get versioned game config (AP-059)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current game economy + feature flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameConfigResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/ops/game-config:
+    put:
+      tags: [Ops]
+      summary: Replace game config (ops only, hard bounds)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-AP-Ops-Token
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameConfig"
+      responses:
+        "200":
+          description: Updated config
+        "400":
+          description: Invalid / out of bounds
+        "403":
+          description: Ops forbidden
+        "501":
+          description: Feature unavailable
+  /api/v1/ops/game-config/rollback:
+    post:
+      tags: [Ops]
+      summary: Rollback to previous game config version
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: X-AP-Ops-Token
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rolled back config
+        "409":
+          description: No previous config
+
 components:
   securitySchemes:
     bearerAuth:

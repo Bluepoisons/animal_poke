@@ -213,6 +213,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/social/friends", product.FriendsList)
 			auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
+			// AP-059 versioned game config (read for all auth; write/rollback ops-gated)
+			auth.GET("/config/game", product.GameConfigGet)
+			auth.PUT("/ops/game-config", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigPut)
+			auth.POST("/ops/game-config/rollback", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigRollback)
 
 			ai := auth.Group("")
 			// device + digest 多维限流（account 维度在有 account_id 时由 RateLimitByAccount 扩展）
