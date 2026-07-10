@@ -215,9 +215,16 @@ docker run --rm -p 8080:8080 \
 # 后端
 cd backend && go test ./...
 
-# 前端
+# 前端单元测试（硬门禁，CI 失败即阻断）
 cd frontend && npm test
+
+# 生产入口 E2E 硬门禁（Playwright + API route mocks）
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
+
+详见 [`frontend/docs/e2e.md`](frontend/docs/e2e.md)。
 
 ### 5. OpenAPI 类型
 
@@ -261,6 +268,9 @@ animal_poke/
 │   │   ├── features/animal-poke/# 生产入口 UI（发现/地图/图鉴…）
 │   │   ├── lbs/ weather/ shop/  # 玩法模块
 │   │   └── sync/                # 离线队列（Idempotency-Key）
+│   ├── e2e/                     # Playwright 生产入口硬门禁
+│   ├── docs/e2e.md              # E2E 运行说明
+│   ├── playwright.config.ts
 │   └── vite.config.ts
 ├── backend/                     # Go 联网枢纽
 │   ├── cmd/
@@ -322,7 +332,8 @@ animal_poke/
 GitHub Actions 覆盖：
 
 - **backend** — gofmt · vet · test · race · staticcheck · govulncheck  
-- **frontend** — install · build · vitest  
+- **frontend** — install · build · vitest（**硬失败**，无 soft-fail）· 生产路径 coverage floor  
+- **frontend-e2e** — Playwright Chromium 全链路硬门禁（consent→detect→capture→analyze→value→sync）  
 - **openapi** — lint + 生成物校验  
 - **container** — Docker build + `/livez` smoke  
 - **k8s** — kustomize build  

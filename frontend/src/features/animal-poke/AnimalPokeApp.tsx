@@ -207,6 +207,7 @@ export default function AnimalPokeApp() {
             species={flow.selectedBox.species}
             detection={flow.selectedBox}
             detectInferenceId={flow.detectInferenceId}
+            photoBlob={flow.photoBlob}
             targetId={flow.targetId}
             captureAttemptId={flow.captureAttemptId}
             onInvalidAccess={handleInvalidCapture}

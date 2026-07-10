@@ -8,6 +8,7 @@ import type { SpeciesType } from '../../../types'
 import WelfareNotice from '../components/WelfareNotice'
 import { announceRareReveal } from '../feedbackPrefs'
 import { registerCapture } from '../collectionValue'
+import { isForceCaptureSuccess } from '../../../e2eFlags'
 import {
   BEST_MAX,
   BEST_MIN,
@@ -104,11 +105,17 @@ export default function CaptureScreen({
     if (!chargingRef.current && att?.phase !== 'charging') return
     stopChargeLoop()
     setEnc((e) => {
+      const forceOk = isForceCaptureSuccess()
+      if (forceOk) {
+        // 命中最佳区间中点，保证 successProbability 足够高
+        powerRef.current = Math.round((profile.bestMin + profile.bestMax) / 2)
+      }
       let next = markThrown(updatePower(e, powerRef.current))
       const result = settleAttempt(next, {
         online: typeof navigator === 'undefined' ? true : navigator.onLine,
         stamina: currentStamina,
         consumeStamina: (n) => consumeStamina(n),
+        rng: forceOk ? () => 0 : undefined,
       })
       next = result.enc
       if (result.ok) {
@@ -135,7 +142,7 @@ export default function CaptureScreen({
       }
       return next
     })
-  }, [att?.phase, currentStamina, consumeStamina, onToast, onSettled, species])
+  }, [att?.phase, currentStamina, consumeStamina, onToast, onSettled, species, profile.bestMin, profile.bestMax])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (enc.locked || enc.success) return
