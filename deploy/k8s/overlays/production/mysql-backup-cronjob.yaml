@@ -1,41 +1,293 @@
-# MySQL 逻辑备份 CronJob 示例（生产请改用云厂商自动备份 + PITR）
+# MySQL logical backup CronJob — production only (AP-015).
+# Dumps with mysqldump, checksums, uploads to S3-compatible storage with SSE.
+# emptyDir is scratch only; durable copies live in object storage.
+#
+# Required Secret (create via External Secrets / Secret Manager — do not commit real keys):
+#   kubectl -n production create secret generic mysql-backup-secrets \
+#     --from-literal=MYSQL_HOST=mysql.production.svc.cluster.local \
+#     --from-literal=MYSQL_USER=animal_poke_backup \
+#     --from-literal=MYSQL_PASSWORD='REPLACE_ME' \
+#     --from-literal=MYSQL_DATABASE=animal_poke \
+#     --from-literal=AWS_ACCESS_KEY_ID='REPLACE_ME' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='REPLACE_ME' \
+#     --from-literal=AWS_DEFAULT_REGION=cn-beijing \
+#     --from-literal=S3_ENDPOINT=https://oss-cn-beijing.aliyuncs.com \
+#     --from-literal=S3_BUCKET=s3://animal-poke-mysql-backups \
+#     --from-literal=BACKUP_RETENTION_DAYS=14
+#
+# Schema reference: deploy/k8s/mysql-backup-secret.example.yaml
+# Prefer managed MySQL PITR as primary; this CronJob is the app-side safety net.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: mysql-backup
   namespace: production
+  labels:
+    app.kubernetes.io/name: mysql-backup
+    app.kubernetes.io/part-of: animal-poke
+    app.kubernetes.io/component: backup
+  annotations:
+    description: "Logical mysqldump → S3-compatible storage with SSE, checksum, retention"
+    animal-poke.io/rpo-minutes: "15"
+    animal-poke.io/backup-destination: "s3-compatible-sse"
 spec:
-  schedule: "0 3 * * *"
+  # Every 15 minutes → RPO target ≤ 15m for logical dumps (binlog/PITR still preferred)
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 600
   jobTemplate:
     spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
       template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: mysql-backup
+            app.kubernetes.io/component: backup
         spec:
           restartPolicy: OnFailure
-          containers:
-            - name: backup
-              image: mysql:8.0
-              env:
-                - name: MYSQL_PWD
-                  valueFrom:
-                    secretKeyRef:
-                      name: backend-secrets
-                      key: db-password
+          serviceAccountName: mysql-backup
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # Fetch static aws CLI v2 bundle into shared volume (mysql image has no aws).
+            - name: fetch-awscli
+              image: amazon/aws-cli:2.17.18
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               command:
                 - /bin/sh
                 - -c
                 - |
                   set -e
-                  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-                  FILE=/backup/animal_poke_${STAMP}.sql.gz
-                  mysqldump -h mysql.production.svc.cluster.local -u animal_poke \
-                    --single-transaction --routines --triggers animal_poke | gzip -c > "$FILE"
-                  echo "wrote $FILE"
-                  # TODO: aws s3 cp / rclone 到加密对象存储
+                  mkdir -p /tools/bin
+                  # Copy aws launcher + dependencies from the aws-cli image into emptyDir
+                  cp -a /usr/local/aws-cli /tools/aws-cli
+                  ln -sf /tools/aws-cli/v2/current/bin/aws /tools/bin/aws
+                  /tools/bin/aws --version
               volumeMounts:
-                - name: backup
-                  mountPath: /backup
-          volumes:
+                - name: tools
+                  mountPath: /tools
+          containers:
             - name: backup
-              emptyDir: {}
+              image: mysql:8.0
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              env:
+                - name: MYSQL_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: MYSQL_HOST
+                - name: MYSQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: MYSQL_USER
+                - name: MYSQL_PWD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: MYSQL_PASSWORD
+                - name: MYSQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: MYSQL_DATABASE
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: AWS_DEFAULT_REGION
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: S3_ENDPOINT
+                      optional: true
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: S3_BUCKET
+                - name: BACKUP_RETENTION_DAYS
+                  valueFrom:
+                    secretKeyRef:
+                      name: mysql-backup-secrets
+                      key: BACKUP_RETENTION_DAYS
+                      optional: true
+                - name: BACKUP_PREFIX
+                  value: "mysql/animal_poke"
+                - name: PATH
+                  value: "/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  command -v mysqldump >/dev/null
+                  command -v aws >/dev/null
+                  command -v gzip >/dev/null
+                  command -v sha256sum >/dev/null
+
+                  STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+                  RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+                  PREFIX="${BACKUP_PREFIX:-mysql/animal_poke}"
+                  LOCAL_DIR="/backup"
+                  BASE="animal_poke_${STAMP}"
+                  SQL_GZ="${LOCAL_DIR}/${BASE}.sql.gz"
+                  SHA_FILE="${LOCAL_DIR}/${BASE}.sql.gz.sha256"
+                  META_FILE="${LOCAL_DIR}/${BASE}.meta.json"
+
+                  mkdir -p "${LOCAL_DIR}"
+                  echo "Starting mysqldump at ${STAMP} host=${MYSQL_HOST} db=${MYSQL_DATABASE}"
+
+                  mysqldump \
+                    -h "${MYSQL_HOST}" \
+                    -u "${MYSQL_USER}" \
+                    --single-transaction \
+                    --routines \
+                    --triggers \
+                    --events \
+                    --hex-blob \
+                    --set-gtid-purged=OFF \
+                    --column-statistics=0 \
+                    "${MYSQL_DATABASE}" \
+                    | gzip -c > "${SQL_GZ}"
+
+                  test -s "${SQL_GZ}" || { echo "ERROR: empty dump ${SQL_GZ}" >&2; exit 3; }
+
+                  sha256sum "${SQL_GZ}" | tee "${SHA_FILE}"
+                  CHECKSUM="$(awk '{print $1}' "${SHA_FILE}")"
+                  SIZE_BYTES="$(wc -c < "${SQL_GZ}" | tr -d ' ')"
+
+                  cat > "${META_FILE}" <<EOF
+                  {
+                    "database": "${MYSQL_DATABASE}",
+                    "host": "${MYSQL_HOST}",
+                    "stamp": "${STAMP}",
+                    "file": "${BASE}.sql.gz",
+                    "sha256": "${CHECKSUM}",
+                    "size_bytes": ${SIZE_BYTES},
+                    "tool": "mysqldump+gzip+aws-cli",
+                    "sse": "AES256",
+                    "rpo_target_minutes": 15
+                  }
+                  EOF
+
+                  ENDPOINT_ARGS=()
+                  if [[ -n "${S3_ENDPOINT:-}" ]]; then
+                    ENDPOINT_ARGS+=(--endpoint-url "${S3_ENDPOINT}")
+                  fi
+
+                  BUCKET_URI="${S3_BUCKET}"
+                  case "${BUCKET_URI}" in
+                    s3://*) ;;
+                    *) BUCKET_URI="s3://${BUCKET_URI}" ;;
+                  esac
+                  DEST="${BUCKET_URI%/}/${PREFIX}/${BASE}"
+
+                  echo "Uploading to ${DEST} with SSE-S3 (AES256) — emptyDir is scratch only"
+                  aws s3 cp "${SQL_GZ}" "${DEST}.sql.gz" \
+                    "${ENDPOINT_ARGS[@]}" \
+                    --sse AES256 \
+                    --only-show-errors \
+                    --metadata "sha256=${CHECKSUM},stamp=${STAMP},database=${MYSQL_DATABASE}"
+
+                  aws s3 cp "${SHA_FILE}" "${DEST}.sql.gz.sha256" \
+                    "${ENDPOINT_ARGS[@]}" \
+                    --sse AES256 \
+                    --only-show-errors
+
+                  aws s3 cp "${META_FILE}" "${DEST}.meta.json" \
+                    "${ENDPOINT_ARGS[@]}" \
+                    --sse AES256 \
+                    --only-show-errors \
+                    --content-type application/json
+
+                  # Verify remote object is listed (durable copy exists outside the Pod)
+                  aws s3 ls "${DEST}.sql.gz" "${ENDPOINT_ARGS[@]}" >/dev/null \
+                    || { echo "ERROR: upload verification failed for ${DEST}.sql.gz" >&2; exit 4; }
+
+                  # Retention note: enforce via bucket lifecycle; log policy for operators
+                  echo "RETENTION_POLICY_DAYS=${RETENTION_DAYS} (prefer bucket lifecycle on prefix ${PREFIX}/)"
+
+                  # Optional: delete local-listed objects older than retention (best-effort)
+                  if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && [[ "${RETENTION_DAYS}" -ge 1 ]]; then
+                    CUTOFF_EPOCH="$(date -u -d "-${RETENTION_DAYS} days" +%s 2>/dev/null || true)"
+                    if [[ -n "${CUTOFF_EPOCH}" ]]; then
+                      aws s3 ls "${BUCKET_URI%/}/${PREFIX}/" "${ENDPOINT_ARGS[@]}" \
+                        | awk '/\.sql\.gz$/ {print $1, $2, $4}' \
+                        | while read -r d t key; do
+                            obj_epoch="$(date -u -d "${d} ${t}" +%s 2>/dev/null || echo 0)"
+                            if [[ "${obj_epoch}" -gt 0 && "${obj_epoch}" -lt "${CUTOFF_EPOCH}" ]]; then
+                              echo "Retention delete: ${key}"
+                              aws s3 rm "${BUCKET_URI%/}/${PREFIX}/${key}" "${ENDPOINT_ARGS[@]}" --only-show-errors || true
+                              aws s3 rm "${BUCKET_URI%/}/${PREFIX}/${key}.sha256" "${ENDPOINT_ARGS[@]}" --only-show-errors || true
+                              base="${key%.sql.gz}"
+                              aws s3 rm "${BUCKET_URI%/}/${PREFIX}/${base}.meta.json" "${ENDPOINT_ARGS[@]}" --only-show-errors || true
+                            fi
+                          done
+                    fi
+                  fi
+
+                  echo "BACKUP_OK stamp=${STAMP} sha256=${CHECKSUM} size=${SIZE_BYTES} dest=${DEST}.sql.gz"
+                  echo "mysql_backup_last_success_unixtime $(date +%s)" > /backup/mysql_backup_last_success.prom
+                  echo "mysql_backup_last_size_bytes ${SIZE_BYTES}" >> /backup/mysql_backup_last_success.prom
+
+                  # Wipe scratch — durable backup is only in object storage
+                  rm -f "${SQL_GZ}" "${SHA_FILE}" "${META_FILE}"
+                  echo "Local scratch cleared; durable copy is in object storage only."
+              volumeMounts:
+                - name: backup-scratch
+                  mountPath: /backup
+                - name: tools
+                  mountPath: /tools
+                  readOnly: true
+          volumes:
+            # Scratch only — durable backups MUST live in S3-compatible storage above.
+            - name: backup-scratch
+              emptyDir:
+                sizeLimit: 4Gi
+            - name: tools
+              emptyDir:
+                sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mysql-backup
+  namespace: production
+  labels:
+    app.kubernetes.io/name: mysql-backup
+    app.kubernetes.io/part-of: animal-poke

@@ -201,7 +201,13 @@ jobs:
           set -euo pipefail
           chmod +x deploy/k8s/scripts/assert-manifests.sh
           # Build both overlays with immutable commit SHA and fail on any isolation/tag violation.
+          # Also enforces AP-015 backup artifacts (S3 SSE checksum CronJob, runbook, drill script).
           deploy/k8s/scripts/assert-manifests.sh
+      - name: AP-015 backup restore drill dry-run
+        run: |
+          set -euo pipefail
+          chmod +x deploy/scripts/backup-restore-drill.sh
+          ./deploy/scripts/backup-restore-drill.sh --dry-run
       - name: Extra staging isolation grep (belt-and-suspenders)
         env:
           IMAGE_TAG: ${{ github.sha }}
@@ -222,7 +228,9 @@ jobs:
           grep -q "backend:${IMAGE_TAG}" /tmp/staging.yaml
           grep -q "frontend:${IMAGE_TAG}" /tmp/staging.yaml
           grep -q 'staging-backend-secrets' /tmp/staging.yaml
-      - name: Assert frontend BACKEND_UPSTREAM in production overlay
+          # AP-015: staging must never ship production backup CronJob
+          ! grep -E 'kind:[[:space:]]*CronJob|mysql-backup' /tmp/staging.yaml
+      - name: Assert frontend BACKEND_UPSTREAM + AP-015 backup in production overlay
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -238,6 +246,14 @@ jobs:
           )
           grep -q 'BACKEND_UPSTREAM' /tmp/prod.yaml
           grep -q 'animal-poke-backend:80' /tmp/prod.yaml
+          # AP-015 durable encrypted backup path
+          grep -q 'kind: CronJob' /tmp/prod.yaml
+          grep -q 'mysql-backup' /tmp/prod.yaml
+          grep -q 'aws s3 cp' /tmp/prod.yaml
+          grep -q 'AES256' /tmp/prod.yaml
+          grep -q 'BACKUP_OK' /tmp/prod.yaml
+          grep -q 'S3_BUCKET' /tmp/prod.yaml
+          ! grep -E 'TODO: aws s3|TODO:.*rclone' /tmp/prod.yaml
 
   secret-scan:
     name: Secret scan
