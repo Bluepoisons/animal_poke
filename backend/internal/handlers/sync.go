@@ -26,12 +26,12 @@ const maxBatchItems = 100
 
 // 时间窗口：允许有限时钟漂移与离线延迟。
 const (
-	syncFutureSkew   = 2 * time.Minute
-	syncMaxAge       = 30 * 24 * time.Hour
-	maxBreedLen      = 64
-	maxCityLen       = 64
-	maxClassLen      = 32
-	maxElementLen    = 32
+	syncFutureSkew    = 2 * time.Minute
+	syncMaxAge        = 30 * 24 * time.Hour
+	maxBreedLen       = 64
+	maxCityLen        = 64
+	maxClassLen       = 32
+	maxElementLen     = 32
 	maxInferenceIDLen = 128
 )
 
