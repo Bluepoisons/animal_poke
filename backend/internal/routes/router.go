@@ -131,6 +131,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			errHandler := handlers.NewErrorReportHandler()
 			auth.POST("/errors/report", errHandler.Report)
 
+			analyticsHandler := handlers.NewAnalyticsHandler()
+			auth.POST("/analytics/events", analyticsHandler.Ingest)
+
 			product := handlers.NewProductHandler()
 			auth.GET("/ranking/daily", product.RankingDaily)
 			auth.POST("/pvp/match", product.PvPMatch)
