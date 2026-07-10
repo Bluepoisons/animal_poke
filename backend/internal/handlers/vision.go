@@ -194,7 +194,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r, err := h.aiService.DetectContext(c.Request.Context(), minimized, providerName)
 		if err != nil {
 			slog.Error("AI 检测失败", "device_id", deviceID, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "detection failed", "reason_code": "detect_failed"})
+			WriteProviderError(c, err, "detection failed")
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
@@ -304,14 +304,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, header.Filename)
 		if err != nil {
 			slog.Error("AI 分析失败", "device_id", deviceID, "err", err)
-			// 校验失败与模型失败区分
-			msg := err.Error()
-			if strings.Contains(msg, "out of range") || strings.Contains(msg, "missing") ||
-				strings.Contains(msg, "json") || strings.Contains(msg, "markdown") || strings.Contains(msg, "multiple") {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid analysis output", "reason_code": "analysis_invalid", "detail": msg})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "analysis failed", "reason_code": "analyze_failed"})
+			WriteProviderError(c, err, "analysis failed")
 			return
 		}
 		if locked != nil {

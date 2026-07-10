@@ -3,7 +3,6 @@ package routes
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
 	"animalpoke/backend/internal/config"
 	"animalpoke/backend/internal/handlers"
@@ -80,12 +79,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.GET("/metrics", middleware.MetricsHandler())
 
 	mockAllowed := cfg.MockAllowed()
-	sharedHTTP := services.DefaultHTTPClient(30 * time.Second)
+	geoProvider, weatherProvider, visionProvider, llmProvider := services.NewProvidersFromConfig(cfg.Upstream)
 
 	thirdParty := &cfg.ThirdParty
-	geoService := services.NewGeoServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
-	weatherService := services.NewWeatherServiceWithOptions(thirdParty, mockAllowed, sharedHTTP)
-	aiService := services.NewAIServiceWithOptions(thirdParty, mockAllowed, sharedHTTP).WithStatsSecret(cfg.JWTSecret)
+	geoService := services.NewGeoServiceWithProvider(thirdParty, mockAllowed, geoProvider)
+	weatherService := services.NewWeatherServiceWithProvider(thirdParty, mockAllowed, weatherProvider)
+	aiService := services.NewAIServiceWithProviders(thirdParty, mockAllowed, visionProvider, llmProvider)
 
 	var deviceRepo *repo.DeviceRepo
 	var animalRepo *repo.AnimalRepo

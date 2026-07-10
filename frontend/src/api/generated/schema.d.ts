@@ -503,6 +503,8 @@ export interface components {
         Error: {
             error?: string;
             reason_code?: string;
+            /** @description Whether the client may retry the request */
+            retryable?: boolean;
             request_id?: string;
         };
         ServiceUnavailableError: {
@@ -510,6 +512,7 @@ export interface components {
             error: string;
             /** @example db_unavailable */
             reason_code: string;
+            retryable?: boolean;
             request_id?: string;
         };
         HealthResponse: {

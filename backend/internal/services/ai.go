@@ -372,11 +372,27 @@ func (s *AIService) callProvider(ctx context.Context, endpoint, key, model strin
 		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
 	}
 
-	client := s.client
-	if client == nil {
-		client = DefaultHTTPClient(30 * time.Second)
+	// 选择 vision/llm provider：endpoint 匹配 Vision 时用 vision
+	provider := s.llmProvider
+	if s.cfg != nil && endpoint == s.cfg.VisionEndpoint && s.visionProvider != nil {
+		provider = s.visionProvider
+	} else if provider == nil {
+		provider = s.visionProvider
 	}
-	resp, respBody, err := DoWithRetry(ctx, client, req, defaultMaxRetries, defaultMaxResponseBytes)
+
+	var (
+		resp     *http.Response
+		respBody []byte
+	)
+	if provider != nil {
+		resp, respBody, err = provider.Do(ctx, req, defaultMaxResponseBytes)
+	} else {
+		client := s.client
+		if client == nil {
+			client = DefaultHTTPClient(30 * time.Second)
+		}
+		resp, respBody, err = DoWithRetry(ctx, client, req, defaultMaxRetries, defaultMaxResponseBytes)
+	}
 	if err != nil {
 		return nil, "", err
 	}
