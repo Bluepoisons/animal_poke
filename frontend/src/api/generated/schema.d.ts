@@ -132,7 +132,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register device and issue JWT */
+        /**
+         * Register device and issue JWT
+         * @description First registration generates an `installation_secret` (returned once).
+         *     Subsequent token refresh must include the secret; knowing only `device_id` is insufficient.
+         */
         post: operations["authDevice"];
         delete?: never;
         options?: never;
@@ -200,7 +204,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Analyze animal image */
+        /** Analyze selected animal target from a prior detect */
         post: operations["visionAnalyze"];
         delete?: never;
         options?: never;
@@ -234,7 +238,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upsert single animal (idempotent) */
+        /**
+         * Upsert single animal (idempotent)
+         * @description Validates and persists one animal. Single and batch share the same
+         *     validateAndSyncOne domain path. Returns stable reason_code on failure;
+         *     never leaks raw database errors.
+         */
         post: operations["syncAnimal"];
         delete?: never;
         options?: never;
@@ -252,7 +261,13 @@ export interface paths {
         /** Pull animals (cursor) */
         get: operations["pullAnimals"];
         put?: never;
-        /** Batch upsert animals */
+        /**
+         * Batch upsert animals (non-atomic per-item results)
+         * @description Non-atomic batch: each item is validated and synced independently via
+         *     the same validateAndSyncOne path as POST /sync/animal. Max 100 items.
+         *     Response is always a results array with per-item status and reason_code;
+         *     raw DB errors are never returned.
+         */
         post: operations["syncAnimalsBatch"];
         delete?: never;
         options?: never;
@@ -339,6 +354,23 @@ export interface paths {
         put?: never;
         /** Client security report */
         post: operations["securityReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest privacy-safe funnel analytics events */
+        post: operations["ingestAnalyticsEvents"];
         delete?: never;
         options?: never;
         head?: never;
@@ -508,12 +540,16 @@ export interface components {
         AuthDeviceRequest: {
             /** @description UUID or 8-64 alphanumeric/_- */
             device_id: string;
+            /** @description Required after first registration; proves device ownership */
+            installation_secret?: string;
         };
         AuthDeviceResponse: {
             token: string;
             expires_at: string;
             /** @example Bearer */
             token_type: string;
+            /** @description Present only on first successful registration; store securely client-side */
+            installation_secret?: string;
         };
         CityResponse: {
             city?: string;
@@ -530,13 +566,105 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        VisionDetectBox: {
+            /** @enum {string} */
+            species: "cat" | "dog" | "goose";
+            label?: string;
+            target_id: string;
+            confidence: number;
+            bounding_box: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
+        };
         VisionDetectResponse: {
-            animals?: {
-                [key: string]: unknown;
-            }[];
+            /** @description Backward-compatible alias of targets */
+            animals?: components["schemas"]["VisionDetectBox"][];
+            /** @description Multi-animal targets with stable target_id */
+            targets?: components["schemas"]["VisionDetectBox"][];
             inference_id?: string;
+            source?: string;
+            degraded?: boolean;
+            reason_code?: string;
+            model?: string;
+            prompt_version?: string;
         } & {
             [key: string]: unknown;
+        };
+        VisionAnalyzeResponse: {
+            breed?: string;
+            color?: string;
+            body_type?: string;
+            quality_score?: number;
+            subject_completeness?: number;
+            clarity?: number;
+            lighting?: number;
+            composition?: number;
+            pose?: number;
+            angle?: number;
+            species?: string;
+            target_id?: string;
+            detect_inference_id?: string;
+            inference_id?: string;
+            box?: {
+                x?: number;
+                y?: number;
+                width?: number;
+                height?: number;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        SyncAnimalRequest: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description capturable species (cat|dog|goose after normalize) */
+            species: string;
+            breed?: string;
+            rarity: number;
+            hp?: number;
+            atk?: number;
+            def?: number;
+            spd?: number;
+            /** @enum {string} */
+            class?: "Warrior" | "Mage" | "Ranger" | "Tank" | "Support" | "Assassin";
+            /** @enum {string} */
+            element?: "Fire" | "Water" | "Grass" | "Electric" | "Ice" | "Dark" | "Light" | "Earth" | "Wind";
+            latitude?: number;
+            longitude?: number;
+            city?: string;
+            /** Format: date-time */
+            generated_at: string;
+            inference_request_id?: string;
+            keep_precise_location?: boolean;
+        };
+        SyncAnimalResponse: {
+            /** @example synced */
+            status: string;
+            /** Format: uuid */
+            uuid: string;
+            review_status?: string;
+        };
+        BatchSyncRequest: {
+            items: components["schemas"]["SyncAnimalRequest"][];
+        };
+        BatchSyncItemResult: {
+            uuid: string;
+            /** @enum {string} */
+            status: "synced" | "conflict" | "error";
+            error?: string;
+            /**
+             * @description Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
+             *     invalid_class, invalid_element, invalid_coords, invalid_time,
+             *     invalid_string_length, species_unsupported, duplicate_animal,
+             *     batch_duplicate, inference_*, sync_failed, batch_too_large
+             */
+            reason_code?: string;
+        };
+        BatchSyncResponse: {
+            results: components["schemas"]["BatchSyncItemResult"][];
         };
     };
     responses: {
@@ -821,6 +949,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -917,25 +1046,51 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
-                    /** Format: binary */
+                    /**
+                     * Format: binary
+                     * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
+                     */
                     image: string;
+                    /** @description Parent detect inference id (required when provenance is enabled) */
+                    detect_inference_id?: string;
+                    /** @description Alias of detect_inference_id */
+                    parent_inference_id?: string;
+                    /** @description Stable target id from detect.targets */
+                    target_id?: string;
+                    /** @description Claimed species; must match locked detect target */
+                    species?: string;
+                    /** @description JSON bounding box {x,y,width,height} fractions 0-1 */
+                    box?: string;
+                    box_x?: number;
+                    box_y?: number;
+                    box_width?: number;
+                    box_height?: number;
                 };
             };
         };
         responses: {
-            /** @description Analysis result */
+            /** @description Analysis result for the locked target */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VisionAnalyzeResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
+            /** @description Invalid model analysis output */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             429: components["responses"]["TooManyRequests"];
         };
     };
@@ -980,23 +1135,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["SyncAnimalRequest"];
             };
         };
         responses: {
             /** @description Synced */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SyncAnimalResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
@@ -1038,23 +1190,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["BatchSyncRequest"];
             };
         };
         responses: {
-            /** @description Batch result */
+            /** @description Per-item batch results */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["BatchSyncResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -1175,6 +1324,62 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ingestAnalyticsEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Client schema registry version */
+                    schema_version?: number;
+                    events: {
+                        schema_version?: number;
+                        /** @description Pseudo-anonymous session id (not device token) */
+                        session_id: string;
+                        /** @enum {string} */
+                        name: "auth" | "camera_ok" | "scan" | "detect_result" | "capture_attempt" | "generate_stage" | "collection_complete" | "trade" | "battle_end";
+                        /** Format: int64 */
+                        ts: number;
+                        event_id: string;
+                        /** @description City/region only when location consented; never lat/lng */
+                        coarse_location?: {
+                            city?: string;
+                            region?: string;
+                            country?: string;
+                        };
+                        experiment_id?: string;
+                        experiment_variant?: string;
+                        /** @description Non-sensitive props; server drops photo/token/coords */
+                        props?: {
+                            [key: string]: unknown;
+                        };
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted (some events may be dropped) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accepted?: number;
+                        dropped?: number;
+                        schema_version?: number;
+                        request_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     createOrder: {

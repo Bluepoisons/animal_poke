@@ -138,6 +138,14 @@ func NewAIServiceWithProviders(cfg *config.ThirdPartyConfig, mockAllowed bool, v
 	}
 }
 
+// WithStatsSecret 注入 rarity/stats HMAC 密钥（通常为 JWT secret）。
+func (s *AIService) WithStatsSecret(secret string) *AIService {
+	if s != nil {
+		s.statsSecret = secret
+	}
+	return s
+}
+
 // NewVisionService 兼容旧测试命名，实际返回 AIService。
 func NewVisionService(cfg *config.ThirdPartyConfig) *AIService {
 	return NewAIService(cfg)

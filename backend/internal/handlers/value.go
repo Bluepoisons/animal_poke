@@ -47,6 +47,10 @@ type valueRequest struct {
 	// ParentInferenceID 应为 analyze 推理 ID（生产链路）；可选兼容旧客户端
 	ParentInferenceID  string `json:"parent_inference_id"`
 	AnalyzeInferenceID string `json:"analyze_inference_id"`
+	// InferenceRequestID 兼容旧客户端字段名
+	InferenceRequestID string `json:"inference_request_id"`
+	// CaptureID 客户端 capture/session id，作稳定 seed 候选
+	CaptureID string `json:"capture_id"`
 }
 
 // Generate POST /value/generate
@@ -56,6 +60,14 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: species is required"})
 		return
 	}
+
+	// 稳定 seed：优先 parent/analyze/inference_request_id，其次 capture_id
+	seedID := firstNonEmpty(
+		req.ParentInferenceID,
+		req.AnalyzeInferenceID,
+		req.InferenceRequestID,
+		req.CaptureID,
+	)
 
 	input := services.ValueInput{
 		Species:             req.Species,
@@ -68,6 +80,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		Composition:         req.Composition,
 		Pose:                req.Pose,
 		Angle:               req.Angle,
+		SeedID:              seedID,
 	}
 	if err := input.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -75,7 +88,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 	}
 
 	deviceID := middleware.GetDeviceID(c)
-	slog.Info("AI 数值生成请求", "device_id", deviceID, "species", req.Species)
+	slog.Info("AI 数值生成请求", "device_id", deviceID, "species", req.Species, "seed_id", seedID)
 	start := time.Now()
 
 	result, err := h.aiService.GenerateValueContext(c.Request.Context(), input)
@@ -99,16 +112,23 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 				return
 			}
 		}
+		cfgVer := result.ConfigVersion
+		if cfgVer == "" {
+			cfgVer = services.StatsConfigVersion
+		}
 		payload, _ := json.Marshal(map[string]interface{}{
-			"species": req.Species,
-			"breed":   req.Breed,
-			"rarity":  result.Rarity,
-			"hp":      result.HP,
-			"atk":     result.ATK,
-			"def":     result.DEF,
-			"spd":     result.SPD,
-			"class":   result.Class,
-			"element": result.Element,
+			"species":         req.Species,
+			"breed":           req.Breed,
+			"rarity":          result.Rarity,
+			"hp":              result.HP,
+			"atk":             result.ATK,
+			"def":             result.DEF,
+			"spd":             result.SPD,
+			"class":           result.Class,
+			"element":         result.Element,
+			"config_version":  cfgVer,
+			"seed_id":         result.SeedID,
+			"factors":         result.Factors,
 		})
 		exp := time.Now().UTC().Add(24 * time.Hour)
 		_ = h.inferenceRepo.Create(&models.Inference{
@@ -116,14 +136,14 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 			DeviceID:          deviceID,
 			Kind:              "value",
 			ParentInferenceID: parent,
-			Provider:          "llm",
+			Provider:          "algo",
 			Model:             result.Model,
 			PromptVersion:     result.PromptVersion,
-			InputDigest:       sha256Hex([]byte(fmt.Sprintf("%s|%s|%s", req.Species, req.Breed, req.Color))),
-			OutputDigest:      sha256Hex([]byte(fmt.Sprintf("%d|%d|%s", result.Rarity, result.HP, result.Class))),
+			InputDigest:       sha256Hex([]byte(fmt.Sprintf("%s|%s|%s|%s", req.Species, req.Breed, req.Color, seedID))),
+			OutputDigest:      sha256Hex([]byte(fmt.Sprintf("%d|%d|%s|%s", result.Rarity, result.HP, result.Class, cfgVer))),
 			ResultJSON:        string(payload),
 			Species:           req.Species,
-			ConfigVersion:     "value-v1",
+			ConfigVersion:     cfgVer,
 			Status:            "success",
 			DurationMs:        time.Since(start).Milliseconds(),
 			ExpiresAt:         &exp,
@@ -132,4 +152,13 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

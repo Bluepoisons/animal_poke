@@ -142,3 +142,73 @@ func TestAuditLogRepo_Create(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Greater(t, log.ID, uint(0))
 }
+
+func TestAnimalRepo_SoftDeleteBumpsVersionAndTombstone(t *testing.T) {
+	r, _ := setupAnimalRepo(t)
+	now := time.Now().UTC()
+	pl, pg := 1.0, 2.0
+	exp := now.Add(-time.Hour)
+	for i := range 3 {
+		a := &models.Animal{
+			UUID:             "soft-del-uuid-" + string(rune('a'+i)),
+			DeviceID:         "dev-sd",
+			Species:          "dog",
+			Breed:            "secret-breed",
+			Rarity:           1,
+			GeneratedAt:      now,
+			ServerVersion:    int64(10 + i),
+			PreciseLat:       &pl,
+			PreciseLng:       &pg,
+			PreciseExpiresAt: &exp,
+		}
+		assert.NoError(t, r.Create(a))
+	}
+
+	assert.NoError(t, r.SoftDeleteByDevice("dev-sd"))
+
+	alive, err := r.ListByDevice("dev-sd", 0, 50)
+	assert.NoError(t, err)
+	assert.Len(t, alive, 0)
+
+	items, err := r.ListSinceVersion("dev-sd", 0, 50)
+	assert.NoError(t, err)
+	assert.Len(t, items, 3)
+	for _, it := range items {
+		assert.NotNil(t, it.DeletedAt)
+		assert.Empty(t, it.Species)
+		assert.Empty(t, it.Breed)
+		assert.Nil(t, it.PreciseLat)
+		assert.Greater(t, it.ServerVersion, int64(12))
+	}
+}
+
+func TestAnimalRepo_ClearExpiredPreciseLocation(t *testing.T) {
+	r, _ := setupAnimalRepo(t)
+	now := time.Now().UTC()
+	pl, pg := 10.0, 20.0
+	expired := now.Add(-time.Minute)
+	future := now.Add(time.Hour)
+	a1 := &models.Animal{
+		UUID: "clr-1", DeviceID: "dev-clr", Species: "cat", Rarity: 1,
+		GeneratedAt: now, ServerVersion: 1,
+		PreciseLat: &pl, PreciseLng: &pg, PreciseExpiresAt: &expired,
+	}
+	a2 := &models.Animal{
+		UUID: "clr-2", DeviceID: "dev-clr", Species: "cat", Rarity: 1,
+		GeneratedAt: now, ServerVersion: 2,
+		PreciseLat: &pl, PreciseLng: &pg, PreciseExpiresAt: &future,
+	}
+	assert.NoError(t, r.Create(a1))
+	assert.NoError(t, r.Create(a2))
+
+	assert.NoError(t, r.ClearExpiredPreciseLocation(now))
+
+	var got1, got2 models.Animal
+	assert.NoError(t, r.db.Where("uuid = ?", "clr-1").First(&got1).Error)
+	assert.NoError(t, r.db.Where("uuid = ?", "clr-2").First(&got2).Error)
+	assert.Nil(t, got1.PreciseLat)
+	assert.Nil(t, got1.PreciseLng)
+	assert.Nil(t, got1.PreciseExpiresAt)
+	assert.NotNil(t, got2.PreciseLat)
+	assert.NotNil(t, got2.PreciseExpiresAt)
+}

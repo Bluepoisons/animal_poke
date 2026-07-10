@@ -18,10 +18,12 @@ const DefaultDevJWTSecret = "animal-poke-dev-secret"
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
-	AppEnv             string
-	ServerAddr         string
-	LogLevel           string
-	JWTSecret          string
+	AppEnv     string
+	ServerAddr string
+	LogLevel   string
+	JWTSecret  string
+	// JWTSecretPrevious 可选：密钥轮换窗口内用于校验旧 Token 的上一版密钥；签发始终用 JWTSecret。
+	JWTSecretPrevious  string
 	JWTIssuer          string
 	JWTAudience        string
 	JWTAccessTTL       time.Duration
@@ -192,6 +194,7 @@ func Load() *Config {
 		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
+		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
 		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
@@ -201,6 +204,7 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		TrustedProxies:     splitCSV(getEnv("TRUSTED_PROXIES", "")),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),
@@ -239,6 +243,12 @@ func Load() *Config {
 	if cfg.IsProduction() {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
 	}
+
+	// 商业化：production 默认关闭；非 production 默认开启。COMMERCE_ENABLED 可覆盖。
+	commerceDefault := !cfg.IsProduction()
+	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
+	// 真实商店验签：默认关闭，需显式开启 COMMERCE_STORE_VERIFY=true。
+	cfg.CommerceStoreVerify = getEnvBool("COMMERCE_STORE_VERIFY", false)
 	return cfg
 }
 
