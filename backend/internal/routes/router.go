@@ -152,7 +152,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			analyticsHandler := handlers.NewAnalyticsHandler()
 			auth.POST("/analytics/events", analyticsHandler.Ingest)
 
-			product := handlers.NewProductHandler()
+			product := handlers.NewProductHandlerWithOptions(handlers.ProductOptions{
+				Flags:    cfg.FeatureFlags,
+				OpsToken: cfg.OpsToken,
+			})
 			auth.GET("/ranking/daily", product.RankingDaily)
 			auth.POST("/pvp/match", product.PvPMatch)
 			auth.POST("/pvp/result", product.PvPReport)

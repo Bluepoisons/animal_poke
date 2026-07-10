@@ -48,7 +48,9 @@ func clearProviderEnv(t *testing.T) {
 		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
 		"LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
 		"VISION_REUSE_LLM",
-		"CORS_ALLOWED_ORIGINS", "ADMIN_API_KEY",
+		"CORS_ALLOWED_ORIGINS", "ADMIN_API_KEY", "OPS_TOKEN",
+		"FEATURE_RANKING", "FEATURE_PVP", "FEATURE_SOCIAL", "FEATURE_OPS",
+		"COMMERCE_ENABLED", "COMMERCE_STORE_VERIFY",
 	}
 	saved := map[string]string{}
 	for _, k := range keys {
@@ -87,6 +89,11 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "none", cfg.ThirdParty.VisionSource)
 	assert.True(t, cfg.AIMockEnabled)
 	assert.True(t, cfg.MockAllowed())
+	// 非 production 默认开启 product feature flags
+	assert.True(t, cfg.FeatureFlags.Ranking)
+	assert.True(t, cfg.FeatureFlags.PvP)
+	assert.True(t, cfg.FeatureFlags.Social)
+	assert.True(t, cfg.FeatureFlags.Ops)
 }
 
 func TestLoad_Overrides(t *testing.T) {
@@ -349,6 +356,11 @@ func TestCapabilityStatus_NoSecrets(t *testing.T) {
 	raw := strings.ToLower(strings.Join(mapValues(status), " "))
 	assert.NotContains(t, raw, "super-secret-key")
 	assert.NotContains(t, raw, "vision.example")
+	// feature flags 出现在 capability 中
+	assert.Contains(t, status, "feature_ranking")
+	assert.Contains(t, status, "feature_pvp")
+	assert.Contains(t, status, "feature_social")
+	assert.Contains(t, status, "feature_ops")
 }
 
 func mapValues(m map[string]interface{}) []string {
@@ -442,4 +454,42 @@ func TestSetupLogger_LevelFilter(t *testing.T) {
 	assert.Contains(t, s, "error_should_appear")
 	assert.False(t, strings.Contains(s, "info_should_be_filtered"),
 		"INFO 级别在 ERROR 阈值下应被过滤")
+}
+
+
+func TestLoad_FeatureFlags_ProductionDefaultsFalse(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("APP_ENV", "production")
+	cfg := Load()
+	assert.False(t, cfg.FeatureFlags.Ranking)
+	assert.False(t, cfg.FeatureFlags.PvP)
+	assert.False(t, cfg.FeatureFlags.Social)
+	assert.False(t, cfg.FeatureFlags.Ops)
+}
+
+func TestLoad_FeatureFlags_Overrides(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("FEATURE_RANKING", "true")
+	t.Setenv("FEATURE_PVP", "0")
+	t.Setenv("FEATURE_SOCIAL", "yes")
+	t.Setenv("FEATURE_OPS", "false")
+	cfg := Load()
+	assert.True(t, cfg.FeatureFlags.Ranking)
+	assert.False(t, cfg.FeatureFlags.PvP)
+	assert.True(t, cfg.FeatureFlags.Social)
+	assert.False(t, cfg.FeatureFlags.Ops)
+}
+
+func TestLoad_OpsTokenFallsBackToAdmin(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("ADMIN_API_KEY", "admin-only")
+	cfg := Load()
+	assert.Equal(t, "admin-only", cfg.OpsToken)
+
+	clearProviderEnv(t)
+	t.Setenv("ADMIN_API_KEY", "admin-only")
+	t.Setenv("OPS_TOKEN", "ops-specific")
+	cfg = Load()
+	assert.Equal(t, "ops-specific", cfg.OpsToken)
 }

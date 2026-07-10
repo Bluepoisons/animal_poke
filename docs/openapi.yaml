@@ -954,6 +954,185 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/ranking/daily:
+    get:
+      tags: [Product]
+      summary: Daily regional ranking board
+      description: |
+        Requires FEATURE_RANKING=true. When disabled returns 501 with reason_code feature_unavailable.
+        Production defaults FEATURE_RANKING=false.
+      operationId: rankingDaily
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ranking board (may be empty but authoritative when enabled)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  city:
+                    type: string
+                  date:
+                    type: string
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                  source:
+                    type: string
+                  request_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/pvp/match:
+    post:
+      tags: [Product]
+      summary: Request PvP match
+      description: |
+        Requires FEATURE_PVP=true. When disabled returns 501 feature_unavailable.
+        When enabled but matchmaking is not ready, returns 503 feature_unavailable (never empty match_id with 2xx).
+      operationId: pvpMatch
+      security:
+        - bearerAuth: []
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+        "503":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/pvp/result:
+    post:
+      tags: [Product]
+      summary: Report PvP result (server-authoritative)
+      description: |
+        Requires FEATURE_PVP=true. Disabled or not-ready returns 501/503 feature_unavailable.
+      operationId: pvpResult
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+        "503":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends:
+    get:
+      tags: [Product]
+      summary: List friends
+      description: |
+        Requires FEATURE_SOCIAL=true. When disabled returns 501 feature_unavailable.
+      operationId: socialFriends
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Friends list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friends:
+                    type: array
+                    items:
+                      type: object
+                  source:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/share:
+    post:
+      tags: [Product]
+      summary: Create share link
+      description: |
+        Requires FEATURE_SOCIAL=true. When disabled or share not ready, returns 501/503 feature_unavailable
+        (never pending share_id with 2xx).
+      operationId: socialShare
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+        "503":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/ops/metrics-summary:
+    get:
+      tags: [Product, Ops]
+      summary: Internal ops metrics summary
+      description: |
+        Requires FEATURE_OPS=true AND internal authorization via X-AP-Ops-Token header
+        or JWT role claim in {admin,ops,internal}. Ordinary devices receive 403 ops_forbidden.
+        When FEATURE_OPS=false returns 501 feature_unavailable.
+      operationId: opsMetricsSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-AP-Ops-Token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Internal ops token (OPS_TOKEN or ADMIN_API_KEY)
+      responses:
+        "200":
+          description: Metrics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dau:
+                    type: integer
+                  captures:
+                    type: integer
+                  source:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Ops access denied (reason_code ops_forbidden)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1060,6 +1239,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ServiceUnavailableError"
+    FeatureUnavailable:
+      description: Product feature disabled or not ready (reason_code feature_unavailable)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/FeatureUnavailableError"
 
   schemas:
     Error:
@@ -1069,6 +1257,21 @@ components:
           type: string
         reason_code:
           type: string
+        request_id:
+          type: string
+    FeatureUnavailableError:
+      type: object
+      required: [error, reason_code]
+      properties:
+        error:
+          type: string
+          example: feature unavailable
+        reason_code:
+          type: string
+          example: feature_unavailable
+        feature:
+          type: string
+          description: ranking|pvp|social|ops
         request_id:
           type: string
     ServiceUnavailableError:

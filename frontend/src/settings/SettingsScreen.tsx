@@ -2,6 +2,7 @@ import { useI18n } from '../i18n'
 import { useSettings } from './SettingsContext'
 import type { Locale } from '../i18n'
 import type { UserSettings } from './types'
+import { isFeatureEnabled } from '../features/animal-poke/featureFlags'
 
 interface SettingsScreenProps {
   onToast?: (msg: string) => void
@@ -57,6 +58,12 @@ function ToggleRow({
 export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps) {
   const { t, locale, setLocale, supportedLocales } = useI18n()
   const { settings, update, exportData, deleteLocalData } = useSettings()
+
+  const showRanking = isFeatureEnabled('ranking')
+  const showPvP = isFeatureEnabled('pvp')
+  const showSocial = isFeatureEnabled('social')
+  const showOps = isFeatureEnabled('ops')
+  const showLabs = showRanking || showPvP || showSocial || showOps
 
   const setBool = (key: keyof UserSettings) => (v: boolean) => {
     update({ [key]: v })
@@ -171,6 +178,39 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
         />
         <p style={{ fontSize: 12, color: '#8D6E63' }}>{t('settings.sync.hint')}</p>
       </section>
+
+
+      {/* AP-042: only show unfinished product surfaces when feature flags are on */}
+      {showLabs && (
+        <section style={{ marginBottom: 16 }} data-testid="feature-labs">
+          <h2 style={{ fontSize: 14, color: '#6D4C41' }}>Labs</h2>
+          <p style={{ fontSize: 12, color: '#8D6E63', marginBottom: 8 }}>
+            Experimental surfaces (hidden when feature flags are off or API returns feature_unavailable).
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {showRanking && (
+              <button type="button" onClick={() => onToast?.('Ranking is experimental')} data-testid="entry-ranking">
+                Ranking
+              </button>
+            )}
+            {showPvP && (
+              <button type="button" onClick={() => onToast?.('PvP is experimental')} data-testid="entry-pvp">
+                PvP
+              </button>
+            )}
+            {showSocial && (
+              <button type="button" onClick={() => onToast?.('Social is experimental')} data-testid="entry-social">
+                Social
+              </button>
+            )}
+            {showOps && (
+              <button type="button" onClick={() => onToast?.('Ops is internal only')} data-testid="entry-ops">
+                Ops
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <section style={{ marginBottom: 16 }}>
         <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.privacy')}</h2>

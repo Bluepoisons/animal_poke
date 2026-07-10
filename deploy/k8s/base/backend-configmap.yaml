@@ -29,3 +29,10 @@ data:
   HTTP_SHUTDOWN_TIMEOUT: "15s"
   MAX_IMAGE_BYTES: "5242880"
   MAX_IMAGE_PIXELS: "12000000"
+  # AP-042: unfinished product surfaces stay off in production
+  FEATURE_RANKING: "false"
+  FEATURE_PVP: "false"
+  FEATURE_SOCIAL: "false"
+  FEATURE_OPS: "false"
+  COMMERCE_ENABLED: "false"
+  COMMERCE_STORE_VERIFY: "false"
