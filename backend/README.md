@@ -49,7 +49,16 @@ docker build -f deploy/Dockerfile -t animal-poke-backend:local ./backend
 make test              # go test ./...
 go test -race ./...
 go vet ./...
+make vision-golden-stub  # AP-047 ML golden set (stub, no API keys)
 ```
+
+### Vision 黄金集（AP-047）
+
+- 清单与基线：`testdata/vision_golden/manifest.json`、`baseline.json`
+- PR 门禁：`make vision-golden-stub` / CI job `vision-golden-stub`（mock 提供商）
+- 指标：per-class precision/recall、unknown rejection、mean IoU、latency P50/P95/P99、cost 占位
+- 退化阈值：基线 diff 超过 `manifest.thresholds` 即失败
+- 真实 Provider 认证：见 `.github/workflows/vision-golden-real.yml`（`workflow_dispatch` / nightly 手动），需 `VISION_*` secrets；默认不在 PR 跑
 
 ## 配置要点
 
