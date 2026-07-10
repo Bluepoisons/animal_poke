@@ -165,7 +165,14 @@ export function useCamera(): UseCameraResult {
   const captureFrame = useCallback(
     async (maxEdge = 1280, quality = 0.85) => {
       if (isForceCameraReady()) {
-        return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' })
+        // Must clear Discover localFrameQualityGate (min 2KB) and look like JPEG
+        const bytes = new Uint8Array(2500)
+        bytes[0] = 0xff
+        bytes[1] = 0xd8
+        bytes[2] = 0xff
+        bytes[bytes.length - 2] = 0xff
+        bytes[bytes.length - 1] = 0xd9
+        return new Blob([bytes], { type: 'image/jpeg' })
       }
       const video = videoRef.current
       if (!video || status !== 'ready') return null

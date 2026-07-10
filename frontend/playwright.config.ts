@@ -11,16 +11,20 @@ import { defineConfig, devices } from '@playwright/test'
 const usePreview = process.env.E2E_USE_PREVIEW === '1'
 const enableMobile = process.env.PLAYWRIGHT_MOBILE === '1'
 
-const projects = [
+const projects: { name: string; use: (typeof devices)[string] }[] = [
   {
     name: 'chromium',
     use: { ...devices['Desktop Chrome'] },
   },
-  {
+]
+
+// CI installs Chromium only; enable WebKit explicitly with PLAYWRIGHT_WEBKIT=1.
+if (process.env.PLAYWRIGHT_WEBKIT === '1') {
+  projects.push({
     name: 'webkit',
     use: { ...devices['Desktop Safari'] },
-  },
-]
+  })
+}
 
 if (enableMobile) {
   projects.push(
