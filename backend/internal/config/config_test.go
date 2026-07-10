@@ -37,8 +37,9 @@ func TestDSN(t *testing.T) {
 	}
 }
 
-// 用例需要环境变量为空以验证默认值; t.Setenv 无法 unset, 故手动保存/清除/恢复。
-func TestLoad_Defaults(t *testing.T) {
+// clearProviderEnv 清空 Vision/VLM/LLM 相关环境，避免宿主环境干扰。
+func clearProviderEnv(t *testing.T) {
+	t.Helper()
 	keys := []string{
 		"APP_ENV", "SERVER_ADDR", "LOG_LEVEL", "JWT_SECRET", "AI_MOCK_ENABLED",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
@@ -46,11 +47,12 @@ func TestLoad_Defaults(t *testing.T) {
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
 		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
 		"LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
+		"VISION_REUSE_LLM",
+		"CORS_ALLOWED_ORIGINS", "ADMIN_API_KEY",
 	}
 	saved := map[string]string{}
 	for _, k := range keys {
-		v, ok := os.LookupEnv(k)
-		if ok {
+		if v, ok := os.LookupEnv(k); ok {
 			saved[k] = v
 		}
 		os.Unsetenv(k)
@@ -63,6 +65,11 @@ func TestLoad_Defaults(t *testing.T) {
 			os.Setenv(k, v)
 		}
 	})
+}
+
+// 用例需要环境变量为空以验证默认值; t.Setenv 无法 unset, 故手动保存/清除/恢复。
+func TestLoad_Defaults(t *testing.T) {
+	clearProviderEnv(t)
 
 	cfg := Load()
 	assert.Equal(t, "development", cfg.AppEnv)
@@ -76,11 +83,14 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "", cfg.ThirdParty.TencentMapKey)
 	assert.Equal(t, "", cfg.ThirdParty.VisionKey)
 	assert.Equal(t, "", cfg.ThirdParty.LLMModel)
+	assert.False(t, cfg.ThirdParty.VisionConfigured())
+	assert.Equal(t, "none", cfg.ThirdParty.VisionSource)
 	assert.True(t, cfg.AIMockEnabled)
 	assert.True(t, cfg.MockAllowed())
 }
 
 func TestLoad_Overrides(t *testing.T) {
+	clearProviderEnv(t)
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("SERVER_ADDR", ":9999")
 	t.Setenv("LOG_LEVEL", "DEBUG")
@@ -108,9 +118,199 @@ func TestLoad_Overrides(t *testing.T) {
 	assert.Equal(t, "https://vision.example", cfg.ThirdParty.VisionEndpoint)
 	assert.Equal(t, "vk", cfg.ThirdParty.VisionKey)
 	assert.Equal(t, "vision-model", cfg.ThirdParty.VisionModel)
+	assert.True(t, cfg.ThirdParty.VisionConfigured())
+	assert.Equal(t, "vision", cfg.ThirdParty.VisionSource)
+}
+
+func TestLoad_VisionAtomicTriplet(t *testing.T) {
+	tests := []struct {
+		name            string
+		env             map[string]string
+		wantConfigured  bool
+		wantSource      string
+		wantEndpoint    string
+		wantModel       string
+		wantValidateErr string
+	}{
+		{
+			name: "complete_vision",
+			env: map[string]string{
+				"VISION_ENDPOINT": "https://vision.example/v1",
+				"VISION_KEY":      "vk",
+				"VISION_MODEL":    "vision-model",
+			},
+			wantConfigured: true,
+			wantSource:     "vision",
+			wantEndpoint:   "https://vision.example/v1",
+			wantModel:      "vision-model",
+		},
+		{
+			name: "complete_vlm_compat",
+			env: map[string]string{
+				"VLM_ENDPOINT": "https://vlm.example/v1",
+				"VLM_KEY":      "vlmk",
+				"VLM_MODEL":    "vlm-model",
+			},
+			wantConfigured: true,
+			wantSource:     "vlm",
+			wantEndpoint:   "https://vlm.example/v1",
+			wantModel:      "vlm-model",
+		},
+		{
+			name: "llm_only_no_reuse_vision_not_configured",
+			env: map[string]string{
+				"LLM_ENDPOINT": "https://llm.example/v1",
+				"LLM_KEY":      "lk",
+				"LLM_MODEL":    "text-model",
+			},
+			wantConfigured: false,
+			wantSource:     "none",
+		},
+		{
+			name: "explicit_reuse_llm",
+			env: map[string]string{
+				"LLM_ENDPOINT":     "https://llm.example/v1",
+				"LLM_KEY":          "lk",
+				"LLM_MODEL":        "text-model",
+				"VISION_REUSE_LLM": "true",
+			},
+			wantConfigured: true,
+			wantSource:     "llm_reuse",
+			wantEndpoint:   "https://llm.example/v1",
+			wantModel:      "text-model",
+		},
+		{
+			name: "partial_vision_missing_key",
+			env: map[string]string{
+				"VISION_ENDPOINT": "https://vision.example/v1",
+				"VISION_MODEL":    "vision-model",
+			},
+			wantConfigured:  false,
+			wantSource:      "vision_partial",
+			wantValidateErr: "complete triplet",
+		},
+		{
+			name: "mixed_vision_endpoint_vlm_key",
+			env: map[string]string{
+				"VISION_ENDPOINT": "https://vision.example/v1",
+				"VLM_KEY":         "vlmk",
+				"LLM_MODEL":       "text-model",
+			},
+			wantConfigured:  false,
+			wantSource:      "vision_partial",
+			wantValidateErr: "complete triplet",
+		},
+		{
+			name: "vision_wins_over_vlm",
+			env: map[string]string{
+				"VISION_ENDPOINT": "https://vision.example/v1",
+				"VISION_KEY":      "vk",
+				"VISION_MODEL":    "vision-model",
+				"VLM_ENDPOINT":    "https://vlm.example/v1",
+				"VLM_KEY":         "vlmk",
+				"VLM_MODEL":       "vlm-model",
+			},
+			wantConfigured: true,
+			wantSource:     "vision",
+			wantEndpoint:   "https://vision.example/v1",
+			wantModel:      "vision-model",
+		},
+		{
+			name: "reuse_false_even_if_llm_complete",
+			env: map[string]string{
+				"LLM_ENDPOINT":     "https://llm.example/v1",
+				"LLM_KEY":          "lk",
+				"LLM_MODEL":        "text-model",
+				"VISION_REUSE_LLM": "false",
+			},
+			wantConfigured: false,
+			wantSource:     "none",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearProviderEnv(t)
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			cfg := Load()
+			assert.Equal(t, tt.wantConfigured, cfg.ThirdParty.VisionConfigured(), "VisionConfigured")
+			assert.Equal(t, tt.wantSource, cfg.ThirdParty.VisionSource, "VisionSource")
+			if tt.wantEndpoint != "" {
+				assert.Equal(t, tt.wantEndpoint, cfg.ThirdParty.VisionEndpoint)
+			}
+			if tt.wantModel != "" {
+				assert.Equal(t, tt.wantModel, cfg.ThirdParty.VisionModel)
+			}
+			if tt.wantSource == "llm_reuse" {
+				assert.True(t, cfg.ThirdParty.VisionReuseLLM)
+				assert.NotEqual(t, "none", cfg.ThirdParty.VisionFingerprint())
+			}
+			err := cfg.Validate()
+			if tt.wantValidateErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantValidateErr)
+			} else if !cfg.IsProduction() {
+				// 开发环境仅在残缺时失败；完整/未配置均可通过（mock 可补）
+				if tt.wantSource == "vision_partial" || tt.wantSource == "vlm_partial" {
+					require.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidate_ProductionHTTPEndpoint(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	cfg.JWTSecret = strings.Repeat("x", 32)
+	cfg.Database.Password = "complex-pass"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "http://vision.example/v1",
+		VisionKey:      "k",
+		VisionModel:    "m",
+		VisionSource:   "vision",
+		LLMEndpoint:    "https://llm.example/v1",
+		LLMKey:         "k",
+		LLMModel:       "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HTTPS")
+}
+
+func TestValidate_ProductionLocalhostRejected(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	cfg.JWTSecret = strings.Repeat("x", 32)
+	cfg.Database.Password = "complex-pass"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://localhost:8080/v1",
+		VisionKey:      "k",
+		VisionModel:    "m",
+		VisionSource:   "vision",
+		LLMEndpoint:    "https://llm.example/v1",
+		LLMKey:         "k",
+		LLMModel:       "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "localhost")
 }
 
 func TestValidate_Production(t *testing.T) {
+	clearProviderEnv(t)
 	cfg := Load()
 	cfg.AppEnv = "production"
 	cfg.JWTSecret = DefaultDevJWTSecret
@@ -123,8 +323,8 @@ func TestValidate_Production(t *testing.T) {
 	cfg.Database.Password = "complex-pass"
 	cfg.AIMockEnabled = false
 	cfg.ThirdParty = ThirdPartyConfig{
-		VisionEndpoint: "https://v", VisionKey: "k", VisionModel: "m",
-		LLMEndpoint: "https://l", LLMKey: "k", LLMModel: "m",
+		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
+		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
 	}
 	cfg.AdminAPIKey = "admin-secret"
 	// 缺 CORS 白名单应失败
@@ -134,6 +334,43 @@ func TestValidate_Production(t *testing.T) {
 
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	assert.NoError(t, cfg.Validate())
+}
+
+func TestCapabilityStatus_NoSecrets(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("VISION_ENDPOINT", "https://vision.example/v1")
+	t.Setenv("VISION_KEY", "super-secret-key")
+	t.Setenv("VISION_MODEL", "vision-model")
+	cfg := Load()
+	status := cfg.CapabilityStatus()
+	assert.Equal(t, true, status["vision_configured"])
+	assert.Equal(t, "vision", status["vision_source"])
+	// 不得包含 key / endpoint 原文
+	raw := strings.ToLower(strings.Join(mapValues(status), " "))
+	assert.NotContains(t, raw, "super-secret-key")
+	assert.NotContains(t, raw, "vision.example")
+}
+
+func mapValues(m map[string]interface{}) []string {
+	out := make([]string, 0, len(m))
+	for _, v := range m {
+		out = append(out, strings.TrimSpace(strings.ToLower(toString(v))))
+	}
+	return out
+}
+
+func toString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	default:
+		return ""
+	}
 }
 
 func TestMockAllowed(t *testing.T) {
