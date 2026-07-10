@@ -1,0 +1,13 @@
+# backend Docker 构建上下文忽略（context = ./backend）
+.env
+.env.*
+!.env.example
+*.local
+.git
+.gitignore
+bin/
+coverage.out
+*.test
+*.out
+tmp/
+.DS_Store

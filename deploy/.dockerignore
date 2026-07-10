@@ -1,0 +1,20 @@
+# 仓库根构建忽略（前端镜像等）
+.git
+.github
+.workbuddy
+conversations
+node_modules
+frontend/node_modules
+frontend/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.local
+**/.DS_Store
+**/coverage
+**/*.tsbuildinfo
+backend/bin
+backend/coverage.out
+docs
+*.md
+!README.md
