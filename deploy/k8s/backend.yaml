@@ -20,33 +20,84 @@ spec:
       labels:
         app: animal-poke-backend
     spec:
+      serviceAccountName: animal-poke-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: backend
-          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:latest
+          # 使用不可变标签：commit SHA 或 release digest，禁止 latest
+          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:__IMAGE_TAG__
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: backend-config
           env:
-            - name: PORT
-              value: "8080"
-            - name: GIN_MODE
-              value: "release"
+            - name: SERVER_ADDR
+              value: ":8080"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: backend-secrets
                   key: jwt-secret
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: db-password
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: admin-api-key
             - name: TENCENT_MAP_KEY
               valueFrom:
                 secretKeyRef:
                   name: backend-secrets
                   key: tencent-map-key
-            - name: DB_HOST
-              value: "mysql.production.svc.cluster.local"
-            - name: DB_PORT
-              value: "3306"
-            - name: DB_NAME
-              value: "animal_poke"
+            - name: CAIYUN_WEATHER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: caiyun-weather-key
+            - name: VISION_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: vision-endpoint
+            - name: VISION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: vision-key
+            - name: VISION_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: vision-model
+            - name: LLM_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: llm-endpoint
+            - name: LLM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: llm-key
+            - name: LLM_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: llm-model
           resources:
             requests:
               cpu: 250m
@@ -54,32 +105,52 @@ spec:
             limits:
               cpu: 1000m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
-              path: /health
-              port: 8080
+              path: /livez
+              port: http
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /health
-              port: 8080
+              path: /readyz
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 2
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: animal-poke-backend
   namespace: production
+  labels:
+    app: animal-poke-backend
 spec:
   selector:
     app: animal-poke-backend
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: http
       protocol: TCP
   type: ClusterIP
 ---

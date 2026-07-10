@@ -1,0 +1,14 @@
+# Namespace + ServiceAccount + 安全上下文基线
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    app.kubernetes.io/part-of: animal-poke
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: animal-poke-backend
+  namespace: production
+automountServiceAccountToken: false
