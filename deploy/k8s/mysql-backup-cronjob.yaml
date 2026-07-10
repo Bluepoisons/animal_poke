@@ -1,0 +1,41 @@
+# MySQL 逻辑备份 CronJob 示例（生产请改用云厂商自动备份 + PITR）
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mysql-backup
+  namespace: production
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: mysql:8.0
+              env:
+                - name: MYSQL_PWD
+                  valueFrom:
+                    secretKeyRef:
+                      name: backend-secrets
+                      key: db-password
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+                  FILE=/backup/animal_poke_${STAMP}.sql.gz
+                  mysqldump -h mysql.production.svc.cluster.local -u animal_poke \
+                    --single-transaction --routines --triggers animal_poke | gzip -c > "$FILE"
+                  echo "wrote $FILE"
+                  # TODO: aws s3 cp / rclone 到加密对象存储
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              emptyDir: {}
