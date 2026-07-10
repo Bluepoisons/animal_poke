@@ -1296,6 +1296,65 @@ paths:
         "501":
           $ref: "#/components/responses/FeatureUnavailable"
 
+  /api/v1/errors/report:
+    post:
+      tags: [Observability]
+      summary: Client error report (redacted)
+      description: |
+        Authenticated client error ingest. Message is required.
+        Server redacts tokens/keys and truncates stack/message before logging.
+        Never accepts photos or precise coordinates.
+      operationId: errorsReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorReportRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorReportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/analytics/events:
+    post:
+      tags: [Analytics]
+      summary: Privacy-safe funnel event ingest
+      description: |
+        Batch ingest of allowed funnel event names only.
+        Drops forbidden keys (photos, tokens, precise coords).
+        schema_version must be 1 when provided.
+      operationId: analyticsIngest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyticsIngestRequest"
+      responses:
+        "202":
+          description: Accepted (per-event accept/drop counts)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsIngestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1790,3 +1849,127 @@ components:
         server_time:
           type: string
           format: date-time
+
+    VisionAnalyzeResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        species: { type: string }
+        breed: { type: string }
+        color: { type: string }
+        body_type: { type: string }
+        inference_id: { type: string }
+        parent_inference_id: { type: string }
+        target_id: { type: string }
+        source: { type: string }
+        safety:
+          $ref: "#/components/schemas/SafetySummary"
+    SyncAnimalRequest:
+      type: object
+      required: [uuid, species, rarity, generated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        species: { type: string }
+        breed: { type: string }
+        rarity: { type: integer, minimum: 1, maximum: 5 }
+        hp: { type: integer }
+        atk: { type: integer }
+        def: { type: integer }
+        spd: { type: integer }
+        class: { type: string }
+        element: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        city: { type: string }
+        generated_at: { type: string, format: date-time }
+        inference_request_id: { type: string }
+        keep_precise_location: { type: boolean }
+    SyncAnimalResponse:
+      type: object
+      required: [status, uuid]
+      properties:
+        status: { type: string, example: synced }
+        uuid: { type: string }
+        review_status: { type: string }
+    BatchSyncRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SyncAnimalRequest"
+    BatchSyncResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              uuid: { type: string }
+              status: { type: string }
+              error: { type: string }
+              reason_code: { type: string }
+    ErrorReportRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        stack: { type: string }
+        component: { type: string }
+        route: { type: string }
+        release: { type: string }
+        level: { type: string }
+        extra:
+          type: object
+          additionalProperties: { type: string }
+    ErrorReportResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        request_id: { type: string }
+    AnalyticsIngestRequest:
+      type: object
+      required: [events]
+      properties:
+        schema_version: { type: integer, enum: [0, 1] }
+        events:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AnalyticsEvent"
+    AnalyticsEvent:
+      type: object
+      required: [name, session_id, event_id]
+      properties:
+        schema_version: { type: integer }
+        session_id: { type: string }
+        name:
+          type: string
+          enum: [auth, camera_ok, scan, detect_result, capture_attempt, generate_stage, collection_complete, trade, battle_end]
+        ts: { type: integer, format: int64 }
+        event_id: { type: string }
+        coarse_location:
+          type: object
+          properties:
+            city: { type: string }
+            region: { type: string }
+            country: { type: string }
+        experiment_id: { type: string }
+        experiment_variant: { type: string }
+        props:
+          type: object
+          additionalProperties: true
+    AnalyticsIngestResponse:
+      type: object
+      required: [accepted, dropped, schema_version]
+      properties:
+        accepted: { type: integer }
+        dropped: { type: integer }
+        schema_version: { type: integer }
+        request_id: { type: string }
