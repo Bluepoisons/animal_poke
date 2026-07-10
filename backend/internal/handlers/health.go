@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,8 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// Health liveness：进程存活。
+// Health liveness：进程存活（兼容旧路径 /health）。
 func Health() gin.HandlerFunc {
+	return Livez()
+}
+
+// Livez 仅判断进程存活，不检查依赖。
+func Livez() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -25,37 +31,114 @@ func Health() gin.HandlerFunc {
 
 // ReadyDeps readiness 依赖。
 type ReadyDeps struct {
-	DB           *gorm.DB
-	ReadyErrors  []string
-	AppEnv       string
+	DB          *gorm.DB
+	ReadyErrors []string
+	AppEnv      string
+	// SchemaOK 为 false 时表示迁移版本不匹配（可选）。
+	SchemaOK *bool
 }
 
-// Ready readiness：配置与依赖。
+// ReadyChecker 运行时可更新的 readiness 状态（依赖恢复后无需重启）。
+type ReadyChecker struct {
+	mu          sync.RWMutex
+	db          *gorm.DB
+	readyErrors []string
+	appEnv      string
+	schemaOK    *bool
+}
+
+// NewReadyChecker 构造。
+func NewReadyChecker(deps ReadyDeps) *ReadyChecker {
+	return &ReadyChecker{
+		db:          deps.DB,
+		readyErrors: append([]string(nil), deps.ReadyErrors...),
+		appEnv:      deps.AppEnv,
+		schemaOK:    deps.SchemaOK,
+	}
+}
+
+// SetDB 更新 DB 句柄（连接恢复时可调用）。
+func (r *ReadyChecker) SetDB(db *gorm.DB) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.db = db
+}
+
+// SetReadyErrors 更新配置错误列表。
+func (r *ReadyChecker) SetReadyErrors(errs []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.readyErrors = append([]string(nil), errs...)
+}
+
+// Snapshot 返回当前依赖快照。
+func (r *ReadyChecker) Snapshot() ReadyDeps {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return ReadyDeps{
+		DB:          r.db,
+		ReadyErrors: append([]string(nil), r.readyErrors...),
+		AppEnv:      r.appEnv,
+		SchemaOK:    r.schemaOK,
+	}
+}
+
+// evaluateReady 统一 readiness 判定。
+func evaluateReady(deps ReadyDeps) (ready bool, details gin.H) {
+	ready = true
+	details = gin.H{"app_env": deps.AppEnv}
+
+	if deps.DB != nil {
+		sqlDB, err := deps.DB.DB()
+		if err != nil || sqlDB.Ping() != nil {
+			ready = false
+			details["db"] = "down"
+		} else {
+			details["db"] = "up"
+		}
+	} else {
+		details["db"] = "unavailable"
+		// 生产无 DB 视为未就绪；开发允许降级
+		if deps.AppEnv == "production" || deps.AppEnv == "prod" {
+			ready = false
+		}
+	}
+
+	if deps.SchemaOK != nil && !*deps.SchemaOK {
+		ready = false
+		details["schema"] = "mismatch"
+	} else if deps.SchemaOK != nil {
+		details["schema"] = "ok"
+	}
+
+	if len(deps.ReadyErrors) > 0 {
+		ready = false
+		details["config_errors"] = deps.ReadyErrors
+	}
+	details["ready"] = ready
+	return ready, details
+}
+
+// Ready readiness：配置与依赖（兼容 /ready）。
 func Ready(deps ReadyDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ready := true
-		details := gin.H{"app_env": deps.AppEnv}
-		if deps.DB != nil {
-			sqlDB, err := deps.DB.DB()
-			if err != nil || sqlDB.Ping() != nil {
-				ready = false
-				details["db"] = "down"
-			} else {
-				details["db"] = "up"
-			}
-		} else {
-			details["db"] = "unavailable"
-			// 开发允许无 DB；生产由配置错误体现
-		}
-		if len(deps.ReadyErrors) > 0 {
-			ready = false
-			details["config_errors"] = deps.ReadyErrors
-		}
+		ready, details := evaluateReady(deps)
 		status := http.StatusOK
 		if !ready {
 			status = http.StatusServiceUnavailable
 		}
-		details["ready"] = ready
+		c.JSON(status, details)
+	}
+}
+
+// Readyz 动态 readiness，支持依赖恢复后无需重启。
+func Readyz(checker *ReadyChecker) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ready, details := evaluateReady(checker.Snapshot())
+		status := http.StatusOK
+		if !ready {
+			status = http.StatusServiceUnavailable
+		}
 		c.JSON(status, details)
 	}
 }

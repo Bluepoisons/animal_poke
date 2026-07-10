@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"net/http"
 	"time"
 
 	"animalpoke/backend/internal/config"
@@ -30,16 +31,42 @@ func (d deviceChecker) TokenVersion(deviceID string) (int, error) {
 	return dev.TokenVersion, nil
 }
 
+// unavailable 依赖不可用时返回结构化 503（避免 404）。
+func unavailable(reason string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Retry-After", "30")
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":       "service unavailable",
+			"reason_code": reason,
+			"request_id":  middleware.GetRequestID(c),
+		})
+	}
+}
+
 // NewRouter 组装 Gin 引擎: 全局中间件链 + 路由分组。
+// 所有业务路由始终注册；依赖缺失时返回 503 而非 404。
 func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r := gin.New()
+	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowedOrigins: cfg.CORSAllowedOrigins,
+		DevOpen:        cfg.IsDevelopment(),
+	}))
 	r.MaxMultipartMemory = cfg.MaxImageBytes
 
-	// Liveness
+	// Liveness / Readiness
 	r.GET("/health", handlers.Health())
+	r.GET("/livez", handlers.Livez())
+	readyChecker := handlers.NewReadyChecker(handlers.ReadyDeps{
+		DB:          db,
+		ReadyErrors: cfg.ReadyErrors(),
+		AppEnv:      cfg.AppEnv,
+	})
+	r.GET("/ready", handlers.Readyz(readyChecker))
+	r.GET("/readyz", handlers.Readyz(readyChecker))
+	r.GET("/metrics", middleware.MetricsHandler())
 
 	mockAllowed := cfg.MockAllowed()
 	sharedHTTP := services.DefaultHTTPClient(30 * time.Second)
@@ -62,13 +89,6 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		inferenceRepo = repo.NewInferenceRepo(db)
 	}
 
-	// Readiness
-	r.GET("/ready", handlers.Ready(handlers.ReadyDeps{
-		DB:          db,
-		ReadyErrors: cfg.ReadyErrors(),
-		AppEnv:      cfg.AppEnv,
-	}))
-
 	// 限流：优先共享存储接口（内存实现可替换 Redis）
 	sharedCounter := middleware.NewMemorySharedCounter()
 	rateLimiter := middleware.NewRateLimiter(100.0/60.0, 10).WithShared(sharedCounter)
@@ -78,19 +98,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	api := r.Group("/api/v1")
 	{
 		api.GET("/ping", func(c *gin.Context) {
-			c.JSON(200, gin.H{"msg": "pong", "db": db != nil, "app_env": cfg.AppEnv})
+			c.JSON(200, gin.H{"msg": "pong", "db": db != nil, "app_env": cfg.AppEnv, "request_id": middleware.GetRequestID(c)})
 		})
 
 		// 可信时间（公开，带签名）
 		timeHandler := handlers.NewTimeHandler(cfg.JWTSecret)
 		api.GET("/time", timeHandler.GetTime)
 
-		// 设备鉴权（IP 限流防爆破）
+		// 设备鉴权：始终注册；无 DB 时 503
 		if deviceRepo != nil {
 			authHandler := handlers.NewAuthHandlerFull(
 				deviceRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 			)
 			api.POST("/auth/device", middleware.RateLimitByIP(ipLimiter), authHandler.DeviceAuth)
+		} else {
+			api.POST("/auth/device", unavailable("db_unavailable"))
 		}
 
 		// JWT
@@ -123,13 +145,19 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				ai.POST("/value/generate", middleware.CostLimitByType(costCounter, "value"), valueHandler.Generate)
 			}
 
+			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
 				syncHandler := handlers.NewSyncHandlerFull(animalRepo, auditService, inferenceRepo)
 				auth.POST("/sync/animal", syncHandler.SyncAnimal)
 				auth.POST("/sync/animals", syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
+			} else {
+				auth.POST("/sync/animal", unavailable("db_unavailable"))
+				auth.POST("/sync/animals", unavailable("db_unavailable"))
+				auth.GET("/sync/animals", unavailable("db_unavailable"))
 			}
 
+			// 隐私 / 安全 / 商业化
 			if db != nil && deviceRepo != nil {
 				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
 				auth.POST("/privacy/consent", privacy.PutConsent)
@@ -146,6 +174,17 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/commerce/orders/refund", commerce.RefundOrder)
 				auth.GET("/commerce/orders/:id", commerce.GetOrder)
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
+			} else {
+				auth.POST("/privacy/consent", unavailable("db_unavailable"))
+				auth.POST("/privacy/export", unavailable("db_unavailable"))
+				auth.POST("/privacy/delete", unavailable("db_unavailable"))
+				auth.GET("/privacy/requests/:id", unavailable("db_unavailable"))
+				auth.POST("/security/report", unavailable("db_unavailable"))
+				auth.POST("/commerce/orders", unavailable("db_unavailable"))
+				auth.POST("/commerce/orders/fulfill", unavailable("db_unavailable"))
+				auth.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+				auth.GET("/commerce/orders/:id", unavailable("db_unavailable"))
+				auth.GET("/commerce/entitlements", unavailable("db_unavailable"))
 			}
 		}
 
@@ -158,6 +197,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				admin.GET("/audit/logs", ah.List)
 				admin.POST("/audit/logs/:id/ack", ah.Ack)
 			}
+		} else {
+			admin := api.Group("/admin")
+			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey))
+			admin.GET("/audit/logs", unavailable("db_unavailable"))
+			admin.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
 		}
 	}
 	return r
