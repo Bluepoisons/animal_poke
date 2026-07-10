@@ -197,14 +197,14 @@ func (r *InferenceRepo) Find(inferenceID string) (*models.Inference, error) {
 
 // Sentinel errors for inference consume / lineage.
 var (
-	ErrInferenceNotFound      = errors.New("inference not found")
-	ErrInferenceAlreadyUsed   = errors.New("inference already consumed")
-	ErrInferenceNotSuccess    = errors.New("inference not successful")
-	ErrInferenceWrongKind     = errors.New("inference kind not allowed")
-	ErrInferenceExpired       = errors.New("inference expired")
-	ErrInferenceDeviceMismatch = errors.New("inference device mismatch")
+	ErrInferenceNotFound        = errors.New("inference not found")
+	ErrInferenceAlreadyUsed     = errors.New("inference already consumed")
+	ErrInferenceNotSuccess      = errors.New("inference not successful")
+	ErrInferenceWrongKind       = errors.New("inference kind not allowed")
+	ErrInferenceExpired         = errors.New("inference expired")
+	ErrInferenceDeviceMismatch  = errors.New("inference device mismatch")
 	ErrInferenceSpeciesMismatch = errors.New("inference species mismatch")
-	ErrInferenceTampered      = errors.New("inference result mismatch")
+	ErrInferenceTampered        = errors.New("inference result mismatch")
 )
 
 // Consume 原子消费成功推理：条件 UPDATE status=success → consumed，要求 RowsAffected==1。
