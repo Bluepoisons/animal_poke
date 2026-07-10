@@ -1,8 +1,10 @@
 /**
  * 从后端拉取本周天气（需 lat/lng；与后端契约对齐）
+ * 统一走 authedRequest：Bearer + 401 singleflight 续签
  * 返回格式：{ week: [...], days: [...], source, cached, degraded, reason_code }
  */
 import type { WeekWeather, WeatherType } from './types'
+import { authedRequest } from '../auth/deviceAuth'
 
 export interface WeatherAPIResponse {
   week?: Array<{
@@ -49,18 +51,19 @@ function mapWeather(raw?: string): WeatherType {
 export async function fetchWeekWeather(
   lat: number,
   lng: number,
-  token?: string,
-  baseUrl = '',
+  _token?: string,
+  _baseUrl = '',
 ): Promise<{ week: WeekWeather; source: 'backend' | 'internal'; meta?: WeatherAPIResponse } | null> {
   try {
-    const headers: Record<string, string> = {}
-    if (token) headers.Authorization = `Bearer ${token}`
-    const resp = await fetch(
-      `${baseUrl}/api/v1/weather/week?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
-      { headers },
-    )
-    if (!resp.ok) throw new Error(`weather/week 请求失败: ${resp.status}`)
-    const data = (await resp.json()) as WeatherAPIResponse
+    // _token/_baseUrl 保留兼容旧调用方；统一走公开配置 + 设备 Token
+    void _token
+    void _baseUrl
+    const data = await authedRequest<WeatherAPIResponse>({
+      method: 'GET',
+      path: `/api/v1/weather/week?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
+      allowRetry: true,
+      timeoutMs: 12_000,
+    })
     const rows = (data.week && data.week.length ? data.week : data.days) ?? []
     if (!Array.isArray(rows) || rows.length < 7) {
       throw new Error('后端天气数据格式异常')
@@ -69,7 +72,6 @@ export async function fetchWeekWeather(
       weather: mapWeather(d.weather || d.skycon),
       dayLabel: d.day_label || d.dayLabel || ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i],
     })) as WeekWeather
-    // 仅当非 degraded 的 random/mock 时视为 backend 真实源；degraded 仍标记 backend 但前端可区分
     return { week, source: 'backend', meta: data }
   } catch {
     return null
