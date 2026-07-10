@@ -209,7 +209,7 @@ export default function AnimalPokeApp() {
   return (
     <div className="ap-root">
       <PhoneFrame variant={screen}>
-        {renderScreen()}
+        <div className="ap-main">{renderScreen()}</div>
         {screen !== 'map' && (
           <BottomTabBar active={screen === 'capture' ? 'discover' : screen} onChange={navigate} onAchievement={handleAchievement} />
         )}
