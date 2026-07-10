@@ -302,6 +302,43 @@ export default function DiscoverScreen({
         </div>
       )}
 
+
+      {flow.phase === 'target_confirmed' && flow.selectedBox && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
+          <button
+            type="button"
+            className="ap-map-chip"
+            onClick={() => {
+              dispatch({ type: 'RESET' })
+            }}
+          >
+            识别错了 · 重新扫描
+          </button>
+          {(['cat', 'dog', 'goose'] as const)
+            .filter((s) => s !== flow.selectedBox?.species)
+            .map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="ap-map-chip"
+                onClick={() => {
+                  // 纠正：用玩家声明物种覆盖 selectedBox
+                  const corrected = {
+                    ...flow.selectedBox!,
+                    species: s,
+                    id: `correct-${s}`,
+                    confidence: Math.min(flow.selectedBox!.confidence, 0.84),
+                    label: `user_correct:${s}`,
+                  }
+                  dispatch({ type: 'DETECT_SUCCESS', detectInferenceId: flow.detectInferenceId || 'user-correct', detections: [corrected] })
+                }}
+              >
+                改成{s === 'cat' ? '猫' : s === 'dog' ? '狗' : '鹅'}
+              </button>
+            ))}
+        </div>
+      )}
+
       {flow.phase === 'failed' && (
         <button
           type="button"
