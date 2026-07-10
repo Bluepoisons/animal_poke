@@ -565,12 +565,7 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
-	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "device required", "reason_code": "unauthorized"})
-		return
-	}
-
-	// 幂等：按设备隔离，禁止跨设备复用 key 命中他人订单
+	accountID := middleware.GetAccountID(c)
 	var existing models.Order
 	if err := h.db.Where("device_id = ? AND idempotency_key = ?", deviceID, req.IdempotencyKey).First(&existing).Error; err == nil {
 		c.JSON(http.StatusOK, existing)
@@ -599,8 +594,8 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 	}
 
 	order := models.Order{
-		OrderID: uuid.NewString(), DeviceID: deviceID, ProductID: product.ProductID,
-		Status: "created", Platform: platform, AmountCents: product.PriceCents,
+		OrderID: uuid.NewString(), DeviceID: deviceID, AccountID: accountID, ProductID: product.ProductID,
+		Status: "created", Platform: req.Platform, AmountCents: product.PriceCents,
 		Currency: product.Currency, IdempotencyKey: req.IdempotencyKey,
 	}
 	if err := h.db.Create(&order).Error; err != nil {
@@ -633,17 +628,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
-	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "device required", "reason_code": "unauthorized"})
-		return
-	}
-
-	// 短回执一律拒绝
-	if len(strings.TrimSpace(req.Receipt)) < minReceiptLen {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid receipt", "reason_code": "receipt_too_short"})
-		return
-	}
-
+	accountID := middleware.GetAccountID(c)
 	sum := sha256.Sum256([]byte(req.Receipt))
 	receiptHash := hex.EncodeToString(sum[:])
 
@@ -723,7 +708,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		}
 		if err == gorm.ErrRecordNotFound {
 			ent = models.Entitlement{
-				DeviceID: deviceID, ProductID: order.ProductID, OrderID: order.OrderID,
+				DeviceID: deviceID, AccountID: accountID, ProductID: order.ProductID, OrderID: order.OrderID,
 				Active: true, StartsAt: now, ExpiresAt: exp,
 			}
 			return tx.Create(&ent).Error
@@ -853,7 +838,13 @@ func (h *CommerceHandler) GetOrder(c *gin.Context) {
 
 // ListEntitlements GET /commerce/entitlements
 func (h *CommerceHandler) ListEntitlements(c *gin.Context) {
+	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 	var ents []models.Entitlement
-	_ = h.db.Where("device_id = ?", middleware.GetDeviceID(c)).Find(&ents).Error
+	q := h.db.Where("device_id = ?", deviceID)
+	if accountID != "" {
+		q = h.db.Where("device_id = ? OR (account_id = ? AND active = ?)", deviceID, accountID, true)
+	}
+	_ = q.Find(&ents).Error
 	c.JSON(http.StatusOK, gin.H{"items": ents})
 }

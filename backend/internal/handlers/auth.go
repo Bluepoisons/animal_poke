@@ -55,10 +55,11 @@ type authRequest struct {
 }
 
 type authResponse struct {
-	Token              string `json:"token"`
-	ExpiresAt          string `json:"expires_at"`
-	TokenType          string `json:"token_type"`
-	InstallationSecret string `json:"installation_secret,omitempty"`
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+	TokenType string `json:"token_type"`
+	AccountID string `json:"account_id,omitempty"`
+	Guest     bool   `json:"guest"`
 }
 
 // DeviceAuth POST /auth/device 注册设备并签发 JWT Token。
@@ -156,6 +157,9 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 		"jti":           jti,
 		"token_version": dev.TokenVersion,
 	}
+	if dev.AccountID != "" {
+		claims["account_id"] = dev.AccountID
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	// 可选 kid，便于密钥轮换与观测（v1 = 当前 JWT_SECRET）
 	token.Header["kid"] = "v1"
@@ -166,14 +170,12 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 		return
 	}
 
-	slog.Info("设备鉴权成功", "device_id", dev.DeviceID, "first_secret", returnedSecret != "")
-	resp := authResponse{
+	slog.Info("设备鉴权成功", "device_id", dev.DeviceID, "account_id", dev.AccountID)
+	c.JSON(http.StatusOK, authResponse{
 		Token:     tokenStr,
 		ExpiresAt: expiresAt.Format(time.RFC3339),
 		TokenType: "Bearer",
-	}
-	if returnedSecret != "" {
-		resp.InstallationSecret = returnedSecret
-	}
-	c.JSON(http.StatusOK, resp)
+		AccountID: dev.AccountID,
+		Guest:     dev.AccountID == "",
+	})
 }

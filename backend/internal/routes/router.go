@@ -91,14 +91,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	var auditService *services.AuditService
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
-	var idempotencyRepo *repo.IdempotencyRepo
+	var accountRepo *repo.AccountRepo
 	if db != nil {
 		deviceRepo = repo.NewDeviceRepo(db)
 		animalRepo = repo.NewAnimalRepo(db)
 		auditRepo = repo.NewAuditLogRepo(db)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(db)
-		idempotencyRepo = repo.NewIdempotencyRepo(db)
+		accountRepo = repo.NewAccountRepo(db, cfg.JWTSecret)
 	}
 
 	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
@@ -133,13 +133,22 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		api.GET("/time", timeHandler.GetTime)
 
 		// 设备鉴权：始终注册；无 DB 时 503
+		var authHandler *handlers.AuthHandler
+		var accountHandler *handlers.AccountHandler
 		if deviceRepo != nil {
-			authHandler := handlers.NewAuthHandlerFull(
+			authHandler = handlers.NewAuthHandlerFull(
 				deviceRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 			)
 			api.POST("/auth/device", middleware.RateLimitByIP(ipLimiter), authHandler.DeviceAuth)
+			if accountRepo != nil {
+				accountHandler = handlers.NewAccountHandler(
+					deviceRepo, accountRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
+				)
+				api.POST("/auth/login", middleware.RateLimitByIP(ipLimiter), accountHandler.Login)
+			}
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
+			api.POST("/auth/login", unavailable("db_unavailable"))
 		}
 
 		// JWT
@@ -164,8 +173,20 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			errHandler := handlers.NewErrorReportHandler()
 			auth.POST("/errors/report", errHandler.Report)
 
-			analyticsHandler := handlers.NewAnalyticsHandler()
-			auth.POST("/analytics/events", analyticsHandler.Ingest)
+			// 账号绑定 / 设备管理
+			if accountHandler != nil {
+				auth.POST("/auth/bind", accountHandler.Bind)
+				auth.POST("/auth/logout", accountHandler.Logout)
+				auth.GET("/auth/devices", accountHandler.ListDevices)
+				auth.POST("/auth/devices/revoke", accountHandler.RevokeDevice)
+				auth.GET("/auth/account", accountHandler.GetAccount)
+			} else {
+				auth.POST("/auth/bind", unavailable("db_unavailable"))
+				auth.POST("/auth/logout", unavailable("db_unavailable"))
+				auth.GET("/auth/devices", unavailable("db_unavailable"))
+				auth.POST("/auth/devices/revoke", unavailable("db_unavailable"))
+				auth.GET("/auth/account", unavailable("db_unavailable"))
+			}
 
 			product := handlers.NewProductHandler()
 			auth.GET("/ranking/daily", product.RankingDaily)

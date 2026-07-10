@@ -104,56 +104,25 @@ func (r *AnimalRepo) SoftDeleteByDevice(deviceID string) error {
 		}).Error
 }
 
-// ListSinceVersion 按 server_version 游标拉取（含软删 tombstone）。
-// 软删行仅返回 uuid + deleted_at + server_version，不得回传原内容或精确坐标。
+// ListSinceVersion 按 server_version 游标拉取（设备作用域）。
 func (r *AnimalRepo) ListSinceVersion(deviceID string, sinceVersion int64, limit int) ([]models.Animal, error) {
-	return r.ListSinceVersionWithDeleted(deviceID, sinceVersion, limit)
+	return r.ListSinceVersionScoped(deviceID, "", sinceVersion, limit)
 }
 
-// ListSinceVersionWithDeleted 拉取含 deleted_at 的变更行；软删内容在返回前裁剪为 tombstone。
-func (r *AnimalRepo) ListSinceVersionWithDeleted(deviceID string, sinceVersion int64, limit int) ([]models.Animal, error) {
+// ListSinceVersionScoped 按 device 或 account 拉取（绑定后跨设备恢复）。
+func (r *AnimalRepo) ListSinceVersionScoped(deviceID, accountID string, sinceVersion int64, limit int) ([]models.Animal, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	var animals []models.Animal
-	err := r.db.Where("device_id = ? AND server_version > ?", deviceID, sinceVersion).
-		Order("server_version asc, id asc").Limit(limit).Find(&animals).Error
-	if err != nil {
-		return nil, err
+	q := r.db.Where("server_version > ?", sinceVersion)
+	if accountID != "" {
+		q = q.Where("(account_id = ? OR device_id = ?)", accountID, deviceID)
+	} else {
+		q = q.Where("device_id = ?", deviceID)
 	}
-	for i := range animals {
-		if animals[i].DeletedAt != nil {
-			// tombstone：仅同步删除标记
-			animals[i] = models.Animal{
-				UUID:          animals[i].UUID,
-				DeletedAt:     animals[i].DeletedAt,
-				ServerVersion: animals[i].ServerVersion,
-			}
-			continue
-		}
-		// 活跃行：脱敏精确坐标
-		animals[i].PreciseLat = nil
-		animals[i].PreciseLng = nil
-		animals[i].PreciseExpiresAt = nil
-	}
-	return animals, nil
-}
-
-// ClearExpiredPreciseLocation 物理清理已过期的精确坐标字段。
-// 保留策略：精确经纬度仅短期保存（PreciseExpiresAt，默认同步时 24h）；
-// 到期后置空，粗精度 city/geohash 可保留至用户发起删除；删除时一并清除精确字段。
-// 可在删除事务内调用，也可由运维/定时任务周期性调用。
-func (r *AnimalRepo) ClearExpiredPreciseLocation(now time.Time) error {
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	return r.db.Model(&models.Animal{}).
-		Where("precise_expires_at IS NOT NULL AND precise_expires_at < ?", now).
-		Updates(map[string]interface{}{
-			"precise_lat":        nil,
-			"precise_lng":        nil,
-			"precise_expires_at": nil,
-		}).Error
+	err := q.Order("server_version asc").Limit(limit).Find(&animals).Error
+	return animals, err
 }
 
 // AuditLogRepo 审计日志仓储。

@@ -127,82 +127,7 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	}
 
 	deviceID := middleware.GetDeviceID(c)
-	out := h.validateAndSyncOne(deviceID, &req)
-	writeSyncOutcome(c, out)
-}
-
-// BatchSyncRequest 批量推送（非原子：逐项独立结果）。
-type BatchSyncRequest struct {
-	Items []syncRequest `json:"items" binding:"required"`
-}
-
-// BatchSyncResponse 批量结果。
-type BatchSyncResponse struct {
-	Results []batchItemResult `json:"results"`
-}
-
-type batchItemResult struct {
-	UUID       string `json:"uuid"`
-	Status     string `json:"status"` // synced|conflict|error
-	Error      string `json:"error,omitempty"`
-	ReasonCode string `json:"reason_code,omitempty"`
-}
-
-// SyncAnimalsBatch POST /sync/animals
-// 语义：非原子逐项处理；每项走与单条相同的 validateAndSyncOne；不返回原始 DB 错误。
-func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
-	var req BatchSyncRequest
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Items) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "items required", "reason_code": "invalid_request"})
-		return
-	}
-	if len(req.Items) > maxBatchItems {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch", "reason_code": "batch_too_large"})
-		return
-	}
-
-	deviceID := middleware.GetDeviceID(c)
-	results := make([]batchItemResult, 0, len(req.Items))
-	seen := make(map[string]int, len(req.Items))
-
-	for i := range req.Items {
-		item := &req.Items[i]
-		// 批内重复：不写库，返回稳定 reason_code（与已存在冲突语义一致但可区分）
-		if item.UUID != "" {
-			if prev, ok := seen[item.UUID]; ok {
-				results = append(results, batchItemResult{
-					UUID:       item.UUID,
-					Status:     "conflict",
-					Error:      "duplicate uuid in batch",
-					ReasonCode: "batch_duplicate",
-				})
-				_ = prev
-				continue
-			}
-			seen[item.UUID] = i
-		}
-
-		out := h.validateAndSyncOne(deviceID, item)
-		results = append(results, batchItemResult{
-			UUID:       out.UUID,
-			Status:     out.Status,
-			Error:      out.Error,
-			ReasonCode: out.ReasonCode,
-		})
-	}
-
-	c.JSON(http.StatusOK, BatchSyncResponse{Results: results})
-}
-
-// validateAndSyncOne 统一校验 + 落库，单条与批量唯一路径。
-func (h *SyncHandler) validateAndSyncOne(deviceID string, req *syncRequest) syncOutcome {
-	if req == nil {
-		return failOutcome("", "error", http.StatusBadRequest, "invalid request", "invalid_request")
-	}
-
-	if errOut := validateSyncFields(req); errOut != nil {
-		return *errOut
-	}
+	accountID := middleware.GetAccountID(c)
 
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
 	if err != nil {
@@ -241,6 +166,7 @@ func (h *SyncHandler) validateAndSyncOne(deviceID string, req *syncRequest) sync
 	animal := &models.Animal{
 		UUID:               req.UUID,
 		DeviceID:           deviceID,
+		AccountID:          accountID,
 		Species:            req.Species,
 		Breed:              req.Breed,
 		Rarity:             req.Rarity,
@@ -375,11 +301,29 @@ func validateSyncFields(req *syncRequest) *syncOutcome {
 		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "species not capturable", "species_unsupported")
 		return &o
 	}
-	req.Species = normSpecies
+	if len(req.Items) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch"})
+		return
+	}
+	results := make([]batchItemResult, 0, len(req.Items))
+	for _, item := range req.Items {
+		// 复用单条逻辑：构造临时 context 调用较重，这里内联简化
+		c.Set("batch_item", item)
+		// 直接调用内部
+		status, errMsg := h.syncOneScoped(middleware.GetDeviceID(c), middleware.GetAccountID(c), item)
+		results = append(results, batchItemResult{UUID: item.UUID, Status: status, Error: errMsg})
+	}
+	c.JSON(http.StatusOK, BatchSyncResponse{Results: results})
+}
 
-	if req.Rarity < 1 || req.Rarity > 5 {
-		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "rarity must be 1-5", "invalid_rarity")
-		return &o
+func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string) {
+	return h.syncOneScoped(deviceID, "", req)
+}
+
+func (h *SyncHandler) syncOneScoped(deviceID, accountID string, req syncRequest) (string, string) {
+	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
+	if err != nil {
+		return "error", "invalid generated_at"
 	}
 
 	// 可选数值：为 0 表示未提供（可由服务端 inference 覆盖）；非 0 则校验范围。
@@ -391,9 +335,14 @@ func validateSyncFields(req *syncRequest) *syncOutcome {
 		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "atk out of range", "invalid_stats")
 		return &o
 	}
-	if req.DEF != 0 && (req.DEF < 5 || req.DEF > 50) {
-		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "def out of range", "invalid_stats")
-		return &o
+	animal := &models.Animal{
+		UUID: req.UUID, DeviceID: deviceID, AccountID: accountID, Species: req.Species, Breed: req.Breed,
+		Rarity: req.Rarity, HP: req.HP, ATK: req.ATK, DEF: req.DEF, SPD: req.SPD,
+		Class: req.Class, Element: req.Element, City: req.City,
+		Latitude: services.RoundCoord(req.Latitude), Longitude: services.RoundCoord(req.Longitude),
+		GeoHash:     services.EncodeGeoHash(req.Latitude, req.Longitude),
+		GeneratedAt: generatedAt, InferenceRequestID: req.InferenceRequestID,
+		ServerVersion: time.Now().UTC().UnixNano(),
 	}
 	if req.SPD != 0 && (req.SPD < 5 || req.SPD > 50) {
 		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "spd out of range", "invalid_stats")
@@ -503,6 +452,7 @@ func writeSyncOutcome(c *gin.Context, out syncOutcome) {
 // PullAnimals GET /sync/animals?since_version=
 func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 	var since int64
 	if v := c.Query("since_version"); v != "" {
 		if _, err := parseInt64(v, &since); err != nil {
@@ -520,8 +470,7 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			}
 		}
 	}
-	// ListSinceVersion 含软删 tombstone（仅 uuid/deleted_at/server_version），不含原内容与精确坐标。
-	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
+	items, err := h.animalRepo.ListSinceVersionScoped(deviceID, accountID, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed", "reason_code": "sync_failed"})
 		return

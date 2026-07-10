@@ -20,7 +20,7 @@ tags:
   - name: Health
     description: Liveness, readiness and lightweight health probes
   - name: Auth
-    description: Device registration and JWT issuance
+    description: Device registration, account binding and JWT issuance
   - name: Geo
     description: Reverse geocoding and location helpers
   - name: Weather
@@ -211,6 +211,154 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/auth/bind:
+    post:
+      tags: [Auth]
+      summary: Bind current device to email or mock OAuth account
+      description: |
+        Guest remains default. Binding creates or attaches an account, merges guest
+        animals/entitlements without double-granting rewards. Credentials are stored hashed.
+      operationId: authBind
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthBindRequest"
+      responses:
+        "200":
+          description: Bound and token re-issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email/mock OAuth to recover after clearing local data
+      operationId: authLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: Logged in; guest assets on device_id merged into account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current device (bump token version, clear refresh hash)
+      operationId: authLogout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: logged_out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/account:
+    get:
+      tags: [Auth]
+      summary: Current account profile (guest if unbound)
+      operationId: authAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account or guest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/devices:
+    get:
+      tags: [Auth]
+      summary: List devices linked to current account
+      operationId: authListDevices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Device list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthDeviceList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/devices/revoke:
+    post:
+      tags: [Auth]
+      summary: Revoke a lost device
+      operationId: authRevokeDevice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id]
+              properties:
+                device_id:
+                  type: string
+      responses:
+        "200":
+          description: Device revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  device_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Device not found
   /api/v1/geo/city:
     get:
       tags: [Geo]
@@ -1185,9 +1333,116 @@ components:
         token_type:
           type: string
           example: Bearer
-        installation_secret:
+        account_id:
           type: string
-          description: Present only on first successful registration; store securely client-side
+        guest:
+          type: boolean
+    AuthBindRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [email, mock_oauth]
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        oauth_subject:
+          type: string
+        oauth_token:
+          type: string
+          description: Mock OAuth secret; server stores only a hash
+        display_name:
+          type: string
+    AuthLoginRequest:
+      type: object
+      required: [device_id, provider]
+      properties:
+        device_id:
+          type: string
+        provider:
+          type: string
+          enum: [email, mock_oauth]
+        email:
+          type: string
+        password:
+          type: string
+        oauth_subject:
+          type: string
+        oauth_token:
+          type: string
+    AuthAccountResponse:
+      type: object
+      required: [token, expires_at, token_type]
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+        token_type:
+          type: string
+        account_id:
+          type: string
+        refresh_token:
+          type: string
+          description: Returned once; server stores only hash
+        guest:
+          type: boolean
+        merge:
+          type: object
+          properties:
+            animals_moved:
+              type: integer
+            animals_skipped:
+              type: integer
+            entitlements_moved:
+              type: integer
+            entitlements_merged:
+              type: integer
+            orders_moved:
+              type: integer
+    AuthAccountInfo:
+      type: object
+      properties:
+        guest:
+          type: boolean
+        account_id:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+        device_id:
+          type: string
+    AuthDeviceList:
+      type: object
+      properties:
+        guest:
+          type: boolean
+        account_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              device_id:
+                type: string
+              device_label:
+                type: string
+              status:
+                type: string
+              linked_at:
+                type: string
+              last_seen_at:
+                type: string
+              revoked_at:
+                type: string
+              current:
+                type: boolean
     CityResponse:
       type: object
       additionalProperties: true

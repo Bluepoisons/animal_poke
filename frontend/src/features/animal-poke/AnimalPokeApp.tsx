@@ -8,7 +8,7 @@ import CaptureScreen from './screens/CaptureScreen'
 import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
-import { SettingsScreen } from '../../settings'
+import AccountSettingsPanel from './screens/AccountSettingsPanel'
 import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
 import { useLbs } from '../../lbs/useLbs'
@@ -51,6 +51,7 @@ export default function AnimalPokeApp() {
   const currentStamina = staminaState.currentStamina
   const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [showAccount, setShowAccount] = useState(false)
   const toastTimer = useRef<number | null>(null)
 
   const [flow, dispatchFlow] = useReducer(reduceCaptureFlow, undefined, createInitialCaptureFlow)
@@ -148,6 +149,11 @@ export default function AnimalPokeApp() {
   )
 
   const renderScreen = () => {
+    if (showAccount) {
+      return (
+        <AccountSettingsPanel onToast={showToast} onClose={() => setShowAccount(false)} />
+      )
+    }
     switch (screen) {
       case 'discover':
         return (
@@ -158,6 +164,7 @@ export default function AnimalPokeApp() {
             dispatch={dispatch}
             onNavigate={navigate}
             onEnterCapture={handleEnterCapture}
+            onOpenAccount={() => setShowAccount(true)}
             city={
               lbs.state.cityName ||
               (lbs.state.geoStatus === 'locating'
