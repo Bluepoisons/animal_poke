@@ -5,6 +5,9 @@ import compression from 'vite-plugin-compression'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0-dev'),
+  },
   plugins: [
     react(),
     VitePWA({

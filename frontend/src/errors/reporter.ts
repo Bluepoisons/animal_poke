@@ -1,62 +1,88 @@
 import type { ErrorReport } from './types'
+import { authedRequest } from '../auth/deviceAuth'
 
 declare const __APP_VERSION__: string
 
-const REPORT_ENDPOINT = '/api/v1/errors/report'
 const MAX_QUEUE = 20
-const RETRY_DELAYS = [1000, 3000, 10000]
+const QUEUE_KEY = 'ap_error_queue'
 
-const offlineQueue: ErrorReport[] = []
+function loadQueue(): ErrorReport[] {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_QUEUE) : []
+  } catch {
+    return []
+  }
+}
+
+function saveQueue(q: ErrorReport[]): void {
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-MAX_QUEUE)))
+  } catch {
+    /* ignore quota */
+  }
+}
+
+let offlineQueue: ErrorReport[] = loadQueue()
 let isFlushing = false
 
+function withRelease(report: ErrorReport): ErrorReport {
+  const release =
+    typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : report.release || 'dev'
+  return { ...report, release }
+}
+
+function sanitize(report: ErrorReport): ErrorReport {
+  const r = withRelease(report)
+  const strip = (s?: string) => {
+    if (!s) return s
+    if (/bearer|jwt|api[_-]?key|password|authorization/i.test(s)) return '[redacted]'
+    return s.slice(0, 2000)
+  }
+  return {
+    ...r,
+    message: strip(r.message) || 'unknown',
+    stack: strip(r.stack),
+  }
+}
+
 /**
- * 上报错误到后端。
- * - 在线：立即发送，失败则入队
- * - 离线：入队，等网络恢复后批量发送
- * - 上报本身永不抛出异常（静默失败）
+ * 上报错误到后端（鉴权 + 脱敏）。
+ * - 在线：立即发送
+ * - 离线：持久化队列，恢复后 flush
+ * - 上报本身永不抛出
  */
 export async function reportError(report: ErrorReport): Promise<void> {
   try {
+    const payload = sanitize(report)
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      enqueue(report)
+      enqueue(payload)
       return
     }
-    await sendWithRetry(report, 0)
+    await send(payload)
   } catch {
-    enqueue(report)
+    enqueue(sanitize(report))
   }
 }
 
-async function sendWithRetry(report: ErrorReport, attempt: number): Promise<void> {
-  try {
-    const resp = await fetch(REPORT_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report),
-      keepalive: true,
-    })
-    if (!resp.ok && resp.status >= 500 && attempt < RETRY_DELAYS.length) {
-      await sleep(RETRY_DELAYS[attempt])
-      await sendWithRetry(report, attempt + 1)
-    }
-  } catch (err) {
-    if (attempt < RETRY_DELAYS.length) {
-      await sleep(RETRY_DELAYS[attempt])
-      await sendWithRetry(report, attempt + 1)
-      return
-    }
-    throw err
-  }
+async function send(report: ErrorReport): Promise<void> {
+  await authedRequest({
+    method: 'POST',
+    path: '/api/v1/errors/report',
+    body: JSON.stringify(report),
+    allowRetry: true,
+    idempotencyKey: `err-${report.message?.slice(0, 40)}-${report.timestamp || Date.now()}`,
+  })
 }
 
 function enqueue(report: ErrorReport): void {
-  if (offlineQueue.length >= MAX_QUEUE) {
-    offlineQueue.shift()
-  }
   offlineQueue.push(report)
+  if (offlineQueue.length > MAX_QUEUE) offlineQueue = offlineQueue.slice(-MAX_QUEUE)
+  saveQueue(offlineQueue)
 }
 
-/** 网络恢复后批量发送队列中的错误 */
 export async function flushQueue(): Promise<void> {
   if (isFlushing || offlineQueue.length === 0) return
   isFlushing = true
@@ -64,8 +90,9 @@ export async function flushQueue(): Promise<void> {
     while (offlineQueue.length > 0) {
       const report = offlineQueue[0]
       try {
-        await sendWithRetry(report, 0)
+        await send(report)
         offlineQueue.shift()
+        saveQueue(offlineQueue)
       } catch {
         break
       }
@@ -73,10 +100,6 @@ export async function flushQueue(): Promise<void> {
   } finally {
     isFlushing = false
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 let onlineListenerInstalled = false
@@ -88,9 +111,13 @@ export function installOnlineListener(): void {
   })
 }
 
-/** 仅供测试使用：重置模块状态 */
 export function _resetForTesting(): void {
-  offlineQueue.length = 0
+  offlineQueue = []
   isFlushing = false
   onlineListenerInstalled = false
+  try {
+    localStorage.removeItem(QUEUE_KEY)
+  } catch {
+    /* ignore */
+  }
 }

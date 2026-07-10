@@ -128,6 +128,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/geo/city", geoHandler.GetCity)
 			auth.GET("/weather/week", weatherHandler.GetWeek)
 
+			errHandler := handlers.NewErrorReportHandler()
+			auth.POST("/errors/report", errHandler.Report)
+
 			ai := auth.Group("")
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
 			{

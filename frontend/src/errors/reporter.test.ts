@@ -1,20 +1,44 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { reportError, flushQueue, _resetForTesting } from './reporter'
+import { __resetAuthForTests } from '../auth/deviceAuth'
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function mockFetchAuthed() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/auth/device')) {
+      return jsonResponse({
+        token: 'tok-test',
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      })
+    }
+    if (url.includes('/errors/report')) {
+      return jsonResponse({ accepted: true }, 202)
+    }
+    return jsonResponse({ error: 'not found' }, 404)
+  })
+}
 
 describe('reporter', () => {
   beforeEach(() => {
     _resetForTesting()
+    __resetAuthForTests()
     vi.restoreAllMocks()
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    __resetAuthForTests()
   })
 
   it('sends error report when online', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
-    )
+    const fetchSpy = mockFetchAuthed()
     await reportError({
       id: 'test-1',
       type: 'window',
@@ -25,8 +49,8 @@ describe('reporter', () => {
       userAgent: 'test',
       online: true,
     })
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/v1/errors/report')
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/errors/report'))).toBe(true)
   })
 
   it('enqueues when offline', async () => {
@@ -60,11 +84,10 @@ describe('reporter', () => {
     })
     vi.unstubAllGlobals()
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
-    )
+    const fetchSpy = mockFetchAuthed()
     await flushQueue()
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/errors/report'))).toBe(true)
   })
 
   it('caps queue at 20 items', async () => {
@@ -83,20 +106,41 @@ describe('reporter', () => {
     }
     vi.unstubAllGlobals()
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
-    )
+    let reportCalls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/auth/device')) {
+        return jsonResponse({
+          token: 'tok-test',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        })
+      }
+      if (url.includes('/errors/report')) {
+        reportCalls++
+        return jsonResponse({ accepted: true }, 202)
+      }
+      return jsonResponse({}, 404)
+    })
     await flushQueue()
-    // Queue capped at 20
-    expect(fetchSpy).toHaveBeenCalledTimes(20)
+    expect(reportCalls).toBe(20)
   })
 
   it('retries on 5xx server error', async () => {
-    let calls = 0
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      calls++
-      if (calls < 2) return new Response('err', { status: 500 })
-      return new Response('{}', { status: 200 })
+    let reportCalls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/auth/device')) {
+        return jsonResponse({
+          token: 'tok-test',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        })
+      }
+      if (url.includes('/errors/report')) {
+        reportCalls++
+        if (reportCalls < 2) return new Response('err', { status: 500 })
+        return jsonResponse({ accepted: true }, 202)
+      }
+      return jsonResponse({}, 404)
     })
     await reportError({
       id: 'test-retry',
@@ -108,6 +152,6 @@ describe('reporter', () => {
       userAgent: 'test',
       online: true,
     })
-    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(reportCalls).toBeGreaterThanOrEqual(2)
   })
 })
