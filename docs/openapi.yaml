@@ -531,6 +531,61 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/safety/report:
+    post:
+      tags: [Security]
+      summary: Report abuse, injured animals, or other moderation concerns
+      description: |
+        Structured safety report path. Never accepts original images.
+        Decision codes are public and stable; model internals are not returned.
+      operationId: safetyReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SafetyReportRequest"
+      responses:
+        "202":
+          description: Report accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyReportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/account/defaults:
+    get:
+      tags: [Security]
+      summary: Account privacy/social defaults (stricter for minors)
+      operationId: accountDefaults
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: minor
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["0", "1", "true", "false"]
+          description: When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled)
+      responses:
+        "200":
+          description: Defaults
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDefaultsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/commerce/orders:
     post:
       tags: [Commerce]
@@ -897,3 +952,103 @@ components:
             additionalProperties: true
         inference_id:
           type: string
+        reason_code:
+          type: string
+          description: Public reason when empty or rejected (e.g. reject_portrait)
+        source:
+          type: string
+        safety:
+          $ref: "#/components/schemas/SafetySummary"
+    SafetySummary:
+      type: object
+      required: [allowed, collectable, decision_code, action]
+      properties:
+        allowed:
+          type: boolean
+        collectable:
+          type: boolean
+        decision_code:
+          type: string
+          description: Public moderation code (no model internals)
+          enum:
+            - ok
+            - reject_portrait
+            - reject_child_focus
+            - reject_sensitive
+            - reject_unsafe
+            - flag_sensitive
+            - flag_abuse
+            - flag_injured
+        action:
+          type: string
+          enum: [allow, reject, flag]
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [face, child, plate, house, abuse, injured]
+        report_path:
+          type: string
+          enum: [abuse, injured]
+    SafetyReportRequest:
+      type: object
+      required: [category]
+      properties:
+        category:
+          type: string
+          enum: [abuse, injured, portrait, sensitive, other]
+        inference_id:
+          type: string
+        note:
+          type: string
+          maxLength: 1000
+        decision_code:
+          type: string
+    SafetyReportResponse:
+      type: object
+      required: [status, report_id, decision_code, category]
+      properties:
+        status:
+          type: string
+          example: accepted
+        report_id:
+          type: string
+        decision_code:
+          type: string
+        category:
+          type: string
+        request_id:
+          type: string
+    AccountDefaultsResponse:
+      type: object
+      properties:
+        defaults:
+          type: object
+          additionalProperties: true
+          properties:
+            audience:
+              type: string
+              enum: [minor, adult]
+            strict:
+              type: boolean
+            play_hours_start:
+              type: integer
+            play_hours_end:
+              type: integer
+            daily_limit_min:
+              type: integer
+            location_scope:
+              type: string
+              enum: [none, city, precise]
+            social_enabled:
+              type: boolean
+        config:
+          type: object
+          properties:
+            strict_minor_defaults:
+              type: boolean
+        request_id:
+          type: string
+        server_time:
+          type: string
+          format: date-time

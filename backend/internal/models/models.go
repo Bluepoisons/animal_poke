@@ -76,17 +76,17 @@ func (AuditLog) TableName() string { return "audit_logs" }
 
 // Inference 服务端推理凭证与 provenance。
 type Inference struct {
-	ID                uint       `gorm:"primaryKey" json:"id"`
-	InferenceID       string     `gorm:"uniqueIndex;size:64;not null" json:"inference_id"`
-	DeviceID          string     `gorm:"index;size:64;not null" json:"device_id"`
-	Kind              string     `gorm:"size:32;not null" json:"kind"` // detect|analyze|value
-	ParentInferenceID string     `gorm:"index;size:64" json:"parent_inference_id,omitempty"`
-	Provider          string     `gorm:"size:64" json:"provider"`
-	Model             string     `gorm:"size:128" json:"model"`
-	PromptVersion     string     `gorm:"size:32" json:"prompt_version"`
-	PromptHash        string     `gorm:"size:64" json:"prompt_hash"`
-	InputDigest       string     `gorm:"size:64" json:"input_digest"`  // 图片/输入摘要，不含原图
-	OutputDigest      string     `gorm:"size:64" json:"output_digest"` // 输出摘要
+	ID                uint   `gorm:"primaryKey" json:"id"`
+	InferenceID       string `gorm:"uniqueIndex;size:64;not null" json:"inference_id"`
+	DeviceID          string `gorm:"index;size:64;not null" json:"device_id"`
+	Kind              string `gorm:"size:32;not null" json:"kind"` // detect|analyze|value
+	ParentInferenceID string `gorm:"index;size:64" json:"parent_inference_id,omitempty"`
+	Provider          string `gorm:"size:64" json:"provider"`
+	Model             string `gorm:"size:128" json:"model"`
+	PromptVersion     string `gorm:"size:32" json:"prompt_version"`
+	PromptHash        string `gorm:"size:64" json:"prompt_hash"`
+	InputDigest       string `gorm:"size:64" json:"input_digest"`  // 图片/输入摘要，不含原图
+	OutputDigest      string `gorm:"size:64" json:"output_digest"` // 输出摘要
 	// ResultJSON 权威结果摘要（value: rarity/stats/species；detect/analyze: 关键字段）
 	ResultJSON    string     `gorm:"type:text" json:"result_json,omitempty"`
 	Species       string     `gorm:"size:32" json:"species,omitempty"`
@@ -185,6 +185,23 @@ type Entitlement struct {
 
 // TableName 明确表名。
 func (Entitlement) TableName() string { return "entitlements" }
+
+// ModerationReport 用户/系统安全举报（虐待、受伤动物等），不含原图。
+type ModerationReport struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	ReportID     string    `gorm:"uniqueIndex;size:64;not null" json:"report_id"`
+	DeviceID     string    `gorm:"index;size:64;not null" json:"device_id"`
+	Category     string    `gorm:"size:32;not null;index" json:"category"` // abuse|injured|portrait|sensitive|other
+	DecisionCode string    `gorm:"size:64;not null" json:"decision_code"`
+	InferenceID  string    `gorm:"index;size:64" json:"inference_id,omitempty"`
+	Note         string    `gorm:"type:text" json:"note,omitempty"`
+	Status       string    `gorm:"size:32;not null;default:open" json:"status"` // open|reviewing|closed
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (ModerationReport) TableName() string { return "moderation_reports" }
 
 // SchemaMigration 简易版本化迁移记录。
 type SchemaMigration struct {

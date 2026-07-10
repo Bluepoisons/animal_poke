@@ -345,6 +345,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report abuse, injured animals, or other moderation concerns
+         * @description Structured safety report path. Never accepts original images.
+         *     Decision codes are public and stable; model internals are not returned.
+         */
+        post: operations["safetyReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Account privacy/social defaults (stricter for minors) */
+        get: operations["accountDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commerce/orders": {
         parameters: {
             query?: never;
@@ -532,8 +570,62 @@ export interface components {
                 [key: string]: unknown;
             }[];
             inference_id?: string;
+            /** @description Public reason when empty or rejected (e.g. reject_portrait) */
+            reason_code?: string;
+            source?: string;
+            safety?: components["schemas"]["SafetySummary"];
         } & {
             [key: string]: unknown;
+        };
+        SafetySummary: {
+            allowed: boolean;
+            collectable: boolean;
+            /**
+             * @description Public moderation code (no model internals)
+             * @enum {string}
+             */
+            decision_code: "ok" | "reject_portrait" | "reject_child_focus" | "reject_sensitive" | "reject_unsafe" | "flag_sensitive" | "flag_abuse" | "flag_injured";
+            /** @enum {string} */
+            action: "allow" | "reject" | "flag";
+            flags?: ("face" | "child" | "plate" | "house" | "abuse" | "injured")[];
+            /** @enum {string} */
+            report_path?: "abuse" | "injured";
+        };
+        SafetyReportRequest: {
+            /** @enum {string} */
+            category: "abuse" | "injured" | "portrait" | "sensitive" | "other";
+            inference_id?: string;
+            note?: string;
+            decision_code?: string;
+        };
+        SafetyReportResponse: {
+            /** @example accepted */
+            status: string;
+            report_id: string;
+            decision_code: string;
+            category: string;
+            request_id?: string;
+        };
+        AccountDefaultsResponse: {
+            defaults?: {
+                /** @enum {string} */
+                audience?: "minor" | "adult";
+                strict?: boolean;
+                play_hours_start?: number;
+                play_hours_end?: number;
+                daily_limit_min?: number;
+                /** @enum {string} */
+                location_scope?: "none" | "city" | "precise";
+                social_enabled?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            config?: {
+                strict_minor_defaults?: boolean;
+            };
+            request_id?: string;
+            /** Format: date-time */
+            server_time?: string;
         };
     };
     responses: {
@@ -1172,6 +1264,57 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    safetyReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Report accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafetyReportResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    accountDefaults: {
+        parameters: {
+            query?: {
+                /** @description When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled) */
+                minor?: "0" | "1" | "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Defaults */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDefaultsResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     createOrder: {

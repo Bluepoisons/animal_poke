@@ -18,6 +18,7 @@ import (
 	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
+	"animalpoke/backend/internal/safety"
 	"animalpoke/backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -34,24 +35,31 @@ type VisionHandler struct {
 	maxPixels      int
 	requireConsent bool
 	consentVer     string
+	// providerNoTrain enables no-train/no-retain policy audit stubs (AP-056).
+	providerNoTrain bool
+	// allowFixture enables safety_fixture form field (dev/mock only).
+	allowFixture bool
 }
 
 // VisionHandlerOptions 可选依赖。
 type VisionHandlerOptions struct {
-	InferenceRepo  *repo.InferenceRepo
-	DeviceRepo     *repo.DeviceRepo
-	MaxBytes       int64
-	MaxPixels      int
-	RequireConsent bool
-	ConsentVersion string
+	InferenceRepo         *repo.InferenceRepo
+	DeviceRepo            *repo.DeviceRepo
+	MaxBytes              int64
+	MaxPixels             int
+	RequireConsent        bool
+	ConsentVersion        string
+	ProviderNoTrainPolicy bool
+	AllowSafetyFixture    bool
 }
 
 // NewVisionHandler 构造 VisionHandler。
 func NewVisionHandler(aiService *services.AIService) *VisionHandler {
 	return &VisionHandler{
-		aiService: aiService,
-		maxBytes:  5 << 20,
-		maxPixels: 12_000_000,
+		aiService:       aiService,
+		maxBytes:        5 << 20,
+		maxPixels:       12_000_000,
+		providerNoTrain: true,
 	}
 }
 
@@ -71,6 +79,8 @@ func NewVisionHandlerWithOptions(aiService *services.AIService, opts VisionHandl
 	if h.consentVer == "" {
 		h.consentVer = "v1"
 	}
+	h.providerNoTrain = opts.ProviderNoTrainPolicy
+	h.allowFixture = opts.AllowSafetyFixture
 	return h
 }
 
@@ -131,29 +141,66 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		return
 	}
 
-	slog.Info("AI 视觉请求", "kind", kind, "device_id", deviceID, "filename", header.Filename, "size", len(imageData))
+	filename := ""
+	if header != nil {
+		filename = header.Filename
+	}
+	digest := sha256Hex(imageData)
+	fixture := ""
+	if h.allowFixture {
+		fixture = safety.NormalizeFixture(c.PostForm("safety_fixture"))
+	}
+
+	// Pre-moderation: hard-reject pure portrait/child/abuse/plate/house fixtures
+	// without sending image to provider (and never log original bytes).
+	if fixture != "" {
+		pre := safety.Evaluate(safety.Input{FixtureLabel: fixture, Filename: filename})
+		if pre.Action == safety.ActionReject || (pre.DecisionCode == safety.CodeFlagAbuse) {
+			slog.Info("AI 视觉安全拒绝",
+				"kind", kind,
+				"device_id", deviceID,
+				"decision_code", pre.DecisionCode,
+				"input_digest", digest,
+				// no filename if it may encode PII; no image bytes
+			)
+			h.respondSafetyReject(c, kind, deviceID, digest, pre)
+			// drop image reference
+			imageData = nil
+			return
+		}
+	}
+
+	slog.Info("AI 视觉请求", "kind", kind, "device_id", deviceID, "size", len(imageData), "input_digest", digest)
 	start := time.Now()
+
+	if h.providerNoTrain {
+		safety.LogProviderNoTrain("vision", kind, "", digest, deviceID, middleware.GetRequestID(c))
+	}
 
 	var (
 		result interface{}
 		model  string
 		pver   string
-		digest = sha256Hex(imageData)
 	)
 
 	switch kind {
 	case "detect":
-		r, err := h.aiService.DetectContext(c.Request.Context(), imageData, header.Filename)
+		r, err := h.aiService.DetectContext(c.Request.Context(), imageData, filename)
 		if err != nil {
 			slog.Error("AI 检测失败", "device_id", deviceID, "err", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "detection failed"})
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
+		h.applyDetectSafety(r, fixture, filename)
 		// 不保留原图；仅摘要
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
 			exp := time.Now().UTC().Add(2 * time.Hour)
+			status := "success"
+			if r.Safety != nil && !r.Safety.Collectable && r.Safety.Action == safety.ActionReject {
+				status = "rejected"
+			}
 			_ = h.inferenceRepo.Create(&models.Inference{
 				InferenceID:   id,
 				DeviceID:      deviceID,
@@ -162,23 +209,39 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				Model:         model,
 				PromptVersion: pver,
 				InputDigest:   digest,
-				OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d", len(r.Animals)))),
+				OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d:%s", len(r.Animals), reasonOrEmpty(r)))),
 				ConfigVersion: "detect-v1",
-				Status:        "success",
+				Status:        status,
 				DurationMs:    time.Since(start).Milliseconds(),
 				ExpiresAt:     &exp,
 			})
 			r.InferenceID = id
 		}
+		// Clear internal labels before response
+		r.SafetyLabels = nil
 		result = r
 	default:
-		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, header.Filename)
+		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, filename)
 		if err != nil {
 			slog.Error("AI 分析失败", "device_id", deviceID, "err", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "analysis failed"})
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
+		// Analyze: re-check fixture/filename only (no multi-label from detect)
+		if fixture != "" || filename != "" {
+			sr := safety.Evaluate(safety.Input{FixtureLabel: fixture, Filename: filename, HasCapturableAnimal: true})
+			view := sr.ToClientView()
+			r.Safety = &services.SafetySummary{
+				Allowed: view.Allowed, Collectable: view.Collectable,
+				DecisionCode: view.DecisionCode, Action: view.Action,
+				Flags: view.Flags, ReportPath: view.ReportPath,
+			}
+			if !sr.Collectable && sr.Action == safety.ActionReject {
+				r.ReasonCode = sr.DecisionCode
+				r.Breed, r.Color, r.BodyType = "", "", ""
+			}
+		}
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
 			exp := time.Now().UTC().Add(2 * time.Hour)
@@ -206,9 +269,102 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		result = r
 	}
 
-	// imageData 出作用域后由 GC 回收，不落盘
-	_ = imageData
+	// imageData 出作用域后由 GC 回收，不落盘；显式置空降低残留窗口
+	for i := range imageData {
+		imageData[i] = 0
+	}
+	imageData = nil
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *VisionHandler) applyDetectSafety(r *services.DetectResult, fixture, filename string) {
+	if r == nil {
+		return
+	}
+	hasAnimal := len(r.Animals) > 0
+	// person_animal fixture implies animal even if mock returned cat already
+	in := safety.Input{
+		FixtureLabel:        fixture,
+		Filename:            filename,
+		Labels:              append([]string(nil), r.SafetyLabels...),
+		HasCapturableAnimal: hasAnimal,
+	}
+	// Also feed species of capturable animals as labels for completeness.
+	for _, a := range r.Animals {
+		if a.Species != "" {
+			in.Labels = append(in.Labels, a.Species)
+		}
+		if a.Label != "" {
+			in.Labels = append(in.Labels, a.Label)
+		}
+	}
+	sr := safety.Evaluate(in)
+	view := sr.ToClientView()
+	r.Safety = &services.SafetySummary{
+		Allowed:      view.Allowed,
+		Collectable:  view.Collectable,
+		DecisionCode: view.DecisionCode,
+		Action:       view.Action,
+		Flags:        view.Flags,
+		ReportPath:   view.ReportPath,
+	}
+	if !sr.Collectable {
+		// Pure portrait / sensitive / abuse: strip animals so they cannot be collected.
+		r.Animals = []services.DetectBox{}
+		r.ReasonCode = sr.DecisionCode
+		if r.Source == "" {
+			r.Source = "safety"
+		}
+	}
+}
+
+func (h *VisionHandler) respondSafetyReject(c *gin.Context, kind, deviceID, digest string, pre safety.Result) {
+	view := pre.ToClientView()
+	summary := &services.SafetySummary{
+		Allowed: view.Allowed, Collectable: view.Collectable,
+		DecisionCode: view.DecisionCode, Action: view.Action,
+		Flags: view.Flags, ReportPath: view.ReportPath,
+	}
+	infID := ""
+	if h.inferenceRepo != nil {
+		id := uuid.NewString()
+		exp := time.Now().UTC().Add(2 * time.Hour)
+		_ = h.inferenceRepo.Create(&models.Inference{
+			InferenceID:   id,
+			DeviceID:      deviceID,
+			Kind:          kind,
+			Provider:      "safety",
+			InputDigest:   digest,
+			OutputDigest:  sha256Hex([]byte(pre.DecisionCode)),
+			ConfigVersion: "safety-v1",
+			Status:        "rejected",
+			ExpiresAt:     &exp,
+		})
+		infID = id
+	}
+	if kind == "analyze" {
+		c.JSON(http.StatusOK, &services.AnalysisResult{
+			Source:      "safety",
+			ReasonCode:  pre.DecisionCode,
+			InferenceID: infID,
+			Safety:      summary,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, &services.DetectResult{
+		Animals:     []services.DetectBox{},
+		Source:      "safety",
+		ReasonCode:  pre.DecisionCode,
+		InferenceID: infID,
+		Safety:      summary,
+	})
+}
+
+func reasonOrEmpty(r *services.DetectResult) string {
+	if r == nil || r.Safety == nil {
+		return ""
+	}
+	return r.Safety.DecisionCode
 }
 
 func validateImage(data []byte, maxPixels int) error {

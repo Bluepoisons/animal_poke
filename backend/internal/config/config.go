@@ -31,9 +31,13 @@ type Config struct {
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string
-	Database           DatabaseConfig
-	ThirdParty         ThirdPartyConfig
-	Server             ServerTimeouts
+	// StrictMinorDefaults 未成年人更严格的时间/位置/社交默认（AP-056）。
+	StrictMinorDefaults bool
+	// ProviderNoTrainPolicy 断言 Provider 不训练/不保留原图并写审计（AP-056）。
+	ProviderNoTrainPolicy bool
+	Database              DatabaseConfig
+	ThirdParty            ThirdPartyConfig
+	Server                ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -144,6 +148,9 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		// 默认开启：未成年人严格默认 + Provider 不训练审计
+		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
+		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),
@@ -373,12 +380,14 @@ func (c *Config) ReadyErrors() []string {
 // CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
 func (c *Config) CapabilityStatus() map[string]interface{} {
 	return map[string]interface{}{
-		"vision_configured":  c.ThirdParty.VisionConfigured(),
-		"vision_source":      c.ThirdParty.VisionSource,
-		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),
-		"llm_configured":     c.ThirdParty.LLMConfigured(),
-		"mock_allowed":       c.MockAllowed(),
-		"vision_reuse_llm":   c.ThirdParty.VisionReuseLLM,
+		"vision_configured":        c.ThirdParty.VisionConfigured(),
+		"vision_source":            c.ThirdParty.VisionSource,
+		"vision_fingerprint":       c.ThirdParty.VisionFingerprint(),
+		"llm_configured":           c.ThirdParty.LLMConfigured(),
+		"mock_allowed":             c.MockAllowed(),
+		"vision_reuse_llm":         c.ThirdParty.VisionReuseLLM,
+		"strict_minor_defaults":    c.StrictMinorDefaults,
+		"provider_no_train_policy": c.ProviderNoTrainPolicy,
 	}
 }
 

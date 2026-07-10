@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   getConsent,
   grantConsent,
@@ -10,11 +10,16 @@ import {
   createDeletionRequest,
   isConsentOutdated,
   MINOR_ALLOWED_HOURS,
+  getMinorAccountDefaults,
+  getAdultAccountDefaults,
+  resolveAccountDefaults,
+  setStrictMinorDefaults,
 } from './index'
 
 describe('compliance', () => {
   beforeEach(() => {
     localStorage.clear()
+    setStrictMinorDefaults(true)
   })
 
   describe('consent', () => {
@@ -99,6 +104,36 @@ describe('compliance', () => {
     it('allowed hours are 8-22', () => {
       expect(MINOR_ALLOWED_HOURS.start).toBe(8)
       expect(MINOR_ALLOWED_HOURS.end).toBe(22)
+    })
+  })
+
+  describe('account defaults (AP-056)', () => {
+    it('strict minor disables location and social', () => {
+      const d = getMinorAccountDefaults(true)
+      expect(d.audience).toBe('minor')
+      expect(d.strict).toBe(true)
+      expect(d.locationScope).toBe('none')
+      expect(d.socialEnabled).toBe(false)
+      expect(d.friendsDefault).toBe(false)
+      expect(d.shareCaptureDefault).toBe(false)
+      expect(d.playHoursStart).toBe(8)
+      expect(d.playHoursEnd).toBe(22)
+    })
+
+    it('non-strict minor keeps city location and social on', () => {
+      const d = getMinorAccountDefaults(false)
+      expect(d.locationScope).toBe('city')
+      expect(d.socialEnabled).toBe(true)
+    })
+
+    it('resolveAccountDefaults uses strict flag for minors', () => {
+      setStrictMinorDefaults(true)
+      const minor = resolveAccountDefaults(true)
+      expect(minor.strict).toBe(true)
+      expect(minor.locationScope).toBe('none')
+      const adult = resolveAccountDefaults(false)
+      expect(adult.audience).toBe('adult')
+      expect(getAdultAccountDefaults().socialEnabled).toBe(true)
     })
   })
 

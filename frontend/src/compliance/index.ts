@@ -338,6 +338,93 @@ export function isMinorAllowedTime(now: Date = new Date()): boolean {
   return hour >= MINOR_ALLOWED_HOURS.start && hour < MINOR_ALLOWED_HOURS.end
 }
 
+/** Whether to apply stricter minor location/social defaults (AP-056). Default true. */
+export let STRICT_MINOR_DEFAULTS = true
+
+/** Test/config helper to toggle strict minor defaults. */
+export function setStrictMinorDefaults(enabled: boolean): void {
+	STRICT_MINOR_DEFAULTS = enabled
+}
+
+export type LocationScopeDefault = 'none' | 'city' | 'precise'
+
+export interface MinorAccountDefaults {
+  audience: 'minor' | 'adult'
+  strict: boolean
+  playHoursStart: number
+  playHoursEnd: number
+  dailyLimitSeconds: number
+  locationScope: LocationScopeDefault
+  preciseLocationDefault: boolean
+  shareLocationDefault: boolean
+  socialEnabled: boolean
+  friendsDefault: boolean
+  publicProfileDefault: boolean
+  shareCaptureDefault: boolean
+}
+
+/** Adult account defaults (consent still required for location/photo). */
+export function getAdultAccountDefaults(): MinorAccountDefaults {
+  return {
+    audience: 'adult',
+    strict: false,
+    playHoursStart: 0,
+    playHoursEnd: 24,
+    dailyLimitSeconds: 0,
+    locationScope: 'city',
+    preciseLocationDefault: false,
+    shareLocationDefault: false,
+    socialEnabled: true,
+    friendsDefault: true,
+    publicProfileDefault: false,
+    shareCaptureDefault: true,
+  }
+}
+
+/**
+ * Minor account defaults. When strict (default), location and social are off
+ * until guardian-approved consent expands scope.
+ */
+export function getMinorAccountDefaults(
+  strict: boolean = STRICT_MINOR_DEFAULTS,
+): MinorAccountDefaults {
+  if (strict) {
+    return {
+      audience: 'minor',
+      strict: true,
+      playHoursStart: MINOR_ALLOWED_HOURS.start,
+      playHoursEnd: MINOR_ALLOWED_HOURS.end,
+      dailyLimitSeconds: MINOR_DAILY_LIMIT_SECONDS,
+      locationScope: 'none',
+      preciseLocationDefault: false,
+      shareLocationDefault: false,
+      socialEnabled: false,
+      friendsDefault: false,
+      publicProfileDefault: false,
+      shareCaptureDefault: false,
+    }
+  }
+  return {
+    audience: 'minor',
+    strict: false,
+    playHoursStart: MINOR_ALLOWED_HOURS.start,
+    playHoursEnd: MINOR_ALLOWED_HOURS.end,
+    dailyLimitSeconds: MINOR_DAILY_LIMIT_SECONDS,
+    locationScope: 'city',
+    preciseLocationDefault: false,
+    shareLocationDefault: false,
+    socialEnabled: true,
+    friendsDefault: false,
+    publicProfileDefault: false,
+    shareCaptureDefault: false,
+  }
+}
+
+export function resolveAccountDefaults(isMinor: boolean): MinorAccountDefaults {
+  if (isMinor) return getMinorAccountDefaults(STRICT_MINOR_DEFAULTS)
+  return getAdultAccountDefaults()
+}
+
 export function createDeletionRequest(): DataDeletionRequest {
   return {
     requestId:
