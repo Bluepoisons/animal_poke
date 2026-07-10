@@ -1,4 +1,6 @@
 # Kustomize base
+# Image tags default to 0.0.0-unset so overlays / CI MUST override with an
+# immutable commit SHA or digest. Never ship :dev / :latest / :ci from base.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: production
@@ -14,6 +16,6 @@ labels:
     includeSelectors: false
 images:
   - name: registry.cn-beijing.aliyuncs.com/animal-poke/backend
-    newTag: dev
+    newTag: "0.0.0-unset"
   - name: registry.cn-beijing.aliyuncs.com/animal-poke/frontend
-    newTag: dev
+    newTag: "0.0.0-unset"

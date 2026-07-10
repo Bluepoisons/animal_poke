@@ -7,6 +7,7 @@ import { useCamera } from '../../../camera/useCamera'
 import { detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
+import WelfareNotice from '../components/WelfareNotice'
 
 interface DiscoverScreenProps {
   energy: number
@@ -311,6 +312,8 @@ export default function DiscoverScreen({
           重新开始
         </button>
       )}
+
+      <WelfareNotice />
 
       <ActionButton
         onClick={onPrimary}
