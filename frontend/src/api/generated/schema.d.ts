@@ -974,8 +974,23 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
-                    /** Format: binary */
+                    /**
+                     * Format: binary
+                     * @description Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
+                     */
                     image: string;
+                    /** @description Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region. */
+                    crop_x?: number;
+                    /** @description Optional normalized crop origin Y (0..1). */
+                    crop_y?: number;
+                    /** @description Optional normalized crop width (0..1). */
+                    crop_w?: number;
+                    /** @description Optional normalized crop height (0..1). */
+                    crop_h?: number;
+                    /** @description Optional parent detect inference id for audit linkage. */
+                    parent_inference_id?: string;
+                    /** @description Alias of parent_inference_id. */
+                    detect_inference_id?: string;
                 };
             };
         };
@@ -991,8 +1006,16 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid image or crop box */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
         };
     };

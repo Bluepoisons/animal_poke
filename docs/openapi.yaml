@@ -302,6 +302,33 @@ paths:
                 image:
                   type: string
                   format: binary
+                  description: Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
+                crop_x:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  description: Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region.
+                crop_y:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  description: Optional normalized crop origin Y (0..1).
+                crop_w:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1
+                  description: Optional normalized crop width (0..1).
+                crop_h:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1
+                  description: Optional normalized crop height (0..1).
+                parent_inference_id:
+                  type: string
+                  description: Optional parent detect inference id for audit linkage.
+                detect_inference_id:
+                  type: string
+                  description: Alias of parent_inference_id.
       responses:
         "200":
           description: Analysis result
@@ -310,10 +337,14 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        "400":
+          description: Invalid image or crop box
         "401":
           $ref: "#/components/responses/Unauthorized"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
