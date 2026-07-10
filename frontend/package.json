@@ -17,7 +17,8 @@
     "preinstall": "node ./scripts/check-node.mjs",
     "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs",
     "economy:gate": "node ./scripts/economy-monte-carlo-gate.mjs",
-    "test:economy": "vitest run src/economy/monteCarlo"
+    "test:economy": "vitest run src/economy/monteCarlo",
+    "sbom": "npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json"
   },
   "dependencies": {
     "idb": "^8.0.3",
@@ -40,5 +41,6 @@
     "vite-plugin-compression": "^0.5.1",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "packageManager": "npm@10.9.2"
 }

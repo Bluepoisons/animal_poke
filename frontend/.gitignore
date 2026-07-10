@@ -1,2 +1,5 @@
 node_modules
 dist
+# AP-041 local SBOM output
+sbom.cdx.json
+sbom*.json

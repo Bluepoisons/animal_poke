@@ -14,13 +14,14 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags="-s -w" -o /out/animal-poke-backend ./cmd
+    go build -trimpath -ldflags="-s -w" -o /out/animal-poke-backend ./cmd && \
+    go build -trimpath -ldflags="-s -w" -o /out/animal-poke-migrate ./cmd/migrate
 
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata wget \
     && adduser -D -H -u 10001 appuser
 WORKDIR /app
-COPY --from=builder /out/animal-poke-backend .
+COPY --from=builder /out/animal-poke-backend /out/animal-poke-migrate .
 
 USER 10001:10001
 ENV SERVER_ADDR=:8080 \

@@ -32,18 +32,16 @@ type Config struct {
 	AIMockEnabled      bool
 	RedisURL           string
 	AdminAPIKey        string
-	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
-	// 环境变量 COMMERCE_ENABLED 可覆盖。
-	CommerceEnabled bool
-	// CommerceStoreVerify 是否启用真实商店验签路径。production 履约在未开启时返回 not ready。
-	// 环境变量 COMMERCE_STORE_VERIFY。
-	CommerceStoreVerify bool
-	MaxImageBytes       int64
-	MaxImagePixels      int
-	CORSAllowedOrigins  []string
-	Database            DatabaseConfig
-	ThirdParty          ThirdPartyConfig
-	Server              ServerTimeouts
+	MaxImageBytes      int64
+	MaxImagePixels     int
+	CORSAllowedOrigins []string
+	// StrictMinorDefaults 未成年人更严格的时间/位置/社交默认（AP-056）。
+	StrictMinorDefaults bool
+	// ProviderNoTrainPolicy 断言 Provider 不训练/不保留原图并写审计（AP-056）。
+	ProviderNoTrainPolicy bool
+	Database              DatabaseConfig
+	ThirdParty            ThirdPartyConfig
+	Server                ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -146,6 +144,7 @@ func Load() *Config {
 		MetricsAddr:        getEnv("METRICS_ADDR", ":9090"),
 		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
 		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
+		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
 		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
@@ -155,6 +154,9 @@ func Load() *Config {
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		// 默认开启：未成年人严格默认 + Provider 不训练审计
+		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
+		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "127.0.0.1"),
 			Port:            getEnvInt("DB_PORT", 3306),
@@ -183,6 +185,7 @@ func Load() *Config {
 			MaxHeader:  getEnvInt("HTTP_MAX_HEADER_BYTES", 1<<20),
 			Shutdown:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		},
+		Upstream: loadUpstreamConfig(),
 	}
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
@@ -390,12 +393,14 @@ func (c *Config) ReadyErrors() []string {
 // CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
 func (c *Config) CapabilityStatus() map[string]interface{} {
 	return map[string]interface{}{
-		"vision_configured":  c.ThirdParty.VisionConfigured(),
-		"vision_source":      c.ThirdParty.VisionSource,
-		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),
-		"llm_configured":     c.ThirdParty.LLMConfigured(),
-		"mock_allowed":       c.MockAllowed(),
-		"vision_reuse_llm":   c.ThirdParty.VisionReuseLLM,
+		"vision_configured":        c.ThirdParty.VisionConfigured(),
+		"vision_source":            c.ThirdParty.VisionSource,
+		"vision_fingerprint":       c.ThirdParty.VisionFingerprint(),
+		"llm_configured":           c.ThirdParty.LLMConfigured(),
+		"mock_allowed":             c.MockAllowed(),
+		"vision_reuse_llm":         c.ThirdParty.VisionReuseLLM,
+		"strict_minor_defaults":    c.StrictMinorDefaults,
+		"provider_no_train_policy": c.ProviderNoTrainPolicy,
 	}
 }
 
@@ -438,6 +443,45 @@ func SetupLogger(level string) {
 	}
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l})
 	slog.SetDefault(slog.New(handler))
+}
+
+func loadUpstreamConfig() UpstreamConfig {
+	u := DefaultUpstreamConfig()
+	u.Geo = loadProviderBudget("UPSTREAM_GEO", u.Geo)
+	u.Weather = loadProviderBudget("UPSTREAM_WEATHER", u.Weather)
+	u.Vision = loadProviderBudget("UPSTREAM_VISION", u.Vision)
+	u.LLM = loadProviderBudget("UPSTREAM_LLM", u.LLM)
+	u.MaxRetryAfter = getEnvDuration("UPSTREAM_MAX_RETRY_AFTER", u.MaxRetryAfter)
+	u.CircuitFailureThreshold = getEnvInt("UPSTREAM_CIRCUIT_FAILURES", u.CircuitFailureThreshold)
+	u.CircuitOpenTimeout = getEnvDuration("UPSTREAM_CIRCUIT_OPEN_TIMEOUT", u.CircuitOpenTimeout)
+	if u.MaxRetryAfter <= 0 {
+		u.MaxRetryAfter = 5 * time.Second
+	}
+	if u.CircuitFailureThreshold <= 0 {
+		u.CircuitFailureThreshold = 5
+	}
+	if u.CircuitOpenTimeout <= 0 {
+		u.CircuitOpenTimeout = 30 * time.Second
+	}
+	return u
+}
+
+func loadProviderBudget(prefix string, def ProviderBudget) ProviderBudget {
+	b := def
+	b.TotalDeadline = getEnvDuration(prefix+"_DEADLINE", b.TotalDeadline)
+	b.Timeout = getEnvDuration(prefix+"_TIMEOUT", b.Timeout)
+	b.MaxRetries = getEnvInt(prefix+"_MAX_RETRIES", b.MaxRetries)
+	b.MaxConcurrent = getEnvInt(prefix+"_CONCURRENCY", b.MaxConcurrent)
+	if b.Timeout <= 0 {
+		b.Timeout = def.Timeout
+	}
+	if b.MaxRetries < 0 {
+		b.MaxRetries = 0
+	}
+	if b.MaxConcurrent <= 0 {
+		b.MaxConcurrent = def.MaxConcurrent
+	}
+	return b
 }
 
 func getEnv(k, def string) string {

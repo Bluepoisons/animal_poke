@@ -4,7 +4,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -142,14 +141,9 @@ func CostLimitByType(counter *DailyCallCounter, callType string) gin.HandlerFunc
 			c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		}
 		if !ok {
-			ObserveRateLimit()
-			c.Header("Retry-After", "86400")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "daily call limit exceeded for " + callType,
-				"limit":       limit,
-				"remaining":   0,
-				"retry_after": 86400,
-				"reason_code": "daily_quota",
+			AbortTooMany(c, "daily_quota", "daily call limit exceeded for "+callType, 86400, map[string]any{
+				"limit":     limit,
+				"remaining": 0,
 			})
 			return
 		}

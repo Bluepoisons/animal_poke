@@ -56,18 +56,11 @@ type valueRequest struct {
 // Generate POST /value/generate
 func (h *ValueHandler) Generate(c *gin.Context) {
 	var req valueRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: species is required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 
-	// 稳定 seed：优先 parent/analyze/inference_request_id，其次 capture_id
-	seedID := firstNonEmpty(
-		req.ParentInferenceID,
-		req.AnalyzeInferenceID,
-		req.InferenceRequestID,
-		req.CaptureID,
-	)
 
 	input := services.ValueInput{
 		Species:             req.Species,
@@ -94,14 +87,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 	result, err := h.aiService.GenerateValueContext(c.Request.Context(), input)
 	if err != nil {
 		slog.Error("AI 数值生成失败", "device_id", deviceID, "err", err)
-		if err.Error() == "invalid input: "+err.Error() || // fallback
-			true {
-			// 区分 400/500
-			if result == nil && (len(err.Error()) > 0) {
-				// invalid input already checked
-			}
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "value generation failed"})
+		WriteProviderError(c, err, "value generation failed")
 		return
 	}
 

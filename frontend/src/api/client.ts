@@ -16,6 +16,8 @@ export type ApiErrorBody = {
   error?: string
   reason_code?: string
   request_id?: string
+  retryable?: boolean
+  details?: Record<string, unknown>
 }
 
 export class ApiError extends Error {
@@ -23,6 +25,8 @@ export class ApiError extends Error {
   reasonCode?: string
   requestId?: string
   retryAfter?: number
+  retryable?: boolean
+  details?: Record<string, unknown>
 
   constructor(status: number, body: ApiErrorBody, retryAfter?: number) {
     super(body.error || `HTTP ${status}`)
@@ -31,6 +35,8 @@ export class ApiError extends Error {
     this.reasonCode = body.reason_code
     this.requestId = body.request_id
     this.retryAfter = retryAfter
+    this.retryable = body.retryable
+    this.details = body.details
   }
 }
 

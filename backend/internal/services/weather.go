@@ -111,13 +111,22 @@ func (s *WeatherService) callCaiyun(ctx context.Context, lat, lng float64) (Weat
 	if err != nil {
 		return WeatherWeekResult{}, err
 	}
-	client := s.client
-	if client == nil {
-		client = DefaultHTTPClient(5 * time.Second)
+	var (
+		resp *http.Response
+		body []byte
+		err2 error
+	)
+	if s.provider != nil {
+		resp, body, err2 = s.provider.Do(ctx, req, 1<<20)
+	} else {
+		client := s.client
+		if client == nil {
+			client = DefaultHTTPClient(5 * time.Second)
+		}
+		resp, body, err2 = DoWithRetry(ctx, client, req, 1, 1<<20)
 	}
-	resp, body, err := DoWithRetry(ctx, client, req, 1, 1<<20)
-	if err != nil {
-		return WeatherWeekResult{}, fmt.Errorf("http request failed: %w", err)
+	if err2 != nil {
+		return WeatherWeekResult{}, err2
 	}
 	if resp.StatusCode != http.StatusOK {
 		return WeatherWeekResult{}, fmt.Errorf("caiyun returned status %d", resp.StatusCode)

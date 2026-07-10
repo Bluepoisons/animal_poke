@@ -1,0 +1,114 @@
+# Example Prometheus / Alertmanager rules for MySQL backup (AP-015).
+# Adapt metric names to your scrape path (kube-state-metrics, cronjob exporter, log-based metrics).
+#
+# Apply with your monitoring stack, e.g.:
+#   kubectl -n monitoring apply -f deploy/k8s/alerts/mysql-backup-alerts.example.yaml
+#
+# Not included in kustomize production overlay by default (cluster-specific).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: animal-poke-mysql-backup
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: animal-poke
+    app.kubernetes.io/component: backup
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: animal-poke.mysql-backup
+      rules:
+        # CronJob schedule present and not suspended (kube-state-metrics)
+        - alert: MySQLBackupCronJobSuspended
+          expr: |
+            kube_cronjob_spec_suspend{
+              namespace="production",
+              cronjob="mysql-backup"
+            } == 1
+          for: 15m
+          labels:
+            severity: critical
+            service: animal-poke
+            component: backup
+          annotations:
+            summary: "MySQL backup CronJob is suspended"
+            description: "production/mysql-backup is suspended — RPO risk. Unsuspend or confirm managed PITR coverage."
+            runbook_url: "https://github.com/Bluepoisons/animal_poke/blob/main/docs/runbooks/backup-and-dr.md"
+
+        # Last Job failed (kube-state-metrics)
+        - alert: MySQLBackupJobFailed
+          expr: |
+            kube_job_status_failed{
+              namespace="production",
+              job_name=~"mysql-backup-.*"
+            } > 0
+            unless on (job_name)
+            kube_job_status_succeeded{
+              namespace="production",
+              job_name=~"mysql-backup-.*"
+            } > 0
+          for: 10m
+          labels:
+            severity: critical
+            service: animal-poke
+            component: backup
+          annotations:
+            summary: "MySQL backup Job failed"
+            description: "A mysql-backup Job in production reports failed pods. Check logs for dump/upload/checksum errors."
+            runbook_url: "https://github.com/Bluepoisons/animal_poke/blob/main/docs/runbooks/backup-and-dr.md"
+
+        # No successful Job completion within 30 minutes (15m schedule + slack)
+        - alert: MySQLBackupTooOld
+          expr: |
+            (
+              time()
+              - max(
+                  kube_job_status_completion_time{
+                    namespace="production",
+                    job_name=~"mysql-backup-.*"
+                  }
+                  and on (job_name)
+                  kube_job_status_succeeded{
+                    namespace="production",
+                    job_name=~"mysql-backup-.*"
+                  } > 0
+                )
+            ) > 1800
+          for: 5m
+          labels:
+            severity: critical
+            service: animal-poke
+            component: backup
+          annotations:
+            summary: "MySQL backup older than 30 minutes"
+            description: "No successful mysql-backup Job completion in > 30m (RPO target ≤ 15m). Investigate CronJob/schedule/auth/storage."
+            runbook_url: "https://github.com/Bluepoisons/animal_poke/blob/main/docs/runbooks/backup-and-dr.md"
+
+        # Optional: textfile / log-derived metric pushed by backup container
+        - alert: MySQLBackupSuccessMetricStale
+          expr: |
+            (time() - mysql_backup_last_success_unixtime) > 1800
+          for: 5m
+          labels:
+            severity: critical
+            service: animal-poke
+            component: backup
+          annotations:
+            summary: "mysql_backup_last_success_unixtime is stale"
+            description: "Backup success metric not updated within 30 minutes."
+            runbook_url: "https://github.com/Bluepoisons/animal_poke/blob/main/docs/runbooks/backup-and-dr.md"
+
+        # Drill / process metric (set by CI or operator pushgateway)
+        - alert: MySQLBackupRestoreRTOExceeded
+          expr: |
+            mysql_backup_last_drill_rto_seconds > 3600
+          for: 0m
+          labels:
+            severity: warning
+            service: animal-poke
+            component: backup
+          annotations:
+            summary: "Last restore drill exceeded RTO 60 minutes"
+            description: "Recorded drill RTO > 3600s. Re-run deploy/scripts/backup-restore-drill.sh and update runbook."
+            runbook_url: "https://github.com/Bluepoisons/animal_poke/blob/main/docs/runbooks/backup-and-dr.md"
