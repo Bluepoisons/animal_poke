@@ -1,3 +1,5 @@
+import { getAccessToken } from '../auth/deviceAuth'
+import { getApiBaseUrl } from '../api/client'
 import React, { createContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   REFRESH_INTERVAL_MS,
@@ -44,7 +46,14 @@ function loadInitialState(): LbsState {
 /** 调用后端逆地理编码获取城市名（静默降级） */
 async function fetchCityName(lat: number, lng: number): Promise<{ city: string; province: string }> {
   try {
-    const resp = await fetch(`/api/v1/geo/city?lat=${lat}&lng=${lng}`)
+    const token = await getAccessToken()
+    const base = getApiBaseUrl()
+    const resp = await fetch(`${base}/api/v1/geo/city?lat=${lat}&lng=${lng}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Request-ID': crypto.randomUUID?.() || `geo-${Date.now()}`,
+      },
+    })
     if (!resp.ok) throw new Error(`geo/city 请求失败: ${resp.status}`)
     const data = await resp.json()
     return {
