@@ -43,9 +43,11 @@ func TestAnimalRepo_CreateAndFind(t *testing.T) {
 func TestAnimalRepo_NotExists(t *testing.T) {
 	repo, _ := setupAnimalRepo(t)
 
-	assert.False(t, repo.ExistsByUUID("no-such-uuid"))
+	ok, err := repo.ExistsByUUID("no-such-uuid")
+	assert.NoError(t, err)
+	assert.False(t, ok)
 
-	_, err := repo.FindByUUID("no-such-uuid")
+	_, err = repo.FindByUUID("no-such-uuid")
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
 
@@ -60,10 +62,12 @@ func TestAnimalRepo_DuplicateUUID(t *testing.T) {
 		GeneratedAt: time.Now(),
 	}
 	assert.NoError(t, repo.Create(animal))
-	assert.True(t, repo.ExistsByUUID("uuid-dup"))
+	ok, err := repo.ExistsByUUID("uuid-dup")
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
 	// 重复创建应报错
-	err := repo.Create(animal)
+	err = repo.Create(animal)
 	assert.Error(t, err)
 }
 
@@ -89,14 +93,16 @@ func TestAnimalRepo_CountRecentHighRarity(t *testing.T) {
 func TestAnimalRepo_CountRecentHighRarity_OutOfRange(t *testing.T) {
 	repo, _ := setupAnimalRepo(t)
 
-	repo.Create(&models.Animal{
+	// 使用服务端 created_at；插入后把 created_at 调到 2 小时前
+	a := &models.Animal{
 		UUID:        "old-one",
 		DeviceID:    "device-old",
 		Rarity:      5,
-		GeneratedAt: time.Now().Add(-2 * time.Hour),
-	})
+		GeneratedAt: time.Now(),
+	}
+	assert.NoError(t, repo.Create(a))
+	assert.NoError(t, repo.DB().Model(a).Update("created_at", time.Now().Add(-2*time.Hour)).Error)
 
-	// 只查最近 5 分钟
 	count, err := repo.CountRecentHighRarity("device-old", 5, time.Now().Add(-5*time.Minute))
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -112,13 +118,13 @@ func TestAnimalRepo_FindByInferenceRequestID(t *testing.T) {
 		GeneratedAt:        time.Now(),
 	})
 
-	animals, err := repo.FindByInferenceRequestID("req-123")
+	animals, err := repo.FindByInferenceRequestID("device-1", "req-123")
 	assert.NoError(t, err)
 	assert.Len(t, animals, 1)
 	assert.Equal(t, "uuid-req", animals[0].UUID)
 
 	// 不存在的 ID 返回空
-	animals, err = repo.FindByInferenceRequestID("nonexistent")
+	animals, err = repo.FindByInferenceRequestID("", "nonexistent")
 	assert.NoError(t, err)
 	assert.Len(t, animals, 0)
 }
