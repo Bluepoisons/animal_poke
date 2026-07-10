@@ -1,0 +1,19 @@
+# gitleaks 配置
+title = "animal_poke"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow example placeholders"
+paths = [
+  '''backend/\.env\.example''',
+  '''frontend/\.env\.example''',
+  '''deploy/k8s/backend-secret\.example\.yaml''',
+  '''docs/runbooks/.*''',
+]
+regexes = [
+  '''REPLACE_ME''',
+  '''change-me-in-production''',
+  '''animal-poke-dev-secret''',
+]
