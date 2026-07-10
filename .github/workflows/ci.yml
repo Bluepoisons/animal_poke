@@ -45,7 +45,8 @@ jobs:
           staticcheck ./...
       - name: Govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # govulncheck@latest may require a newer Go to *build* the tool.
+          GOTOOLCHAIN=auto go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
   frontend:
