@@ -2,6 +2,10 @@
 package repo
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -103,6 +107,69 @@ func (r *DeviceRepo) Disable(deviceID string) error {
 func (r *DeviceRepo) BumpTokenVersion(deviceID string) error {
 	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
 		Update("token_version", gorm.Expr("token_version + 1")).Error
+}
+
+// HashInstallationSecret 计算安装密钥哈希（可选盐）。
+func HashInstallationSecret(secret, salt string) string {
+	payload := secret
+	if salt != "" {
+		payload = salt + ":" + secret
+	}
+	sum := sha256.Sum256([]byte(payload))
+	return hex.EncodeToString(sum[:])
+}
+
+// GenerateInstallationSecret 生成 32 字节随机密钥（hex）与可选盐。
+func GenerateInstallationSecret() (secret, salt string, err error) {
+	raw := make([]byte, 32)
+	if _, err = rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	saltRaw := make([]byte, 16)
+	if _, err = rand.Read(saltRaw); err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(raw), hex.EncodeToString(saltRaw), nil
+}
+
+// SetInstallationSecret 首次写入安装密钥哈希（仅当当前为空时成功）。
+// 返回 claimed=true 表示本调用成功占用；false 表示已被并发/已有 secret。
+func (r *DeviceRepo) SetInstallationSecret(deviceID, secret, salt string) (claimed bool, err error) {
+	if deviceID == "" || secret == "" {
+		return false, errors.New("device_id and secret required")
+	}
+	hash := HashInstallationSecret(secret, salt)
+	res := r.db.Model(&models.Device{}).
+		Where("device_id = ? AND (installation_secret_hash = '' OR installation_secret_hash IS NULL)", deviceID).
+		Updates(map[string]interface{}{
+			"installation_secret_hash": hash,
+			"installation_secret_salt": salt,
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// VerifyInstallationSecret 校验安装密钥（常量时间比较）。
+func (r *DeviceRepo) VerifyInstallationSecret(deviceID, secret string) (bool, error) {
+	if deviceID == "" || secret == "" {
+		return false, nil
+	}
+	var dev models.Device
+	err := r.db.Select("installation_secret_hash", "installation_secret_salt").
+		Where("device_id = ?", deviceID).First(&dev).Error
+	if err != nil {
+		return false, err
+	}
+	if dev.InstallationSecretHash == "" {
+		return false, nil
+	}
+	got := HashInstallationSecret(secret, dev.InstallationSecretSalt)
+	if len(got) != len(dev.InstallationSecretHash) {
+		return false, nil
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(dev.InstallationSecretHash)) == 1, nil
 }
 
 // UpdateConsent 更新授权。

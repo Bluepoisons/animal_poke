@@ -4,6 +4,8 @@ import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
 import AnimalIcon from '../components/AnimalIcon'
 import { useCamera } from '../../../camera/useCamera'
+import { usePerfMode } from '../../../performance'
+import { compressImageForUpload } from '../../../performance'
 import { detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
@@ -81,6 +83,8 @@ export default function DiscoverScreen({
   weather = '—',
 }: DiscoverScreenProps) {
   const camera = useCamera()
+  const { decision: perf, shouldPauseCamera } = usePerfMode()
+  // perf.scanMode: continuous | manual; compress before upload via compressImageForUpload
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -184,7 +188,7 @@ export default function DiscoverScreen({
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
         ...a,
-        id: `det-${i}-${a.species}`,
+        id: a.targetId || `det-${i}-${a.species}`,
       }))
       dispatch({
         type: 'DETECT_SUCCESS',

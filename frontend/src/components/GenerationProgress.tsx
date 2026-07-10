@@ -131,6 +131,20 @@ function ResultSummary({
       <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.4 }}>
         {value.narrative}
       </div>
+      {value.factors && (
+        <div style={{ fontSize: 11, color: 'var(--ink-2)', marginTop: 10, lineHeight: 1.45 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>生成依据</div>
+          <div>拍摄质量 {(value.factors.photo_quality * 100).toFixed(0)}% · 完整度 {(value.factors.completeness * 100).toFixed(0)}%</div>
+          <div>
+            物种 {value.factors.species_weight.toFixed(2)} · 品种 {value.factors.breed_weight.toFixed(2)} · 毛色{' '}
+            {value.factors.color_weight.toFixed(2)}
+          </div>
+          <div>
+            有限随机 {value.factors.random_jitter.toFixed(3)} · 档位 {value.factors.quality_band}
+            {value.config_version ? ` · ${value.config_version}` : ''}
+          </div>
+        </div>
+      )}
       {onClose && (
         <button className="btn btn-primary" style={{ ...styles.btn, marginTop: 14 }} onClick={onClose}>
           收入图鉴

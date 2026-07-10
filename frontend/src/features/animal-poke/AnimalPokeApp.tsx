@@ -23,11 +23,11 @@ import {
 import './animalPoke.css'
 import OnboardingOverlay from './components/OnboardingOverlay'
 
-const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store']
+const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store', 'settings']
 
 function parseHashScreen(): ScreenId {
   const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
-  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store']
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store', 'settings']
   return allowed.includes(h) ? h : 'discover'
 }
 
@@ -231,6 +231,8 @@ export default function AnimalPokeApp() {
         return <BattleArenaScreen />
       case 'store':
         return <StoreScreen coins={gold} onCoinsChange={handleCoinsChange} onToast={showToast} />
+      case 'settings':
+        return <SettingsScreen onToast={showToast} />
       default:
         return null
     }

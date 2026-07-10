@@ -2,6 +2,9 @@ import { useEffect, useMemo } from 'react'
 import PageTitle from '../components/PageTitle'
 import DiscoveryPin from '../components/DiscoveryPin'
 import { useLbs } from '../../../lbs/useLbs'
+import { accuracyCircleRadiusM } from '../../../outdoorSafety/useOutdoorSafety'
+import { MAX_ACCURACY_M } from '../../../outdoorSafety/constants'
+import { DISCOVERY_RANGE_M } from '../../../lbs/constants'
 import { discoveryToHuntTarget } from '../lbsMap'
 import type { HuntTarget } from '../data/types'
 
@@ -24,6 +27,15 @@ export default function HuntMapScreen({
 }: HuntMapScreenProps) {
   const lbs = useLbs()
   const { state, requestLocation, refreshPoints, nextRefreshIn } = lbs
+  const accuracy = state.playerLocation?.accuracy
+  const accuracyRadius = accuracyCircleRadiusM(accuracy)
+  const accuracyTooLow = accuracy != null && accuracy > MAX_ACCURACY_M
+
+  const circlePercent = useMemo(() => {
+    if (accuracyRadius <= 0) return 0
+    const pct = (accuracyRadius / DISCOVERY_RANGE_M) * 90
+    return Math.max(8, Math.min(pct, 80))
+  }, [accuracyRadius])
 
   useEffect(() => {
     if (state.geoStatus === 'idle' || state.geoStatus === 'denied') {
@@ -72,6 +84,29 @@ export default function HuntMapScreen({
         <div className="ap-road ap-road--blue" />
         <div className="ap-road ap-road--olive" />
 
+        {circlePercent > 0 && (
+          <div
+            aria-label={`定位精度约 ${Math.round(accuracy ?? 0)} 米`}
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: `${circlePercent}%`,
+              height: `${circlePercent}%`,
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              background: accuracyTooLow
+                ? 'rgba(244, 67, 54, 0.12)'
+                : 'rgba(33, 150, 243, 0.15)',
+              border: accuracyTooLow
+                ? '1.5px dashed rgba(244, 67, 54, 0.6)'
+                : '1.5px solid rgba(33, 150, 243, 0.45)',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+        )}
+
         {targets.map((target) => (
           <DiscoveryPin
             key={target.id}
@@ -83,7 +118,7 @@ export default function HuntMapScreen({
 
         <div
           className="ap-pin ap-pin--user"
-          style={{ left: '50%', top: '50%' }}
+          style={{ left: '50%', top: '50%', zIndex: 2 }}
           aria-label="你的位置"
         />
         <div
@@ -93,12 +128,15 @@ export default function HuntMapScreen({
             top: 'calc(50% + 18px)',
             transform: 'translateX(-50%)',
             position: 'absolute',
+            zIndex: 2,
           }}
         >
           你的位置
+          {accuracy != null ? ` · ±${Math.round(accuracy)}m` : ''}
         </div>
 
         <div className="ap-map-card">
+          {accuracyTooLow && <p>定位精度不足，无法判定进入捕获范围。</p>}
           {state.geoStatus === 'denied' || state.geoStatus === 'unsupported' ? (
             <>
               <h2>无法定位</h2>

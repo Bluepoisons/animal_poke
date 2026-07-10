@@ -12,11 +12,15 @@ type Device struct {
 	AccountID    string `gorm:"index;size:36" json:"account_id,omitempty"` // 绑定账号后填充
 	TokenVersion int    `gorm:"not null;default:1" json:"token_version"`
 	Disabled     bool   `gorm:"not null;default:false" json:"disabled"`
+	// InstallationSecretHash 安装密钥哈希（sha256 hex），明文仅首次注册返回一次。
+	InstallationSecretHash string `gorm:"size:128" json:"-"`
+	// InstallationSecretSalt 可选盐（hex），为空时直接 sha256(secret)。
+	InstallationSecretSalt string `gorm:"size:64" json:"-"`
 	// 授权
 	ConsentVersion string     `gorm:"size:32" json:"consent_version"`
 	ConsentAt      *time.Time `json:"consent_at,omitempty"`
 	ConsentScope   string     `gorm:"size:128" json:"consent_scope"`
-	ConsentRevoked *time.Time `json:"consent_revoked_at,omitempty"`
+	ConsentRevoked *time.Time `gorm:"column:consent_revoked_at" json:"consent_revoked_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -152,6 +156,7 @@ type Product struct {
 func (Product) TableName() string { return "products" }
 
 // Order 服务端订单。
+// 幂等作用域为 (device_id, idempotency_key)；receipt_hash 为空时使用 NULL（可多单未履约）。
 type Order struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	OrderID        string     `gorm:"uniqueIndex;size:64;not null" json:"order_id"`
@@ -160,12 +165,12 @@ type Order struct {
 	ProductID      string     `gorm:"index;size:64;not null" json:"product_id"`
 	Status         string     `gorm:"size:32;not null" json:"status"` // created|paid|fulfilled|refunded|failed
 	Platform       string     `gorm:"size:32" json:"platform"`        // apple|google|mock
-	ReceiptHash    string     `gorm:"uniqueIndex;size:128" json:"receipt_hash"`
+	ReceiptHash    *string    `gorm:"uniqueIndex;size:128" json:"receipt_hash,omitempty"`
 	AmountCents    int        `json:"amount_cents"`
 	Currency       string     `gorm:"size:8" json:"currency"`
 	FulfilledAt    *time.Time `json:"fulfilled_at,omitempty"`
 	RefundedAt     *time.Time `json:"refunded_at,omitempty"`
-	IdempotencyKey string     `gorm:"uniqueIndex;size:64" json:"idempotency_key"`
+	IdempotencyKey string     `gorm:"uniqueIndex:idx_order_device_idem,priority:2;size:64" json:"idempotency_key"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -189,6 +194,26 @@ type Entitlement struct {
 
 // TableName 明确表名。
 func (Entitlement) TableName() string { return "entitlements" }
+
+
+// IdempotencyRecord 服务端幂等键（device_id + route + key 唯一）。
+type IdempotencyRecord struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	DeviceID     string     `gorm:"uniqueIndex:idx_idem_device_route_key,priority:1;size:64;not null" json:"device_id"`
+	Route        string     `gorm:"uniqueIndex:idx_idem_device_route_key,priority:2;size:128;not null" json:"route"`
+	Key          string     `gorm:"column:key_name;uniqueIndex:idx_idem_device_route_key,priority:3;size:128;not null" json:"key"`
+	RequestHash  string     `gorm:"size:64;not null" json:"request_hash"`
+	Status       string     `gorm:"size:32;not null" json:"status"` // processing|completed|failed
+	HTTPStatus   int        `json:"http_status"`
+	ResponseBody string     `gorm:"type:longtext" json:"response_body,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	ExpiresAt    time.Time  `gorm:"index" json:"expires_at"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+}
+
+// TableName 明确表名。
+func (IdempotencyRecord) TableName() string { return "idempotency_records" }
 
 // SchemaMigration 简易版本化迁移记录。
 type SchemaMigration struct {
