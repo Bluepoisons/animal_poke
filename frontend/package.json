@@ -13,6 +13,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts",
     "preinstall": "node ./scripts/check-node.mjs",
     "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs",
@@ -26,6 +29,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -33,6 +37,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "rollup-plugin-visualizer": "^7.0.1",

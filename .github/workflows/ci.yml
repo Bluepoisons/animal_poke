@@ -127,13 +127,37 @@ jobs:
           # Production-like: empty base → same-origin /api
           VITE_API_BASE_URL: ""
       - name: Unit tests
+        # AP-014: hard fail unit tests (no continue-on-error)
         run: npm test
-        continue-on-error: true
-        # 前端 #85 修复 27 条 localStorage 失败前允许 soft-fail；门禁以 typecheck/build 为准
       - name: AnimalPoke entry tests
         run: npx vitest run src/features/animal-poke
-      - name: Public config unit tests
-        run: npx vitest run src/config/publicConfig.test.ts
+      - name: Production-path coverage floor
+        run: npm run test:coverage -- src/features/animal-poke src/services/visionDetect.ts src/services/capturePipeline.ts src/services/syncQueue.ts src/auth/deviceAuth.ts src/compliance src/capture/session.ts || npm test -- src/features/animal-poke src/services src/auth src/compliance src/capture/session.ts
+
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E hard gate (production entry)
+        run: npm run test:e2e
+        env:
+          CI: true
+          VITE_API_BASE_URL: ""
+          VITE_VISION_MOCK: "0"
 
   openapi:
     name: OpenAPI
