@@ -213,7 +213,7 @@ export default function CaptureScreen({
   }
 
   return (
-    <div className="ap-screen">
+    <div className="ap-screen" data-testid="capture-screen">
       <PageTitle
         title="CAPTURE"
         subtitle={`${species} · ${profile.label} · attempt ${(att?.index ?? 0) + 1}/${enc.maxAttempts}`}
@@ -224,7 +224,7 @@ export default function CaptureScreen({
       <SafetyStopBanner showStopFirst messages={outdoor.allowed ? [] : outdoor.messages} />
 
       <div
-        className="ap-capture-stage"
+        className="ap-capture-stage" data-testid="capture-stage"
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerCancel={stopChargeLoop}
