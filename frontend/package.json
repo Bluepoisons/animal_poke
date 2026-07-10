@@ -4,15 +4,18 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22 <23",
+    "npm": ">=10"
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node ./scripts/scan-bundle-secrets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts"
+    "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts",
+    "preinstall": "node ./scripts/check-node.mjs",
+    "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs"
   },
   "dependencies": {
     "idb": "^8.0.3",
