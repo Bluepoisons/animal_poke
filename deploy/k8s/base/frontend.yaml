@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: registry.cn-beijing.aliyuncs.com/animal-poke/frontend:__IMAGE_TAG__
+          image: registry.cn-beijing.aliyuncs.com/animal-poke/frontend:ci
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

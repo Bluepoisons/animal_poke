@@ -9,9 +9,9 @@ docker build -f deploy/Dockerfile.frontend \
 ```
 
 ## 部署
-- 清单：`deploy/k8s/frontend.yaml`
+- 清单：`deploy/k8s/base/frontend.yaml`
 - 镜像 tag 使用 commit SHA，禁止 `latest`。
-- Ingress：`deploy/k8s/ingress.yaml`（`__APP_HOST__`）
+- Ingress：`deploy/k8s/base/ingress.yaml`（`__APP_HOST__`）
 
 ## 缓存与 PWA
 - `index.html` / `sw.js`：`Cache-Control: no-cache`

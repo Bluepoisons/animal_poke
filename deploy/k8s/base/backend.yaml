@@ -31,7 +31,7 @@ spec:
       containers:
         - name: backend
           # 使用不可变标签：commit SHA 或 release digest，禁止 latest
-          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:__IMAGE_TAG__
+          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:ci
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import '@testing-library/jest-dom'
+import { afterEach } from 'vitest'
 
 // 固定 jsdom URL，避免不同环境 origin 漂移
 if (typeof window !== 'undefined' && window.location?.href === 'about:blank') {
@@ -41,7 +42,12 @@ if (typeof window !== 'undefined') {
 }
 
 // Canvas mock — 消除 getContext 未实现噪音
-HTMLCanvasElement.prototype.getContext = function getContext() {
+// Cast through any to satisfy the overloaded DOM getContext signature.
+;(HTMLCanvasElement.prototype as any).getContext = function getContext(
+  this: HTMLCanvasElement,
+  contextId: string,
+) {
+  if (contextId !== '2d') return null
   return {
     canvas: this,
     fillRect: () => {},
@@ -68,7 +74,7 @@ HTMLCanvasElement.prototype.getContext = function getContext() {
     transform: () => {},
     rect: () => {},
     clip: () => {},
-  } as unknown as CanvasRenderingContext2D
+  }
 }
 
 HTMLCanvasElement.prototype.toBlob = function toBlob(cb: BlobCallback) {

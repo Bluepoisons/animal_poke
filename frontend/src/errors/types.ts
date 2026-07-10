@@ -16,6 +16,8 @@ export interface ErrorReport {
   page?: string
   deviceId?: string
   appVersion: string
+  /** Build/release identifier used by backend error telemetry. */
+  release?: string
   userAgent: string
   context?: Record<string, unknown>
   online: boolean

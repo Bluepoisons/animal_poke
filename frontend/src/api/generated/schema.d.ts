@@ -641,6 +641,7 @@ export interface operations {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     getLivez: {
@@ -661,6 +662,7 @@ export interface operations {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     getReady: {
@@ -681,6 +683,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReadyResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             /** @description Not ready */
             503: {
                 headers: {
@@ -710,6 +713,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReadyResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             /** @description Not ready */
             503: {
                 headers: {
@@ -739,6 +743,7 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     ping: {
@@ -765,6 +770,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     getTime: {
@@ -786,6 +792,7 @@ export interface operations {
                     "application/json": components["schemas"]["TimeResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     authDevice: {

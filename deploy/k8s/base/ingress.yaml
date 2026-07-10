@@ -1,5 +1,5 @@
 # 环境化 Ingress（Ingress Controller 注解限流 / TLS）
-# 域名通过 overlays 或 CI 替换 __API_HOST__ / __APP_HOST__
+# 域名通过 overlays 或 CI 替换 api.animal-poke.example.com / app.animal-poke.example.com
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -17,10 +17,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - __API_HOST__
+        - api.animal-poke.example.com
       secretName: animal-poke-api-tls
   rules:
-    - host: __API_HOST__
+    - host: api.animal-poke.example.com
       http:
         paths:
           - path: /
@@ -43,10 +43,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - __APP_HOST__
+        - app.animal-poke.example.com
       secretName: animal-poke-web-tls
   rules:
-    - host: __APP_HOST__
+    - host: app.animal-poke.example.com
       http:
         paths:
           - path: /

@@ -36,9 +36,6 @@ func createMultipartBody(fieldName, filename string, data []byte) (string, *byte
 	return w.FormDataContentType(), &buf
 }
 
-// minimalJPEG 最小合法 JPEG（SOI+EOI），magic 通过。
-var minimalJPEG = []byte{0xFF, 0xD8, 0xFF, 0xD9}
-
 func TestVisionDetect_MissingFile(t *testing.T) {
 	r, _ := setupVisionTest()
 

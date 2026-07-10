@@ -127,10 +127,10 @@ npx openapi-typescript docs/openapi.yaml -o frontend/src/api/generated/schema.d.
 
 ## 部署
 
-- 后端清单：`deploy/k8s/backend.yaml`（`SERVER_ADDR`、Secret 契约、`/livez`+`/readyz`、非 root、只读根 FS）
+- 后端清单：`deploy/k8s/base/backend.yaml`（`SERVER_ADDR`、Secret 契约、`/livez`+`/readyz`、非 root、只读根 FS）
 - 配置：`deploy/k8s/backend-configmap.yaml` + `backend-secret.example.yaml`
-- 前端：`deploy/k8s/frontend.yaml` + Nginx SPA 回退
-- Ingress / 环境：`deploy/k8s/ingress.yaml` + `overlays/{staging,production}`
+- 前端：`deploy/k8s/base/frontend.yaml` + Nginx SPA 回退
+- Ingress / 环境：`deploy/k8s/base/ingress.yaml` + `overlays/{staging,production}`
 - 镜像 tag：**commit SHA**，禁止 `latest`
 
 ---

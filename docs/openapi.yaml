@@ -7,25 +7,40 @@ info:
     客户端仅持有 API Base URL + 设备 Token；第三方 Key 永不进入前端。
   contact:
     name: animal_poke team
+  license:
+    name: Proprietary
+    url: https://github.com/Bluepoisons/animal_poke
 servers:
-  - url: http://localhost:8080
-    description: Local
-  - url: https://api.animal-poke.example.com
-    description: Production example
+  - url: https://api.animal-poke.app
+    description: Production
+  - url: https://api.staging.animal-poke.app
+    description: Staging
 
 tags:
   - name: Health
+    description: Liveness, readiness and lightweight health probes
   - name: Auth
+    description: Device registration and JWT issuance
   - name: Geo
+    description: Reverse geocoding and location helpers
   - name: Weather
+    description: Weather queries proxied via backend
   - name: Vision
+    description: Image animal detection and analysis
   - name: Value
+    description: Pet value generation
   - name: Sync
+    description: Animal collection sync APIs
   - name: Privacy
+    description: Consent, export and deletion requests
   - name: Security
+    description: Client security and trusted time endpoints
   - name: Commerce
+    description: Orders and entitlements
   - name: Admin
+    description: Admin audit APIs
   - name: Observability
+    description: Metrics and operational endpoints
 
 paths:
   /health:
@@ -33,6 +48,7 @@ paths:
       tags: [Health]
       summary: Liveness (legacy)
       operationId: getHealth
+      security: []
       responses:
         "200":
           description: Process alive
@@ -40,11 +56,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /livez:
     get:
       tags: [Health]
       summary: Liveness
       operationId: getLivez
+      security: []
       responses:
         "200":
           description: Process alive
@@ -52,11 +71,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /ready:
     get:
       tags: [Health]
       summary: Readiness (legacy)
       operationId: getReady
+      security: []
       responses:
         "200":
           description: Ready
@@ -64,6 +86,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "503":
           description: Not ready
           content:
@@ -75,6 +99,7 @@ paths:
       tags: [Health]
       summary: Readiness
       operationId: getReadyz
+      security: []
       responses:
         "200":
           description: Ready
@@ -82,6 +107,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "503":
           description: Not ready
           content:
@@ -93,6 +120,7 @@ paths:
       tags: [Observability]
       summary: Prometheus metrics
       operationId: getMetrics
+      security: []
       responses:
         "200":
           description: Prometheus text exposition
@@ -100,12 +128,15 @@ paths:
             text/plain:
               schema:
                 type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/ping:
     get:
       tags: [Health]
       summary: Ping
       operationId: ping
+      security: []
       responses:
         "200":
           description: Pong
@@ -124,12 +155,15 @@ paths:
                     type: string
                   request_id:
                     type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/time:
     get:
       tags: [Security]
       summary: Trusted server time
       operationId: getTime
+      security: []
       responses:
         "200":
           description: Signed server time
@@ -141,12 +175,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TimeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/auth/device:
     post:
       tags: [Auth]
       summary: Register device and issue JWT
       operationId: authDevice
+      security: []
       requestBody:
         required: true
         content:
