@@ -120,7 +120,7 @@ func RateLimitByDevice(rl *RateLimiter) gin.HandlerFunc {
 // RateLimitByIP 按客户端 IP 限流。
 func RateLimitByIP(rl *RateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !rl.allow("ip:"+c.ClientIP()) {
+		if !rl.allow("ip:" + c.ClientIP()) {
 			c.Header("Retry-After", "1")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":       "rate limit exceeded",
