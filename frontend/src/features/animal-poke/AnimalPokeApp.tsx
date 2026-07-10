@@ -9,6 +9,7 @@ import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
 import { useStamina } from '../../stamina/useStamina'
+import { FEATURE_FLAGS } from './featureFlags'
 import { useLbs } from '../../lbs/useLbs'
 import { useWeather } from '../../weather/useWeather'
 import {
@@ -19,6 +20,7 @@ import {
 } from './captureFlow'
 
 import './animalPoke.css'
+import OnboardingOverlay from './components/OnboardingOverlay'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store']
 
@@ -41,6 +43,8 @@ export default function AnimalPokeApp() {
   })
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
   const { state: staminaState, addGold } = useStamina()
+  const level = staminaState.level
+  const exp = staminaState.exp
   const lbs = useLbs()
   const weather = useWeather()
   const currentStamina = staminaState.currentStamina
@@ -127,7 +131,13 @@ export default function AnimalPokeApp() {
     showToast('捕获会话无效，已返回发现')
   }, [dispatch, navigate, showToast])
 
-  const handleAchievement = useCallback(() => showToast('成就暂未开放'), [showToast])
+  const handleAchievement = useCallback(() => {
+    if (!FEATURE_FLAGS.achievements) {
+      showToast('成就暂未开放')
+      return
+    }
+    showToast(`等级 Lv.${level} · 经验 ${exp} · 成就进度开发中`)
+  }, [showToast, level, exp])
   const handleCoinsChange = useCallback(
     (next: number) => {
       const delta = next - gold
@@ -220,8 +230,12 @@ export default function AnimalPokeApp() {
 
   return (
     <div className="ap-root">
+      <OnboardingOverlay />
+      <a className="ap-skip-link" href="#ap-main-content">
+        跳到主要内容
+      </a>
       <PhoneFrame variant={screen}>
-        <div className="ap-main">{renderScreen()}</div>
+        <div className="ap-main" id="ap-main-content" tabIndex={-1}>{renderScreen()}</div>
         {screen !== 'map' && (
           <BottomTabBar active={screen === 'capture' ? 'discover' : screen} onChange={navigate} onAchievement={handleAchievement} />
         )}

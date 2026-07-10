@@ -12,6 +12,7 @@ import { ApiError } from '../api/client'
 import { authedRequest } from '../auth/deviceAuth'
 import type { GeneratedAnimal } from './capturePipeline'
 import { classifySync409, extractReasonCode } from './syncConflict'
+import { pullAnimalsFromServer } from './syncPull'
 
 const MAX_ATTEMPTS = 8
 const BASE_DELAY_MS = 1000
@@ -215,7 +216,14 @@ async function processQueueItem(item: SyncQueueItem): Promise<boolean> {
 export function installSyncOnlineFlush(): () => void {
   if (typeof window === 'undefined') return () => {}
   const onOnline = () => {
-    void flushSyncQueue()
+    void (async () => {
+      try {
+        await pullAnimalsFromServer()
+      } catch {
+        /* ignore */
+      }
+      await flushSyncQueue()
+    })()
   }
   window.addEventListener('online', onOnline)
   return () => window.removeEventListener('online', onOnline)
