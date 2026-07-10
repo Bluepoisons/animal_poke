@@ -7,10 +7,10 @@ import (
 
 // Device 设备注册表。每个客户端设备对应一条记录。
 type Device struct {
-	ID           uint       `gorm:"primaryKey" json:"id"`
-	DeviceID     string     `gorm:"uniqueIndex;size:64;not null" json:"device_id"`
-	TokenVersion int        `gorm:"not null;default:1" json:"token_version"`
-	Disabled     bool       `gorm:"not null;default:false" json:"disabled"`
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	DeviceID     string `gorm:"uniqueIndex;size:64;not null" json:"device_id"`
+	TokenVersion int    `gorm:"not null;default:1" json:"token_version"`
+	Disabled     bool   `gorm:"not null;default:false" json:"disabled"`
 	// 授权
 	ConsentVersion string     `gorm:"size:32" json:"consent_version"`
 	ConsentAt      *time.Time `json:"consent_at,omitempty"`
@@ -26,18 +26,18 @@ func (Device) TableName() string { return "devices" }
 // Animal 玩家同步上传的动物元数据。
 // 位置默认仅保存粗精度（城市/geohash），精确坐标可选且短期。
 type Animal struct {
-	ID                 uint       `gorm:"primaryKey" json:"id"`
-	UUID               string     `gorm:"uniqueIndex;size:36;not null" json:"uuid"`
-	DeviceID           string     `gorm:"index;size:64;not null" json:"device_id"`
-	Species            string     `gorm:"size:32;not null" json:"species"`
-	Breed              string     `gorm:"size:64" json:"breed"`
-	Rarity             int        `gorm:"not null" json:"rarity"` // 1-5 星级
-	HP                 int        `json:"hp"`
-	ATK                int        `json:"atk"`
-	DEF                int        `json:"def"`
-	SPD                int        `json:"spd"`
-	Class              string     `gorm:"size:32" json:"class"`
-	Element            string     `gorm:"size:32" json:"element"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	UUID     string `gorm:"uniqueIndex;size:36;not null" json:"uuid"`
+	DeviceID string `gorm:"index;size:64;not null" json:"device_id"`
+	Species  string `gorm:"size:32;not null" json:"species"`
+	Breed    string `gorm:"size:64" json:"breed"`
+	Rarity   int    `gorm:"not null" json:"rarity"` // 1-5 星级
+	HP       int    `json:"hp"`
+	ATK      int    `json:"atk"`
+	DEF      int    `json:"def"`
+	SPD      int    `json:"spd"`
+	Class    string `gorm:"size:32" json:"class"`
+	Element  string `gorm:"size:32" json:"element"`
 	// 位置最小化：城市/geohash；精确坐标可选
 	City               string     `gorm:"size:64" json:"city"`
 	GeoHash            string     `gorm:"size:16;index" json:"geohash"`
@@ -84,8 +84,8 @@ type Inference struct {
 	Model         string     `gorm:"size:128" json:"model"`
 	PromptVersion string     `gorm:"size:32" json:"prompt_version"`
 	PromptHash    string     `gorm:"size:64" json:"prompt_hash"`
-	InputDigest   string     `gorm:"size:64" json:"input_digest"`  // 图片/输入摘要，不含原图
-	OutputDigest  string     `gorm:"size:64" json:"output_digest"` // 输出摘要
+	InputDigest   string     `gorm:"size:64" json:"input_digest"`                    // 图片/输入摘要，不含原图
+	OutputDigest  string     `gorm:"size:64" json:"output_digest"`                   // 输出摘要
 	Status        string     `gorm:"size:32;not null;default:success" json:"status"` // success|failed|consumed
 	DurationMs    int64      `json:"duration_ms"`
 	ConsumedAt    *time.Time `json:"consumed_at,omitempty"`
@@ -145,20 +145,20 @@ func (Product) TableName() string { return "products" }
 
 // Order 服务端订单。
 type Order struct {
-	ID              uint       `gorm:"primaryKey" json:"id"`
-	OrderID         string     `gorm:"uniqueIndex;size:64;not null" json:"order_id"`
-	DeviceID        string     `gorm:"index;size:64;not null" json:"device_id"`
-	ProductID       string     `gorm:"index;size:64;not null" json:"product_id"`
-	Status          string     `gorm:"size:32;not null" json:"status"` // created|paid|fulfilled|refunded|failed
-	Platform        string     `gorm:"size:32" json:"platform"`        // apple|google|mock
-	ReceiptHash     string     `gorm:"uniqueIndex;size:128" json:"receipt_hash"`
-	AmountCents     int        `json:"amount_cents"`
-	Currency        string     `gorm:"size:8" json:"currency"`
-	FulfilledAt     *time.Time `json:"fulfilled_at,omitempty"`
-	RefundedAt      *time.Time `json:"refunded_at,omitempty"`
-	IdempotencyKey  string     `gorm:"uniqueIndex;size:64" json:"idempotency_key"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	OrderID        string     `gorm:"uniqueIndex;size:64;not null" json:"order_id"`
+	DeviceID       string     `gorm:"index;size:64;not null" json:"device_id"`
+	ProductID      string     `gorm:"index;size:64;not null" json:"product_id"`
+	Status         string     `gorm:"size:32;not null" json:"status"` // created|paid|fulfilled|refunded|failed
+	Platform       string     `gorm:"size:32" json:"platform"`        // apple|google|mock
+	ReceiptHash    string     `gorm:"uniqueIndex;size:128" json:"receipt_hash"`
+	AmountCents    int        `json:"amount_cents"`
+	Currency       string     `gorm:"size:8" json:"currency"`
+	FulfilledAt    *time.Time `json:"fulfilled_at,omitempty"`
+	RefundedAt     *time.Time `json:"refunded_at,omitempty"`
+	IdempotencyKey string     `gorm:"uniqueIndex;size:64" json:"idempotency_key"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // TableName 明确表名。

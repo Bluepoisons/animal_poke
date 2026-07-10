@@ -228,7 +228,7 @@ func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string)
 		Rarity: req.Rarity, HP: req.HP, ATK: req.ATK, DEF: req.DEF, SPD: req.SPD,
 		Class: req.Class, Element: req.Element, City: req.City,
 		Latitude: services.RoundCoord(req.Latitude), Longitude: services.RoundCoord(req.Longitude),
-		GeoHash: services.EncodeGeoHash(req.Latitude, req.Longitude),
+		GeoHash:     services.EncodeGeoHash(req.Latitude, req.Longitude),
 		GeneratedAt: generatedAt, InferenceRequestID: req.InferenceRequestID,
 		ServerVersion: time.Now().UTC().UnixNano(),
 	}

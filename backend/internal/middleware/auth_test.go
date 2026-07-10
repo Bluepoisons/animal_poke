@@ -20,13 +20,13 @@ func setupAuthTest() *gin.Engine {
 
 func signToken(secret, deviceID string, exp time.Time) string {
 	claims := jwt.MapClaims{
-		"device_id": deviceID,
-		"sub":       deviceID,
-		"iss":       "animal-poke",
-		"aud":       "animal-poke-client",
-		"iat":       time.Now().Unix(),
-		"exp":       exp.Unix(),
-		"jti":       "test-jti",
+		"device_id":     deviceID,
+		"sub":           deviceID,
+		"iss":           "animal-poke",
+		"aud":           "animal-poke-client",
+		"iat":           time.Now().Unix(),
+		"exp":           exp.Unix(),
+		"jti":           "test-jti",
 		"token_version": 1,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

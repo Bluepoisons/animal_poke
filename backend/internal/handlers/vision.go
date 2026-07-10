@@ -27,13 +27,13 @@ import (
 
 // VisionHandler VLM 推理处理器。
 type VisionHandler struct {
-	aiService     *services.AIService
-	inferenceRepo *repo.InferenceRepo
+	aiService      *services.AIService
+	inferenceRepo  *repo.InferenceRepo
 	deviceRepo     *repo.DeviceRepo
-	maxBytes      int64
-	maxPixels     int
+	maxBytes       int64
+	maxPixels      int
 	requireConsent bool
-	consentVer    string
+	consentVer     string
 }
 
 // VisionHandlerOptions 可选依赖。

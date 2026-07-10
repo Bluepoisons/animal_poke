@@ -35,13 +35,13 @@ type DetectBox struct {
 
 // DetectResult VLM 检测结果（标准 envelope）。
 type DetectResult struct {
-	Animals           []DetectBox `json:"animals"`
-	Source            string      `json:"source,omitempty"` // real|mock|cache
-	Degraded          bool        `json:"degraded,omitempty"`
-	ReasonCode        string      `json:"reason_code,omitempty"`
-	InferenceID       string      `json:"inference_id,omitempty"`
-	Model             string      `json:"model,omitempty"`
-	PromptVersion     string      `json:"prompt_version,omitempty"`
+	Animals       []DetectBox `json:"animals"`
+	Source        string      `json:"source,omitempty"` // real|mock|cache
+	Degraded      bool        `json:"degraded,omitempty"`
+	ReasonCode    string      `json:"reason_code,omitempty"`
+	InferenceID   string      `json:"inference_id,omitempty"`
+	Model         string      `json:"model,omitempty"`
+	PromptVersion string      `json:"prompt_version,omitempty"`
 }
 
 // AnalysisResult 深度分析结果。
