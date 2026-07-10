@@ -8,6 +8,7 @@ import { detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
+import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
 
 interface DiscoverScreenProps {
   energy: number
@@ -112,7 +113,10 @@ export default function DiscoverScreen({
     if (camera.status === 'busy') return '相机被占用'
     if (camera.status === 'unavailable') return '设备无可用相机 · 使用占位预览'
     if (camera.status === 'requesting') return '正在打开相机…'
-    if (camera.status === 'ready') return '相机就绪 · 点击开始识别'
+    if (camera.status === 'ready') {
+      const b = loadScanBudget()
+      return `相机就绪 · ${scanModeCopy(b.mode)} · 今日剩余 ${Math.max(0, b.dailyQuota - b.usedToday)}`
+    }
     return '准备相机…'
   })()
 
@@ -137,13 +141,42 @@ export default function DiscoverScreen({
       return
     }
 
+    const gate = canStartScan()
+    if (!gate.ok) {
+      dispatch({
+        type: 'DETECT_FAIL',
+        code: gate.reason,
+        message:
+          gate.reason === 'quota_exhausted'
+            ? `今日识别次数已用完（${gate.state.dailyQuota}）`
+            : gate.reason === 'too_fast'
+              ? '扫描过快，请稍候再试'
+              : '当前仅允许手动扫描',
+      })
+      return
+    }
+
     const blob = await camera.captureFrame()
     if (!blob) {
       dispatch({ type: 'DETECT_FAIL', code: 'no_frame', message: '未获取到有效画面' })
       return
     }
 
+    const quality = await localFrameQualityGate(blob)
+    if (!quality.ok) {
+      dispatch({
+        type: 'DETECT_FAIL',
+        code: quality.reason || 'quality',
+        message:
+          quality.reason === 'duplicate_frame'
+            ? '画面几乎未变化，请调整角度后再扫'
+            : '画面质量不足，请靠近并保持稳定',
+      })
+      return
+    }
+
     setBusy(true)
+    recordScanAttempt()
     dispatch({ type: 'START_DETECT', photoBlob: blob })
     try {
       const result = await detectAnimals(blob)
