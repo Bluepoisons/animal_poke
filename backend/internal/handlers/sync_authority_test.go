@@ -82,7 +82,7 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"uuid": "u3", "species": "cat", "rarity": 5, "hp": 100, "atk": 50, "def": 50, "spd": 50,
 		"class": "Warrior", "element": "Fire",
-		"generated_at": time.Now().Format(time.RFC3339),
+		"generated_at":         time.Now().Format(time.RFC3339),
 		"inference_request_id": "val-1",
 	})
 	w := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 	// second consume fails
 	body2, _ := json.Marshal(map[string]interface{}{
 		"uuid": "u4", "species": "cat", "rarity": 2,
-		"generated_at": time.Now().Format(time.RFC3339),
+		"generated_at":         time.Now().Format(time.RFC3339),
 		"inference_request_id": "val-1",
 	})
 	w2 := httptest.NewRecorder()
