@@ -49,6 +49,11 @@ patches:
       kind: Deployment
       name: animal-poke-backend
     path: backend-secrets-patch.yaml
+  # Point migrate Job secretKeyRefs at staging secret (isolation).
+  - target:
+      kind: Job
+      name: animal-poke-migrate
+    path: migrate-job-secrets-patch.yaml
   - target:
       kind: Ingress
       name: animal-poke-api

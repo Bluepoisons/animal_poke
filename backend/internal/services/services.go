@@ -6,69 +6,136 @@ package services
 import (
 	"animalpoke/backend/internal/config"
 	"net/http"
-	"time"
 )
 
 // GeoService 腾讯地图代理(逆地理编码 / POI)。
 type GeoService struct {
-	cfg    *config.ThirdPartyConfig
-	client *http.Client
-	mock   bool
+	cfg      *config.ThirdPartyConfig
+	client   *http.Client
+	mock     bool
+	provider *Provider
 }
 
 // NewGeoService 构造 GeoService。
 func NewGeoService(cfg *config.ThirdPartyConfig) *GeoService {
-	return &GeoService{cfg: cfg, client: DefaultHTTPClient(5 * time.Second), mock: true}
+	return NewGeoServiceWithOptions(cfg, true, nil)
 }
 
 // NewGeoServiceWithOptions 带 mock 控制的构造。
 func NewGeoServiceWithOptions(cfg *config.ThirdPartyConfig, mockAllowed bool, client *http.Client) *GeoService {
+	budget := config.DefaultUpstreamConfig().Geo
 	if client == nil {
-		client = DefaultHTTPClient(5 * time.Second)
+		client = DefaultHTTPClient(budget.Timeout)
 	}
-	return &GeoService{cfg: cfg, client: client, mock: mockAllowed}
+	p := NewProvider(ProviderOptions{
+		Name:   "geo",
+		Budget: budget,
+		Client: client,
+	})
+	return &GeoService{cfg: cfg, client: client, mock: mockAllowed, provider: p}
+}
+
+// NewGeoServiceWithProvider 完整构造（含自定义 Provider）。
+func NewGeoServiceWithProvider(cfg *config.ThirdPartyConfig, mockAllowed bool, provider *Provider) *GeoService {
+	client := (*http.Client)(nil)
+	if provider != nil {
+		client = provider.Client
+	}
+	if client == nil {
+		client = DefaultHTTPClient(config.DefaultUpstreamConfig().Geo.Timeout)
+	}
+	if provider == nil {
+		provider = NewProvider(ProviderOptions{Name: "geo", Budget: config.DefaultUpstreamConfig().Geo, Client: client})
+	}
+	return &GeoService{cfg: cfg, client: client, mock: mockAllowed, provider: provider}
 }
 
 // WeatherService 彩云天气代理。
 type WeatherService struct {
-	cfg    *config.ThirdPartyConfig
-	client *http.Client
-	mock   bool
+	cfg      *config.ThirdPartyConfig
+	client   *http.Client
+	mock     bool
+	provider *Provider
 }
 
 // NewWeatherService 构造 WeatherService。
 func NewWeatherService(cfg *config.ThirdPartyConfig) *WeatherService {
-	return &WeatherService{cfg: cfg, client: DefaultHTTPClient(5 * time.Second), mock: true}
+	return NewWeatherServiceWithOptions(cfg, true, nil)
 }
 
 // NewWeatherServiceWithOptions 带 mock 控制的构造。
 func NewWeatherServiceWithOptions(cfg *config.ThirdPartyConfig, mockAllowed bool, client *http.Client) *WeatherService {
+	budget := config.DefaultUpstreamConfig().Weather
 	if client == nil {
-		client = DefaultHTTPClient(5 * time.Second)
+		client = DefaultHTTPClient(budget.Timeout)
 	}
-	return &WeatherService{cfg: cfg, client: client, mock: mockAllowed}
+	p := NewProvider(ProviderOptions{
+		Name:   "weather",
+		Budget: budget,
+		Client: client,
+	})
+	return &WeatherService{cfg: cfg, client: client, mock: mockAllowed, provider: p}
+}
+
+// NewWeatherServiceWithProvider 完整构造。
+func NewWeatherServiceWithProvider(cfg *config.ThirdPartyConfig, mockAllowed bool, provider *Provider) *WeatherService {
+	client := (*http.Client)(nil)
+	if provider != nil {
+		client = provider.Client
+	}
+	if client == nil {
+		client = DefaultHTTPClient(config.DefaultUpstreamConfig().Weather.Timeout)
+	}
+	if provider == nil {
+		provider = NewProvider(ProviderOptions{Name: "weather", Budget: config.DefaultUpstreamConfig().Weather, Client: client})
+	}
+	return &WeatherService{cfg: cfg, client: client, mock: mockAllowed, provider: provider}
 }
 
 // AIService 统一 AI 编排(视觉检测/深度分析/数值生成)。
 // Vision 与 Text 使用独立 Endpoint/Key/Model，可指向同一供应商。
 type AIService struct {
-	cfg         *config.ThirdPartyConfig
-	client      *http.Client
-	mock        bool
-	statsSecret string // HMAC key for deterministic rarity/stats (AP-048)
+	cfg            *config.ThirdPartyConfig
+	client         *http.Client
+	mock           bool
+	visionProvider *Provider
+	llmProvider    *Provider
 }
 
 // NewAIService 构造 AIService（开发默认允许 mock）。
 func NewAIService(cfg *config.ThirdPartyConfig) *AIService {
-	return &AIService{cfg: cfg, client: DefaultHTTPClient(30 * time.Second), mock: true}
+	return NewAIServiceWithOptions(cfg, true, nil)
 }
 
 // NewAIServiceWithOptions 带 mock 与共享 client 的构造。
 func NewAIServiceWithOptions(cfg *config.ThirdPartyConfig, mockAllowed bool, client *http.Client) *AIService {
+	u := config.DefaultUpstreamConfig()
 	if client == nil {
-		client = DefaultHTTPClient(30 * time.Second)
+		client = DefaultHTTPClient(u.Vision.Timeout)
 	}
-	return &AIService{cfg: cfg, client: client, mock: mockAllowed}
+	vision := NewProvider(ProviderOptions{Name: "vision", Budget: u.Vision, Client: DefaultHTTPClient(u.Vision.Timeout)})
+	llm := NewProvider(ProviderOptions{Name: "llm", Budget: u.LLM, Client: DefaultHTTPClient(u.LLM.Timeout)})
+	// 若调用方传入共享 client，作为 fallback 保留
+	_ = client
+	return &AIService{cfg: cfg, client: client, mock: mockAllowed, visionProvider: vision, llmProvider: llm}
+}
+
+// NewAIServiceWithProviders 完整构造。
+func NewAIServiceWithProviders(cfg *config.ThirdPartyConfig, mockAllowed bool, vision, llm *Provider) *AIService {
+	u := config.DefaultUpstreamConfig()
+	if vision == nil {
+		vision = NewProvider(ProviderOptions{Name: "vision", Budget: u.Vision})
+	}
+	if llm == nil {
+		llm = NewProvider(ProviderOptions{Name: "llm", Budget: u.LLM})
+	}
+	return &AIService{
+		cfg:            cfg,
+		client:         vision.Client,
+		mock:           mockAllowed,
+		visionProvider: vision,
+		llmProvider:    llm,
+	}
 }
 
 // WithStatsSecret 注入 rarity/stats HMAC 密钥（通常为 JWT secret）。

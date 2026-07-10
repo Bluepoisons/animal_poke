@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/draw"
@@ -20,7 +21,9 @@ import (
 	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
+	"animalpoke/backend/internal/safety"
 	"animalpoke/backend/internal/services"
+	"animalpoke/backend/internal/taxonomy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -51,24 +54,31 @@ type VisionHandler struct {
 	maxPixels      int
 	requireConsent bool
 	consentVer     string
+	// providerNoTrain enables no-train/no-retain policy audit stubs (AP-056).
+	providerNoTrain bool
+	// allowFixture enables safety_fixture form field (dev/mock only).
+	allowFixture bool
 }
 
 // VisionHandlerOptions 可选依赖。
 type VisionHandlerOptions struct {
-	InferenceRepo  *repo.InferenceRepo
-	DeviceRepo     *repo.DeviceRepo
-	MaxBytes       int64
-	MaxPixels      int
-	RequireConsent bool
-	ConsentVersion string
+	InferenceRepo         *repo.InferenceRepo
+	DeviceRepo            *repo.DeviceRepo
+	MaxBytes              int64
+	MaxPixels             int
+	RequireConsent        bool
+	ConsentVersion        string
+	ProviderNoTrainPolicy bool
+	AllowSafetyFixture    bool
 }
 
 // NewVisionHandler 构造 VisionHandler。
 func NewVisionHandler(aiService *services.AIService) *VisionHandler {
 	return &VisionHandler{
-		aiService: aiService,
-		maxBytes:  5 << 20,
-		maxPixels: 12_000_000,
+		aiService:       aiService,
+		maxBytes:        5 << 20,
+		maxPixels:       12_000_000,
+		providerNoTrain: true,
 	}
 }
 
@@ -88,6 +98,8 @@ func NewVisionHandlerWithOptions(aiService *services.AIService, opts VisionHandl
 	if h.consentVer == "" {
 		h.consentVer = "v1"
 	}
+	h.providerNoTrain = opts.ProviderNoTrainPolicy
+	h.allowFixture = opts.AllowSafetyFixture
 	return h
 }
 
@@ -153,33 +165,41 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		}
 	}
 
-	// Strict decode + re-encode to JPEG (strips EXIF/metadata); optional crop for analyze.
-	minimized, width, height, err := minimizeForProvider(imageData, h.maxPixels, crop)
-	if err != nil {
-		status := http.StatusBadRequest
-		msg := err.Error()
-		if strings.Contains(msg, "unsupported") {
-			status = http.StatusUnsupportedMediaType
-		}
-		c.JSON(status, gin.H{"error": msg, "code": status})
-		return
+	filename := ""
+	if header != nil {
+		filename = header.Filename
 	}
-	// Drop raw upload ASAP; only minimized JPEG proceeds to provider.
-	imageData = nil
+	digest := sha256Hex(imageData)
+	fixture := ""
+	if h.allowFixture {
+		fixture = safety.NormalizeFixture(c.PostForm("safety_fixture"))
+	}
 
-	digest := sha256Hex(minimized)
-	// Privacy: digest + dimensions only — never filename, crop coords, or raw size of original.
-	slog.Info("AI 视觉请求",
-		"kind", kind,
-		"device_id", deviceID,
-		"digest", digest,
-		"width", width,
-		"height", height,
-	)
+	// Pre-moderation: hard-reject pure portrait/child/abuse/plate/house fixtures
+	// without sending image to provider (and never log original bytes).
+	if fixture != "" {
+		pre := safety.Evaluate(safety.Input{FixtureLabel: fixture, Filename: filename})
+		if pre.Action == safety.ActionReject || (pre.DecisionCode == safety.CodeFlagAbuse) {
+			slog.Info("AI 视觉安全拒绝",
+				"kind", kind,
+				"device_id", deviceID,
+				"decision_code", pre.DecisionCode,
+				"input_digest", digest,
+				// no filename if it may encode PII; no image bytes
+			)
+			h.respondSafetyReject(c, kind, deviceID, digest, pre)
+			// drop image reference
+			imageData = nil
+			return
+		}
+	}
+
+	slog.Info("AI 视觉请求", "kind", kind, "device_id", deviceID, "size", len(imageData), "input_digest", digest)
 	start := time.Now()
 
-	// Provider always receives re-encoded JPEG under a fixed name (no client filename).
-	const providerName = "image.jpg"
+	if h.providerNoTrain {
+		safety.LogProviderNoTrain("vision", kind, "", digest, deviceID, middleware.GetRequestID(c))
+	}
 
 	var (
 		result interface{}
@@ -189,16 +209,22 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 
 	switch kind {
 	case "detect":
-		r, err := h.aiService.DetectContext(c.Request.Context(), minimized, providerName)
+		r, err := h.aiService.DetectContext(c.Request.Context(), imageData, filename)
 		if err != nil {
-			slog.Error("AI 检测失败", "device_id", deviceID, "digest", digest, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "detection failed"})
+			slog.Error("AI 检测失败", "device_id", deviceID, "err", err)
+			WriteProviderError(c, err, "detection failed")
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
+		h.applyDetectSafety(r, fixture, filename)
+		// 不保留原图；仅摘要
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
 			exp := time.Now().UTC().Add(2 * time.Hour)
+			status := "success"
+			if r.Safety != nil && !r.Safety.Collectable && r.Safety.Action == safety.ActionReject {
+				status = "rejected"
+			}
 			_ = h.inferenceRepo.Create(&models.Inference{
 				InferenceID:   id,
 				DeviceID:      deviceID,
@@ -207,41 +233,78 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				Model:         model,
 				PromptVersion: pver,
 				InputDigest:   digest,
-				OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d", len(r.Animals)))),
+				OutputDigest:  sha256Hex([]byte(fmt.Sprintf("%d:%s", len(r.Animals), reasonOrEmpty(r)))),
 				ConfigVersion: "detect-v1",
-				Status:        "success",
+				Status:        status,
 				DurationMs:    time.Since(start).Milliseconds(),
 				ExpiresAt:     &exp,
 			})
 			r.InferenceID = id
 		}
+		// Clear internal labels before response
+		r.SafetyLabels = nil
 		result = r
 	default:
-		r, err := h.aiService.AnalyzeContext(c.Request.Context(), minimized, providerName)
+		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, filename)
 		if err != nil {
-			slog.Error("AI 分析失败", "device_id", deviceID, "digest", digest, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "analysis failed"})
+			slog.Error("AI 分析失败", "device_id", deviceID, "err", err)
+			WriteProviderError(c, err, "analysis failed")
 			return
 		}
+		if locked != nil {
+			r.Species = locked.Species
+			r.TargetID = locked.TargetID
+			r.DetectInferenceID = detectInfID
+			bb := locked.BoundingBox
+			r.Box = &bb
+		}
 		model, pver = r.Model, r.PromptVersion
+		// Analyze: re-check fixture/filename only (no multi-label from detect)
+		if fixture != "" || filename != "" {
+			sr := safety.Evaluate(safety.Input{FixtureLabel: fixture, Filename: filename, HasCapturableAnimal: true})
+			view := sr.ToClientView()
+			r.Safety = &services.SafetySummary{
+				Allowed: view.Allowed, Collectable: view.Collectable,
+				DecisionCode: view.DecisionCode, Action: view.Action,
+				Flags: view.Flags, ReportPath: view.ReportPath,
+			}
+			if !sr.Collectable && sr.Action == safety.ActionReject {
+				r.ReasonCode = sr.DecisionCode
+				r.Breed, r.Color, r.BodyType = "", "", ""
+			}
+		}
 		if h.inferenceRepo != nil {
 			id := uuid.NewString()
 			exp := time.Now().UTC().Add(2 * time.Hour)
-			parent := c.PostForm("parent_inference_id")
-			if parent == "" {
-				parent = c.PostForm("detect_inference_id")
-			}
+			payload, _ := json.Marshal(map[string]interface{}{
+				"species":              r.Species,
+				"target_id":            r.TargetID,
+				"detect_inference_id":  detectInfID,
+				"breed":                r.Breed,
+				"color":                r.Color,
+				"body_type":            r.BodyType,
+				"quality_score":        r.QualityScore,
+				"subject_completeness": r.SubjectCompleteness,
+				"clarity":              r.Clarity,
+				"lighting":             r.Lighting,
+				"composition":          r.Composition,
+				"pose":                 r.Pose,
+				"angle":                r.Angle,
+				"box":                  r.Box,
+			})
 			_ = h.inferenceRepo.Create(&models.Inference{
 				InferenceID:       id,
 				DeviceID:          deviceID,
 				Kind:              "analyze",
-				ParentInferenceID: parent,
+				ParentInferenceID: detectInfID,
 				Provider:          "vision",
 				Model:             model,
 				PromptVersion:     pver,
 				InputDigest:       digest,
-				OutputDigest:      sha256Hex([]byte(r.Breed + r.Color)),
-				ConfigVersion:     "analyze-v1",
+				OutputDigest:      sha256Hex(payload),
+				ResultJSON:        string(payload),
+				Species:           r.Species,
+				ConfigVersion:     "analyze-v2",
 				Status:            "success",
 				DurationMs:        time.Since(start).Milliseconds(),
 				ExpiresAt:         &exp,
@@ -251,55 +314,105 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		result = r
 	}
 
-	// minimized 出作用域后由 GC 回收，不落盘
-	_ = minimized
+	// imageData 出作用域后由 GC 回收，不落盘；显式置空降低残留窗口
+	for i := range imageData {
+		imageData[i] = 0
+	}
+	imageData = nil
 	c.JSON(http.StatusOK, result)
 }
 
-// parseOptionalCrop reads optional normalized crop box form fields for analyze.
-// Fields: crop_x, crop_y, crop_w, crop_h (fractions of image size, 0..1).
-// Missing all fields → nil (full frame). Partial/invalid → error.
-func parseOptionalCrop(c *gin.Context) (*cropBox, error) {
-	rawX := strings.TrimSpace(c.PostForm("crop_x"))
-	rawY := strings.TrimSpace(c.PostForm("crop_y"))
-	rawW := strings.TrimSpace(c.PostForm("crop_w"))
-	rawH := strings.TrimSpace(c.PostForm("crop_h"))
-	if rawX == "" && rawY == "" && rawW == "" && rawH == "" {
-		return nil, nil
+func (h *VisionHandler) applyDetectSafety(r *services.DetectResult, fixture, filename string) {
+	if r == nil {
+		return
 	}
-	if rawX == "" || rawY == "" || rawW == "" || rawH == "" {
-		return nil, fmt.Errorf("crop box requires crop_x, crop_y, crop_w, crop_h")
+	hasAnimal := len(r.Animals) > 0
+	// person_animal fixture implies animal even if mock returned cat already
+	in := safety.Input{
+		FixtureLabel:        fixture,
+		Filename:            filename,
+		Labels:              append([]string(nil), r.SafetyLabels...),
+		HasCapturableAnimal: hasAnimal,
 	}
-	x, err1 := strconv.ParseFloat(rawX, 64)
-	y, err2 := strconv.ParseFloat(rawY, 64)
-	w, err3 := strconv.ParseFloat(rawW, 64)
-	h, err4 := strconv.ParseFloat(rawH, 64)
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		return nil, fmt.Errorf("invalid crop box numbers")
+	// Also feed species of capturable animals as labels for completeness.
+	for _, a := range r.Animals {
+		if a.Species != "" {
+			in.Labels = append(in.Labels, a.Species)
+		}
+		if a.Label != "" {
+			in.Labels = append(in.Labels, a.Label)
+		}
 	}
-	const eps = 1e-6
-	if x < -eps || y < -eps || w <= eps || h <= eps {
-		return nil, fmt.Errorf("invalid crop box range")
+	sr := safety.Evaluate(in)
+	view := sr.ToClientView()
+	r.Safety = &services.SafetySummary{
+		Allowed:      view.Allowed,
+		Collectable:  view.Collectable,
+		DecisionCode: view.DecisionCode,
+		Action:       view.Action,
+		Flags:        view.Flags,
+		ReportPath:   view.ReportPath,
 	}
-	if x > 1+eps || y > 1+eps || w > 1+eps || h > 1+eps {
-		return nil, fmt.Errorf("invalid crop box range")
+	if !sr.Collectable {
+		// Pure portrait / sensitive / abuse: strip animals so they cannot be collected.
+		r.Animals = []services.DetectBox{}
+		r.ReasonCode = sr.DecisionCode
+		if r.Source == "" {
+			r.Source = "safety"
+		}
 	}
-	if x+w > 1+eps || y+h > 1+eps {
-		return nil, fmt.Errorf("crop box exceeds image bounds")
-	}
-	// Clamp into [0,1] after soft epsilon checks.
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	return &cropBox{X: x, Y: y, W: w, H: h}, nil
 }
 
-// detectAllowedImageType returns a canonical type for supported formats only.
-// Does not trust Content-Type headers or incomplete WebP magic alone.
-func detectAllowedImageType(data []byte) (string, error) {
+func (h *VisionHandler) respondSafetyReject(c *gin.Context, kind, deviceID, digest string, pre safety.Result) {
+	view := pre.ToClientView()
+	summary := &services.SafetySummary{
+		Allowed: view.Allowed, Collectable: view.Collectable,
+		DecisionCode: view.DecisionCode, Action: view.Action,
+		Flags: view.Flags, ReportPath: view.ReportPath,
+	}
+	infID := ""
+	if h.inferenceRepo != nil {
+		id := uuid.NewString()
+		exp := time.Now().UTC().Add(2 * time.Hour)
+		_ = h.inferenceRepo.Create(&models.Inference{
+			InferenceID:   id,
+			DeviceID:      deviceID,
+			Kind:          kind,
+			Provider:      "safety",
+			InputDigest:   digest,
+			OutputDigest:  sha256Hex([]byte(pre.DecisionCode)),
+			ConfigVersion: "safety-v1",
+			Status:        "rejected",
+			ExpiresAt:     &exp,
+		})
+		infID = id
+	}
+	if kind == "analyze" {
+		c.JSON(http.StatusOK, &services.AnalysisResult{
+			Source:      "safety",
+			ReasonCode:  pre.DecisionCode,
+			InferenceID: infID,
+			Safety:      summary,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, &services.DetectResult{
+		Animals:     []services.DetectBox{},
+		Source:      "safety",
+		ReasonCode:  pre.DecisionCode,
+		InferenceID: infID,
+		Safety:      summary,
+	})
+}
+
+func reasonOrEmpty(r *services.DetectResult) string {
+	if r == nil || r.Safety == nil {
+		return ""
+	}
+	return r.Safety.DecisionCode
+}
+
+func validateImage(data []byte, maxPixels int) error {
 	if len(data) < 12 {
 		return "", fmt.Errorf("unsupported media type")
 	}
@@ -419,3 +532,76 @@ func sha256Hex(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
+
+func parseOptionalBox(c *gin.Context) (services.BoundingBox, bool, error) {
+	// box as JSON: box={"x":..,"y":..,"width":..,"height":..}
+	if raw := strings.TrimSpace(c.PostForm("box")); raw != "" {
+		var bb services.BoundingBox
+		if err := json.Unmarshal([]byte(raw), &bb); err != nil {
+			return services.BoundingBox{}, false, fmt.Errorf("invalid box json")
+		}
+		if err := services.ValidateBoundingBox(bb); err != nil {
+			return services.BoundingBox{}, false, err
+		}
+		return bb, true, nil
+	}
+	// discrete fields box_x / box_y / box_width / box_height
+	xs, ys, ws, hs := c.PostForm("box_x"), c.PostForm("box_y"), c.PostForm("box_width"), c.PostForm("box_height")
+	if xs == "" && ys == "" && ws == "" && hs == "" {
+		// also accept bounding_box_* aliases
+		xs, ys = c.PostForm("bounding_box_x"), c.PostForm("bounding_box_y")
+		ws, hs = c.PostForm("bounding_box_width"), c.PostForm("bounding_box_height")
+	}
+	if xs == "" && ys == "" && ws == "" && hs == "" {
+		return services.BoundingBox{}, false, nil
+	}
+	parse := func(s, name string) (float64, error) {
+		if s == "" {
+			return 0, fmt.Errorf("missing %s", name)
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid %s", name)
+		}
+		return v, nil
+	}
+	x, err := parse(xs, "box_x")
+	if err != nil {
+		return services.BoundingBox{}, false, err
+	}
+	y, err := parse(ys, "box_y")
+	if err != nil {
+		return services.BoundingBox{}, false, err
+	}
+	w, err := parse(ws, "box_width")
+	if err != nil {
+		return services.BoundingBox{}, false, err
+	}
+	h, err := parse(hs, "box_height")
+	if err != nil {
+		return services.BoundingBox{}, false, err
+	}
+	bb := services.BoundingBox{X: x, Y: y, Width: w, Height: h}
+	if err := services.ValidateBoundingBox(bb); err != nil {
+		return services.BoundingBox{}, false, err
+	}
+	return bb, true, nil
+}
+
+func parseDetectTargets(resultJSON string) ([]services.DetectBox, error) {
+	if strings.TrimSpace(resultJSON) == "" {
+		return nil, fmt.Errorf("empty result json")
+	}
+	var env struct {
+		Targets []services.DetectBox `json:"targets"`
+		Animals []services.DetectBox `json:"animals"`
+	}
+	if err := json.Unmarshal([]byte(resultJSON), &env); err != nil {
+		return nil, err
+	}
+	if len(env.Targets) > 0 {
+		return env.Targets, nil
+	}
+	return env.Animals, nil
+}
+

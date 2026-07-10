@@ -1,0 +1,90 @@
+# Pre-deploy schema migration Job (AP-038)
+#
+# Usage (pre-deploy, before rolling the API Deployment):
+#   1. Confirm recent MySQL backup / PITR window (see docs/runbooks/mysql-dr.md).
+#   2. Apply this Job with the same image tag about to ship:
+#        kubectl -n production apply -f <rendered>  # or kustomize
+#   3. Wait for Job success:
+#        kubectl -n production wait --for=condition=complete job/animal-poke-migrate --timeout=600s
+#   4. Then roll the backend Deployment (AUTO_MIGRATE=false; API only CheckVersion).
+#
+# Lock / timeout:
+#   - CLI uses MySQL GET_LOCK('animal_poke_schema_migrate', 120) so concurrent Jobs serialize.
+#   - activeDeadlineSeconds=600 kills hung Jobs; backoffLimit=1 avoids thundering herd.
+#   - Apply is idempotent: safe to re-run after interrupt (already-applied versions skip).
+#
+# Do NOT set AUTO_MIGRATE=true on the API Deployment; this Job is the sole migrator in prod.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: animal-poke-migrate
+  namespace: production
+  labels:
+    app: animal-poke-migrate
+    app.kubernetes.io/component: migrate
+  annotations:
+    description: "Pre-deploy schema migrate (up). See docs/runbooks/schema-migrate.md"
+spec:
+  # Only one successful completion needed; keep history short.
+  backoffLimit: 1
+  # Hard wall-clock timeout for the whole Job (lock wait + DDL).
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: animal-poke-migrate
+        app.kubernetes.io/component: migrate
+    spec:
+      serviceAccountName: animal-poke-backend
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          # Image tag overridden by kustomize / CI IMAGE_TAG (never :latest).
+          image: registry.cn-beijing.aliyuncs.com/animal-poke/backend:0.0.0-unset
+          imagePullPolicy: IfNotPresent
+          command: ["./animal-poke-migrate", "up"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          env:
+            # Force no in-process server migrate path if binary ever shared flags.
+            - name: AUTO_MIGRATE
+              value: "false"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: db-password
+            # JWT not required for migrate, but config Load may reference env; keep minimal.
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: jwt-secret
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

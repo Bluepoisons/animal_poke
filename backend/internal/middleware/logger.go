@@ -76,8 +76,9 @@ func Logger() gin.HandlerFunc {
 			slog.Info("http", attrs...)
 		}
 
-		// 指标
-		ObserveHTTP(c.Request.Method, path, status, time.Since(start))
+		// Metrics: Gin route template only (FullPath). Unmatched → "unknown".
+		// Never use raw URL.Path — that enables high-cardinality DoS.
+		ObserveHTTP(c.Request.Method, c.FullPath(), status, time.Since(start))
 	}
 }
 

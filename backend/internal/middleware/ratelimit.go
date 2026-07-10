@@ -10,7 +10,7 @@ package middleware
 
 import (
 	"context"
-	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -153,14 +153,8 @@ func RateLimitByDevice(rl *RateLimiter) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if !rl.allow(RateKeyDevice(deviceID)) {
-			ObserveRateLimit()
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-				"reason_code": "rate_limit_device",
-			})
+		if !rl.allow(deviceID) {
+			AbortTooMany(c, "rate_limited", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()
@@ -171,14 +165,8 @@ func RateLimitByDevice(rl *RateLimiter) gin.HandlerFunc {
 // Fail-open：共享存储错误时降级本机桶（见 package 注释）。
 func RateLimitByIP(rl *RateLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !rl.allow(RateKeyIP(c.ClientIP())) {
-			ObserveRateLimit()
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-				"reason_code": "rate_limit_ip",
-			})
+		if !rl.allow("ip:" + c.ClientIP()) {
+			AbortTooMany(c, "rate_limited", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()

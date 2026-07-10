@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { isForceCameraReady } from '../e2eFlags'
 
 export type CameraStatus =
   | 'idle'
@@ -53,6 +54,13 @@ export function useCamera(): UseCameraResult {
   }, [])
 
   const start = useCallback(async (nextFacing?: CameraFacing) => {
+    // E2E hard-gate: skip real media devices
+    if (isForceCameraReady()) {
+      if (nextFacing) setFacing(nextFacing)
+      setStatus('ready')
+      setError(undefined)
+      return
+    }
     // 生产 HTTPS 要求；jsdom/测试环境 isSecureContext 常为 false，仅在明确 http 远程时拦截
     if (
       typeof window !== 'undefined' &&
@@ -156,6 +164,9 @@ export function useCamera(): UseCameraResult {
 
   const captureFrame = useCallback(
     async (maxEdge = 1280, quality = 0.85) => {
+      if (isForceCameraReady()) {
+        return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' })
+      }
       const video = videoRef.current
       if (!video || status !== 'ready') return null
       const vw = video.videoWidth || 640

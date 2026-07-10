@@ -20,7 +20,7 @@ tags:
   - name: Health
     description: Liveness, readiness and lightweight health probes
   - name: Auth
-    description: Device registration and JWT issuance
+    description: Device registration, account binding and JWT issuance
   - name: Geo
     description: Reverse geocoding and location helpers
   - name: Weather
@@ -120,16 +120,30 @@ paths:
   /metrics:
     get:
       tags: [Observability]
-      summary: Prometheus metrics
+      summary: Prometheus metrics (management plane only)
+      description: |
+        **AP-036**: Metrics are NOT available on the public API / Ingress port.
+        Public `GET /metrics` on the main server returns **404**.
+
+        Scrape the dedicated management listener instead:
+        - Env: `METRICS_ADDR` (default `:9090`)
+        - Path: `GET /metrics` on that address only
+        - Kubernetes: ClusterIP Service `animal-poke-backend-metrics:9090`
+          (never attach this Service to Ingress)
+
+        Label set is fixed-cardinality: Gin route templates via `c.FullPath()`,
+        unmatched routes use path=`unknown`, status is bucketed (`2xx`/`4xx`/…).
       operationId: getMetrics
       security: []
       responses:
         "200":
-          description: Prometheus text exposition
+          description: Prometheus text exposition (management port only)
           content:
             text/plain:
               schema:
                 type: string
+        "404":
+          description: Public API port deliberately does not expose metrics
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -184,6 +198,9 @@ paths:
     post:
       tags: [Auth]
       summary: Register device and issue JWT
+      description: |
+        First registration generates an `installation_secret` (returned once).
+        Subsequent token refresh must include the secret; knowing only `device_id` is insufficient.
       operationId: authDevice
       security: []
       requestBody:
@@ -201,11 +218,161 @@ paths:
                 $ref: "#/components/schemas/AuthDeviceResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/auth/bind:
+    post:
+      tags: [Auth]
+      summary: Bind current device to email or mock OAuth account
+      description: |
+        Guest remains default. Binding creates or attaches an account, merges guest
+        animals/entitlements without double-granting rewards. Credentials are stored hashed.
+      operationId: authBind
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthBindRequest"
+      responses:
+        "200":
+          description: Bound and token re-issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email/mock OAuth to recover after clearing local data
+      operationId: authLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: Logged in; guest assets on device_id merged into account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current device (bump token version, clear refresh hash)
+      operationId: authLogout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: logged_out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/account:
+    get:
+      tags: [Auth]
+      summary: Current account profile (guest if unbound)
+      operationId: authAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account or guest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/devices:
+    get:
+      tags: [Auth]
+      summary: List devices linked to current account
+      operationId: authListDevices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Device list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthDeviceList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/devices/revoke:
+    post:
+      tags: [Auth]
+      summary: Revoke a lost device
+      operationId: authRevokeDevice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id]
+              properties:
+                device_id:
+                  type: string
+      responses:
+        "200":
+          description: Device revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  device_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Device not found
   /api/v1/geo/city:
     get:
       tags: [Geo]
@@ -289,7 +456,7 @@ paths:
   /api/v1/vision/analyze:
     post:
       tags: [Vision]
-      summary: Analyze animal image
+      summary: Analyze selected animal target from a prior detect
       operationId: visionAnalyze
       security:
         - bearerAuth: []
@@ -304,49 +471,50 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: Animal image (jpeg/png/webp). Server re-encodes to JPEG and strips EXIF before provider.
-                crop_x:
-                  type: number
-                  minimum: 0
-                  maximum: 1
-                  description: Optional normalized crop origin X (0..1). Used with crop_y/crop_w/crop_h to send only the animal region.
-                crop_y:
-                  type: number
-                  minimum: 0
-                  maximum: 1
-                  description: Optional normalized crop origin Y (0..1).
-                crop_w:
-                  type: number
-                  exclusiveMinimum: 0
-                  maximum: 1
-                  description: Optional normalized crop width (0..1).
-                crop_h:
-                  type: number
-                  exclusiveMinimum: 0
-                  maximum: 1
-                  description: Optional normalized crop height (0..1).
-                parent_inference_id:
-                  type: string
-                  description: Optional parent detect inference id for audit linkage.
                 detect_inference_id:
                   type: string
-                  description: Alias of parent_inference_id.
+                  description: Parent detect inference id (required when provenance is enabled)
+                parent_inference_id:
+                  type: string
+                  description: Alias of detect_inference_id
+                target_id:
+                  type: string
+                  description: Stable target id from detect.targets
+                species:
+                  type: string
+                  description: Claimed species; must match locked detect target
+                box:
+                  type: string
+                  description: JSON bounding box {x,y,width,height} fractions 0-1
+                box_x:
+                  type: number
+                box_y:
+                  type: number
+                box_width:
+                  type: number
+                box_height:
+                  type: number
       responses:
         "200":
-          description: Analysis result
+          description: Analysis result for the locked target
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/VisionAnalyzeResponse"
         "400":
-          description: Invalid image or crop box
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
-        "415":
-          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: Invalid model analysis output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -490,14 +658,25 @@ paths:
     get:
       tags: [Sync]
       summary: Pull animals (cursor)
+      description: |
+        Pull animals by server_version cursor (`since_version`).
+        Soft-deleted animals are returned as tombstones only
+        (`uuid`, `deleted_at`, `server_version`) — never full content or precise coordinates.
       operationId: pullAnimals
       security:
         - bearerAuth: []
       parameters:
+        - name: since_version
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: Exclusive lower bound of server_version
         - name: cursor
           in: query
           schema:
             type: string
+          description: Deprecated alias; prefer since_version
         - name: limit
           in: query
           schema:
@@ -506,7 +685,7 @@ paths:
             maximum: 100
       responses:
         "200":
-          description: Animals page
+          description: Animals page (active rows + tombstones)
           content:
             application/json:
               schema:
@@ -543,12 +722,23 @@ paths:
     post:
       tags: [Privacy]
       summary: Request data export
+      description: |
+        Default complete export: paginates all animals (beyond 200), consent,
+        security report metadata (no raw payloads), data_request history (no nested payloads),
+        orders and entitlements when present. Precise coordinates are always redacted.
+        Optional `cursor` query returns a single page for large exports.
       operationId: exportData
       security:
         - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Optional animal id cursor for page-only export
       responses:
         "200":
-          description: Export accepted
+          description: Export completed (or page)
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -558,6 +748,12 @@ paths:
     post:
       tags: [Privacy]
       summary: Request data deletion
+      description: |
+        Transactional delete: soft-delete animals (tombstone + server_version bump),
+        remove inferences and security reports, clear historical export payloads,
+        deactivate entitlements, revoke consent, bump token_version.
+        Orders are retained for legal/financial audit (not hard-deleted).
+        Precise location fields are cleared; expired precise coords cleaned via maintenance hook.
       operationId: deleteData
       security:
         - bearerAuth: []
@@ -617,12 +813,14 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
-
-  /api/v1/analytics/events:
+  /api/v1/safety/report:
     post:
-      tags: [Analytics]
-      summary: Ingest privacy-safe funnel analytics events
-      operationId: ingestAnalyticsEvents
+      tags: [Security]
+      summary: Report abuse, injured animals, or other moderation concerns
+      description: |
+        Structured safety report path. Never accepts original images.
+        Decision codes are public and stable; model internals are not returned.
+      operationId: safetyReport
       security:
         - bearerAuth: []
       requestBody:
@@ -630,78 +828,43 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [events]
-              properties:
-                schema_version:
-                  type: integer
-                  description: Client schema registry version
-                events:
-                  type: array
-                  maxItems: 50
-                  items:
-                    type: object
-                    required: [session_id, name, event_id, ts]
-                    properties:
-                      schema_version:
-                        type: integer
-                      session_id:
-                        type: string
-                        description: Pseudo-anonymous session id (not device token)
-                      name:
-                        type: string
-                        enum:
-                          - auth
-                          - camera_ok
-                          - scan
-                          - detect_result
-                          - capture_attempt
-                          - generate_stage
-                          - collection_complete
-                          - trade
-                          - battle_end
-                      ts:
-                        type: integer
-                        format: int64
-                      event_id:
-                        type: string
-                      coarse_location:
-                        type: object
-                        description: City/region only when location consented; never lat/lng
-                        properties:
-                          city:
-                            type: string
-                          region:
-                            type: string
-                          country:
-                            type: string
-                        additionalProperties: false
-                      experiment_id:
-                        type: string
-                      experiment_variant:
-                        type: string
-                      props:
-                        type: object
-                        additionalProperties: true
-                        description: Non-sensitive props; server drops photo/token/coords
+              $ref: "#/components/schemas/SafetyReportRequest"
       responses:
         "202":
-          description: Accepted (some events may be dropped)
+          description: Report accepted
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  accepted:
-                    type: integer
-                  dropped:
-                    type: integer
-                  schema_version:
-                    type: integer
-                  request_id:
-                    type: string
+                $ref: "#/components/schemas/SafetyReportResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/account/defaults:
+    get:
+      tags: [Security]
+      summary: Account privacy/social defaults (stricter for minors)
+      operationId: accountDefaults
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: minor
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["0", "1", "true", "false"]
+          description: When 1/true, return minor defaults (strict when STRICT_MINOR_DEFAULTS enabled)
+      responses:
+        "200":
+          description: Defaults
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDefaultsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1252,11 +1415,16 @@ components:
   schemas:
     Error:
       type: object
+      required: [error, reason_code, retryable]
       properties:
         error:
           type: string
+          description: Human-readable error message (safe for clients)
+          example: invalid JSON body
         reason_code:
           type: string
+          description: Machine-readable reason code
+          example: bad_request
         request_id:
           type: string
     FeatureUnavailableError:
@@ -1275,17 +1443,20 @@ components:
         request_id:
           type: string
     ServiceUnavailableError:
-      type: object
-      required: [error, reason_code]
-      properties:
-        error:
-          type: string
-          example: service unavailable
-        reason_code:
-          type: string
-          example: db_unavailable
-        request_id:
-          type: string
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          required: [error, reason_code, retryable]
+          properties:
+            error:
+              type: string
+              example: service unavailable
+            reason_code:
+              type: string
+              example: db_unavailable
+            retryable:
+              type: boolean
+              example: true
     HealthResponse:
       type: object
       required: [status, time]
@@ -1335,6 +1506,9 @@ components:
         device_id:
           type: string
           description: UUID or 8-64 alphanumeric/_-
+        installation_secret:
+          type: string
+          description: Required after first registration; proves device ownership
     AuthDeviceResponse:
       type: object
       required: [token, expires_at, token_type]
@@ -1346,6 +1520,116 @@ components:
         token_type:
           type: string
           example: Bearer
+        account_id:
+          type: string
+        guest:
+          type: boolean
+    AuthBindRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [email, mock_oauth]
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        oauth_subject:
+          type: string
+        oauth_token:
+          type: string
+          description: Mock OAuth secret; server stores only a hash
+        display_name:
+          type: string
+    AuthLoginRequest:
+      type: object
+      required: [device_id, provider]
+      properties:
+        device_id:
+          type: string
+        provider:
+          type: string
+          enum: [email, mock_oauth]
+        email:
+          type: string
+        password:
+          type: string
+        oauth_subject:
+          type: string
+        oauth_token:
+          type: string
+    AuthAccountResponse:
+      type: object
+      required: [token, expires_at, token_type]
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+        token_type:
+          type: string
+        account_id:
+          type: string
+        refresh_token:
+          type: string
+          description: Returned once; server stores only hash
+        guest:
+          type: boolean
+        merge:
+          type: object
+          properties:
+            animals_moved:
+              type: integer
+            animals_skipped:
+              type: integer
+            entitlements_moved:
+              type: integer
+            entitlements_merged:
+              type: integer
+            orders_moved:
+              type: integer
+    AuthAccountInfo:
+      type: object
+      properties:
+        guest:
+          type: boolean
+        account_id:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+        device_id:
+          type: string
+    AuthDeviceList:
+      type: object
+      properties:
+        guest:
+          type: boolean
+        account_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              device_id:
+                type: string
+              device_label:
+                type: string
+              status:
+                type: string
+              linked_at:
+                type: string
+              last_seen_at:
+                type: string
+              revoked_at:
+                type: string
+              current:
+                type: boolean
     CityResponse:
       type: object
       additionalProperties: true
@@ -1367,6 +1651,29 @@ components:
             additionalProperties: true
         source:
           type: string
+    VisionDetectBox:
+      type: object
+      required: [species, confidence, target_id, bounding_box]
+      properties:
+        species:
+          type: string
+          enum: [cat, dog, goose]
+        label:
+          type: string
+        target_id:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        bounding_box:
+          type: object
+          required: [x, y, width, height]
+          properties:
+            x: { type: number, minimum: 0, maximum: 1 }
+            y: { type: number, minimum: 0, maximum: 1 }
+            width: { type: number, minimum: 0, maximum: 1 }
+            height: { type: number, minimum: 0, maximum: 1 }
     VisionDetectResponse:
       type: object
       additionalProperties: true
@@ -1374,113 +1681,112 @@ components:
         animals:
           type: array
           items:
-            type: object
-            additionalProperties: true
-        inference_id:
-          type: string
-    SyncAnimalRequest:
-      type: object
-      required: [uuid, species, rarity, generated_at]
-      properties:
-        uuid:
-          type: string
-          format: uuid
-        species:
-          type: string
-          description: capturable species (cat|dog|goose after normalize)
-        breed:
-          type: string
-          maxLength: 64
-        rarity:
-          type: integer
-          minimum: 1
-          maximum: 5
-        hp:
-          type: integer
-          minimum: 10
-          maximum: 100
-        atk:
-          type: integer
-          minimum: 5
-          maximum: 50
-        def:
-          type: integer
-          minimum: 5
-          maximum: 50
-        spd:
-          type: integer
-          minimum: 5
-          maximum: 50
-        class:
-          type: string
-          enum: [Warrior, Mage, Ranger, Tank, Support, Assassin]
-        element:
-          type: string
-          enum: [Fire, Water, Grass, Electric, Ice, Dark, Light, Earth, Wind]
-        latitude:
-          type: number
-          minimum: -90
-          maximum: 90
-        longitude:
-          type: number
-          minimum: -180
-          maximum: 180
-        city:
-          type: string
-          maxLength: 64
-        generated_at:
-          type: string
-          format: date-time
-        inference_request_id:
-          type: string
-          maxLength: 128
-        keep_precise_location:
-          type: boolean
-    SyncAnimalResponse:
-      type: object
-      required: [status, uuid]
-      properties:
-        status:
-          type: string
-          example: synced
-        uuid:
-          type: string
-          format: uuid
-        review_status:
-          type: string
-    BatchSyncRequest:
-      type: object
-      required: [items]
-      properties:
-        items:
+            $ref: "#/components/schemas/VisionDetectBox"
+          description: Backward-compatible alias of targets
+        targets:
           type: array
-          minItems: 1
-          maxItems: 100
           items:
-            $ref: "#/components/schemas/SyncAnimalRequest"
-    BatchSyncItemResult:
-      type: object
-      required: [uuid, status]
-      properties:
-        uuid:
-          type: string
-        status:
-          type: string
-          enum: [synced, conflict, error]
-        error:
+            $ref: "#/components/schemas/VisionDetectBox"
+          description: Multi-animal targets with stable target_id
+        inference_id:
           type: string
         reason_code:
           type: string
-          description: |
-            Stable codes e.g. invalid_uuid, invalid_rarity, invalid_stats,
-            invalid_class, invalid_element, invalid_coords, invalid_time,
-            invalid_string_length, species_unsupported, duplicate_animal,
-            batch_duplicate, inference_*, sync_failed, batch_too_large
-    BatchSyncResponse:
+          description: Public reason when empty or rejected (e.g. reject_portrait)
+        source:
+          type: string
+        safety:
+          $ref: "#/components/schemas/SafetySummary"
+    SafetySummary:
       type: object
-      required: [results]
+      required: [allowed, collectable, decision_code, action]
       properties:
-        results:
+        allowed:
+          type: boolean
+        collectable:
+          type: boolean
+        decision_code:
+          type: string
+          description: Public moderation code (no model internals)
+          enum:
+            - ok
+            - reject_portrait
+            - reject_child_focus
+            - reject_sensitive
+            - reject_unsafe
+            - flag_sensitive
+            - flag_abuse
+            - flag_injured
+        action:
+          type: string
+          enum: [allow, reject, flag]
+        flags:
           type: array
           items:
-            $ref: "#/components/schemas/BatchSyncItemResult"
+            type: string
+            enum: [face, child, plate, house, abuse, injured]
+        report_path:
+          type: string
+          enum: [abuse, injured]
+    SafetyReportRequest:
+      type: object
+      required: [category]
+      properties:
+        category:
+          type: string
+          enum: [abuse, injured, portrait, sensitive, other]
+        inference_id:
+          type: string
+        note:
+          type: string
+          maxLength: 1000
+        decision_code:
+          type: string
+    SafetyReportResponse:
+      type: object
+      required: [status, report_id, decision_code, category]
+      properties:
+        status:
+          type: string
+          example: accepted
+        report_id:
+          type: string
+        decision_code:
+          type: string
+        category:
+          type: string
+        request_id:
+          type: string
+    AccountDefaultsResponse:
+      type: object
+      properties:
+        defaults:
+          type: object
+          additionalProperties: true
+          properties:
+            audience:
+              type: string
+              enum: [minor, adult]
+            strict:
+              type: boolean
+            play_hours_start:
+              type: integer
+            play_hours_end:
+              type: integer
+            daily_limit_min:
+              type: integer
+            location_scope:
+              type: string
+              enum: [none, city, precise]
+            social_enabled:
+              type: boolean
+        config:
+          type: object
+          properties:
+            strict_minor_defaults:
+              type: boolean
+        request_id:
+          type: string
+        server_time:
+          type: string
+          format: date-time
