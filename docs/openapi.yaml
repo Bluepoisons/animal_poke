@@ -41,6 +41,8 @@ tags:
     description: Admin audit APIs
   - name: Observability
     description: Metrics and operational endpoints
+  - name: Analytics
+    description: Privacy-friendly funnel event ingest
 
 paths:
   /health:
@@ -570,6 +572,94 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+
+
+  /api/v1/analytics/events:
+    post:
+      tags: [Analytics]
+      summary: Ingest privacy-safe funnel analytics events
+      operationId: ingestAnalyticsEvents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                schema_version:
+                  type: integer
+                  description: Client schema registry version
+                events:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [session_id, name, event_id, ts]
+                    properties:
+                      schema_version:
+                        type: integer
+                      session_id:
+                        type: string
+                        description: Pseudo-anonymous session id (not device token)
+                      name:
+                        type: string
+                        enum:
+                          - auth
+                          - camera_ok
+                          - scan
+                          - detect_result
+                          - capture_attempt
+                          - generate_stage
+                          - collection_complete
+                          - trade
+                          - battle_end
+                      ts:
+                        type: integer
+                        format: int64
+                      event_id:
+                        type: string
+                      coarse_location:
+                        type: object
+                        description: City/region only when location consented; never lat/lng
+                        properties:
+                          city:
+                            type: string
+                          region:
+                            type: string
+                          country:
+                            type: string
+                        additionalProperties: false
+                      experiment_id:
+                        type: string
+                      experiment_variant:
+                        type: string
+                      props:
+                        type: object
+                        additionalProperties: true
+                        description: Non-sensitive props; server drops photo/token/coords
+      responses:
+        "202":
+          description: Accepted (some events may be dropped)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: integer
+                  dropped:
+                    type: integer
+                  schema_version:
+                    type: integer
+                  request_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/v1/commerce/orders:
     post:

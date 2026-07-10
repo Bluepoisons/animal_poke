@@ -356,6 +356,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest privacy-safe funnel analytics events */
+        post: operations["ingestAnalyticsEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commerce/orders": {
         parameters: {
             query?: never;
@@ -1249,6 +1266,62 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ingestAnalyticsEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Client schema registry version */
+                    schema_version?: number;
+                    events: {
+                        schema_version?: number;
+                        /** @description Pseudo-anonymous session id (not device token) */
+                        session_id: string;
+                        /** @enum {string} */
+                        name: "auth" | "camera_ok" | "scan" | "detect_result" | "capture_attempt" | "generate_stage" | "collection_complete" | "trade" | "battle_end";
+                        /** Format: int64 */
+                        ts: number;
+                        event_id: string;
+                        /** @description City/region only when location consented; never lat/lng */
+                        coarse_location?: {
+                            city?: string;
+                            region?: string;
+                            country?: string;
+                        };
+                        experiment_id?: string;
+                        experiment_variant?: string;
+                        /** @description Non-sensitive props; server drops photo/token/coords */
+                        props?: {
+                            [key: string]: unknown;
+                        };
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted (some events may be dropped) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accepted?: number;
+                        dropped?: number;
+                        schema_version?: number;
+                        request_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     createOrder: {
