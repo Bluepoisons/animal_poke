@@ -45,6 +45,12 @@ export interface AnalysisResult {
   composition: number
   pose: number
   angle: number
+  /** 服务端 analyze 阶段 inference_id */
+  inference_id?: string
+  model?: string
+  prompt_version?: string
+  source?: string
+  degraded?: boolean
 }
 
 export interface ValueResult {
@@ -56,11 +62,23 @@ export interface ValueResult {
   class: string
   element: string
   narrative: string
+  /** 服务端 value 阶段 inference_id（同步必须用此 ID） */
+  inference_id?: string
+  model?: string
+  prompt_version?: string
+  source?: string
+  degraded?: boolean
 }
 
 export interface GeneratedAnimal {
   sessionId: string
+  /** @deprecated 兼容字段；同步请用 valueInferenceId */
   inferenceRequestId: string
+  /** detect 阶段 id（若有） */
+  detectInferenceId?: string
+  analyzeInferenceId?: string
+  /** 权威：value 阶段服务端返回的 inference_id */
+  valueInferenceId: string
   species: string
   analysis: AnalysisResult
   value: ValueResult
@@ -104,6 +122,12 @@ function asString(v: unknown, fallback = ''): string {
   return typeof v === 'string' && v.trim() ? v.trim() : fallback
 }
 
+function pickInferenceId(o: Record<string, unknown>): string | undefined {
+  const v =
+    o.inference_id ?? o.inferenceId ?? o.inference_request_id ?? o.request_id
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined
+}
+
 export function validateAnalysis(raw: unknown): AnalysisResult {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
@@ -117,6 +141,11 @@ export function validateAnalysis(raw: unknown): AnalysisResult {
     composition: clampInt(o.composition, 0, 10, 5),
     pose: clampInt(o.pose, 0, 10, 5),
     angle: clampInt(o.angle, 0, 10, 5),
+    inference_id: pickInferenceId(o),
+    model: asString(o.model, '') || undefined,
+    prompt_version: asString(o.prompt_version ?? o.promptVersion, '') || undefined,
+    source: asString(o.source, '') || undefined,
+    degraded: typeof o.degraded === 'boolean' ? o.degraded : undefined,
   }
 }
 
@@ -135,6 +164,11 @@ export function validateValue(raw: unknown): ValueResult {
     class: petClass,
     element,
     narrative: asString(o.narrative, 'A mysterious companion found in the wild.'),
+    inference_id: pickInferenceId(o),
+    model: asString(o.model, '') || undefined,
+    prompt_version: asString(o.prompt_version ?? o.promptVersion, '') || undefined,
+    source: asString(o.source, '') || undefined,
+    degraded: typeof o.degraded === 'boolean' ? o.degraded : undefined,
   }
 }
 
@@ -220,12 +254,13 @@ export async function runCaptureGeneration(
   options: RunPipelineOptions,
 ): Promise<GeneratedAnimal> {
   const { sessionId, species, photoDataUrl, signal, onProgress, resumeFrom } = options
-  const inferenceRequestId = sessionId
   const analyzeKey = `analyze:${sessionId}`
   const valueKey = `value:${sessionId}`
 
   let analysis = resumeFrom?.analysis
   let value = resumeFrom?.value
+  let analyzeInferenceId = analysis?.inference_id
+  let valueInferenceId = value?.inference_id
 
   const emit = (stage: GenerationStage, extra?: Partial<PipelineProgress>) => {
     onProgress?.({
@@ -259,24 +294,27 @@ export async function runCaptureGeneration(
         allowRetry: true,
       })
       analysis = validateAnalysis(raw)
+      analyzeInferenceId = analysis.inference_id
     }
 
     // ---- value ----
     if (!value) {
       emit('value', { partial: { analysis, value } })
       throwIfAborted(signal)
+      // 优先传递 analyze 阶段真实 inference_id；禁止用 sessionId 冒充
+      const parentInference = analyzeInferenceId || analysis?.inference_id
       const payload = {
         species,
-        breed: analysis.breed,
-        color: analysis.color,
-        body_type: analysis.body_type,
-        subject_completeness: analysis.subject_completeness,
-        clarity: analysis.clarity,
-        lighting: analysis.lighting,
-        composition: analysis.composition,
-        pose: analysis.pose,
-        angle: analysis.angle,
-        inference_request_id: inferenceRequestId,
+        breed: analysis!.breed,
+        color: analysis!.color,
+        body_type: analysis!.body_type,
+        subject_completeness: analysis!.subject_completeness,
+        clarity: analysis!.clarity,
+        lighting: analysis!.lighting,
+        composition: analysis!.composition,
+        pose: analysis!.pose,
+        angle: analysis!.angle,
+        ...(parentInference ? { inference_request_id: parentInference } : {}),
       }
       const raw = await authedRequest<unknown>({
         method: 'POST',
@@ -288,18 +326,29 @@ export async function runCaptureGeneration(
         allowRetry: true,
       })
       value = validateValue(raw)
+      valueInferenceId = value.inference_id
     }
 
     // ---- save (local assemble; sync 由 #103) ----
     emit('save', { partial: { analysis, value } })
     throwIfAborted(signal)
 
+    // 同步权威 ID = value 阶段服务端返回；缺失则不可伪装为 sessionId
+    const authoritativeId = valueInferenceId || value?.inference_id || ''
+    if (!authoritativeId) {
+      const err = new Error('value response missing inference_id')
+      emit('error', { error: err.message, partial: { analysis, value } })
+      throw err
+    }
+
     const result: GeneratedAnimal = {
       sessionId,
-      inferenceRequestId,
+      inferenceRequestId: authoritativeId,
+      analyzeInferenceId: analyzeInferenceId || analysis?.inference_id,
+      valueInferenceId: authoritativeId,
       species,
-      analysis,
-      value,
+      analysis: analysis!,
+      value: value!,
       photoDataUrl,
     }
     emit('done', { result, partial: { analysis, value } })
