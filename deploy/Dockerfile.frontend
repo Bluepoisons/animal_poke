@@ -30,6 +30,8 @@ RUN sed "s/\${BACKEND_UPSTREAM}/animal-poke-backend:80/g" \
       > /etc/nginx/conf.d/default.conf
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+# AP-037: do not serve source maps publicly
+RUN find /usr/share/nginx/html -name '*.map' -delete || true
 
 # 预置同域 config.js（entrypoint 可按 API_BASE_URL 覆盖；非 root 写失败则用此默认）
 RUN printf '%s\n' \
