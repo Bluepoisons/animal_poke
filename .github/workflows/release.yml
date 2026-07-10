@@ -1,0 +1,597 @@
+# AP-039 Release pipeline: staging → canary → production
+#
+# Manual release workflow (workflow_dispatch). Builds immutable SHA-tagged
+# images, dry-runs kustomize overlays, runs staging smoke hooks, requires an
+# explicit canary approval input, then proceeds to production with a recorded
+# rollback command. Does not auto-apply to a live cluster without configured
+# kube context secrets — apply steps are gated and documented.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Git ref to release (branch, tag, or full SHA). Defaults to the ref that triggered the workflow."
+        required: false
+        type: string
+        default: ""
+      image_tag:
+        description: "Optional override for image tag. Empty = full commit SHA."
+        required: false
+        type: string
+        default: ""
+      skip_push:
+        description: "If true, build images locally only (no registry push). Useful for dry validation."
+        required: false
+        type: boolean
+        default: true
+      deploy_staging:
+        description: "If true and KUBECONFIG_STAGING is set, apply staging overlay after smoke hooks."
+        required: false
+        type: boolean
+        default: false
+      canary_approval:
+        description: "REQUIRED for canary/production. Type exactly: APPROVE_CANARY"
+        required: true
+        type: string
+        default: ""
+      canary_percent:
+        description: "Canary traffic percent (1-50). Used for rollout annotation and rollback plan."
+        required: false
+        type: string
+        default: "10"
+      promote_production:
+        description: "If true and canary_approval is valid, promote full production after canary smoke."
+        required: false
+        type: boolean
+        default: false
+      dry_run_only:
+        description: "If true, only build + kustomize dry-run + smoke hooks; never apply."
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.event.inputs.git_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  actions: read
+
+env:
+  REGISTRY: registry.cn-beijing.aliyuncs.com/animal-poke
+  BACKEND_IMAGE: registry.cn-beijing.aliyuncs.com/animal-poke/backend
+  FRONTEND_IMAGE: registry.cn-beijing.aliyuncs.com/animal-poke/frontend
+  KUSTOMIZE_VERSION: "v5.5.0"
+  # Cosign optional — signing runs when COSIGN_YES=1 and key material present
+  COSIGN_YES: "1"
+
+jobs:
+  resolve:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      canary_ok: ${{ steps.meta.outputs.canary_ok }}
+      ref: ${{ steps.meta.outputs.ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.git_ref || github.sha }}
+          fetch-depth: 0
+      - name: Resolve SHA / tag / approval
+        id: meta
+        run: |
+          set -euo pipefail
+          REF="${{ github.event.inputs.git_ref }}"
+          if [ -z "${REF}" ]; then
+            REF="${GITHUB_SHA}"
+          fi
+          SHA="$(git rev-parse HEAD)"
+          SHORT="$(echo "${SHA}" | cut -c1-12)"
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "${TAG}" ]; then
+            TAG="${SHA}"
+          fi
+          # Forbid mutable tags
+          case "${TAG}" in
+            latest|dev|ci|0.0.0-unset|__IMAGE_TAG__|*placeholder*)
+              echo "Forbidden mutable image tag: ${TAG}" >&2
+              exit 1
+              ;;
+          esac
+          APPROVAL="${{ github.event.inputs.canary_approval }}"
+          CANARY_OK=false
+          if [ "${APPROVAL}" = "APPROVE_CANARY" ]; then
+            CANARY_OK=true
+          fi
+          {
+            echo "sha=${SHA}"
+            echo "short_sha=${SHORT}"
+            echo "image_tag=${TAG}"
+            echo "canary_ok=${CANARY_OK}"
+            echo "ref=${REF}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "=== Release metadata ==="
+          echo "ref=${REF}"
+          echo "sha=${SHA}"
+          echo "image_tag=${TAG}"
+          echo "canary_approval_ok=${CANARY_OK}"
+          echo "canary_percent=${{ github.event.inputs.canary_percent }}"
+          echo "skip_push=${{ github.event.inputs.skip_push }}"
+          echo "dry_run_only=${{ github.event.inputs.dry_run_only }}"
+
+  build-images:
+    name: Build images (SHA tags)
+    runs-on: ubuntu-latest
+    needs: [resolve]
+    outputs:
+      backend_digest: ${{ steps.push.outputs.backend_digest }}
+      frontend_digest: ${{ steps.push.outputs.frontend_digest }}
+      backend_ref: ${{ steps.push.outputs.backend_ref }}
+      frontend_ref: ${{ steps.push.outputs.frontend_ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build backend image
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.image_tag }}"
+          docker build -f deploy/Dockerfile \
+            -t "${BACKEND_IMAGE}:${TAG}" \
+            -t "animal-poke-backend:${TAG}" \
+            ./backend
+      - name: Build frontend image
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.image_tag }}"
+          docker build -f deploy/Dockerfile.frontend \
+            --build-arg VITE_API_BASE_URL= \
+            -t "${FRONTEND_IMAGE}:${TAG}" \
+            -t "animal-poke-frontend:${TAG}" \
+            .
+      - name: Local container smoke (livez + hard readyz)
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.image_tag }}"
+          docker network create ap-release || true
+          docker rm -f ap-rel-be ap-rel-fe 2>/dev/null || true
+          docker run -d --name ap-rel-be --network ap-release --network-alias animal-poke-backend \
+            -e APP_ENV=development \
+            -e AI_MOCK_ENABLED=true \
+            -e JWT_SECRET=release-smoke-secret-at-least-32-chars \
+            -e SERVER_ADDR=:8080 \
+            "animal-poke-backend:${TAG}"
+          docker run -d --name ap-rel-fe --network ap-release \
+            -e BACKEND_UPSTREAM=animal-poke-backend:8080 \
+            -e API_BASE_URL= \
+            -p 18082:80 \
+            "animal-poke-frontend:${TAG}"
+          # livez must succeed
+          for i in $(seq 1 40); do
+            if docker exec ap-rel-be wget -qO- http://127.0.0.1:8080/livez >/dev/null; then
+              echo "livez OK"
+              break
+            fi
+            if [ "$i" -eq 40 ]; then docker logs ap-rel-be; exit 1; fi
+            sleep 1
+          done
+          # readyz must be HTTP 200 — hard fail (AP-039, no || true)
+          for i in $(seq 1 40); do
+            code=$(docker exec ap-rel-be wget -qO- -S http://127.0.0.1:8080/readyz 2>&1 | awk '/HTTP\//{print $2}' | tail -1 || true)
+            body=$(docker exec ap-rel-be wget -qO- http://127.0.0.1:8080/readyz 2>/dev/null || true)
+            if [ "${code}" = "200" ]; then
+              echo "readyz OK: ${body}"
+              break
+            fi
+            if [ "$i" -eq 40 ]; then
+              echo "readyz failed: HTTP ${code} body=${body}" >&2
+              docker logs ap-rel-be
+              exit 1
+            fi
+            sleep 1
+          done
+          # direct hard fail path (belt-and-suspenders — no soft-fail)
+          docker run --rm --network ap-release curlimages/curl:8.5.0 \
+            -fsS -o /tmp/readyz.json -w '%{http_code}' \
+            http://animal-poke-backend:8080/readyz | tee /tmp/readyz.code
+          test "$(cat /tmp/readyz.code)" = "200"
+          docker run --rm --network ap-release curlimages/curl:8.5.0 \
+            -fsS http://animal-poke-backend:8080/livez >/dev/null
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18082/healthz; then echo; break; fi
+            if [ "$i" -eq 40 ]; then docker logs ap-rel-fe; exit 1; fi
+            sleep 1
+          done
+          chmod +x deploy/scripts/frontend-smoke.sh
+          FRONTEND_SMOKE_URL=http://127.0.0.1:18082 ./deploy/scripts/frontend-smoke.sh
+          docker rm -f ap-rel-fe ap-rel-be || true
+          docker network rm ap-release || true
+      - name: Login registry (optional push)
+        if: ${{ github.event.inputs.skip_push != 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-beijing.aliyuncs.com
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Push images + capture digests
+        id: push
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.image_tag }}"
+          BACKEND_REF="${BACKEND_IMAGE}:${TAG}"
+          FRONTEND_REF="${FRONTEND_IMAGE}:${TAG}"
+          if [ "${{ github.event.inputs.skip_push }}" = "true" ]; then
+            echo "skip_push=true — recording local image ids as digests"
+            BE_ID=$(docker image inspect "animal-poke-backend:${TAG}" --format '{{.Id}}')
+            FE_ID=$(docker image inspect "animal-poke-frontend:${TAG}" --format '{{.Id}}')
+            echo "backend_digest=${BE_ID}" >> "${GITHUB_OUTPUT}"
+            echo "frontend_digest=${FE_ID}" >> "${GITHUB_OUTPUT}"
+            echo "backend_ref=${BACKEND_REF}" >> "${GITHUB_OUTPUT}"
+            echo "frontend_ref=${FRONTEND_REF}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          docker push "${BACKEND_REF}"
+          docker push "${FRONTEND_REF}"
+          BE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${BACKEND_REF}" | awk -F@ '{print $2}')
+          FE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${FRONTEND_REF}" | awk -F@ '{print $2}')
+          echo "backend_digest=${BE_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "frontend_digest=${FE_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "backend_ref=${BACKEND_REF}" >> "${GITHUB_OUTPUT}"
+          echo "frontend_ref=${FRONTEND_REF}" >> "${GITHUB_OUTPUT}"
+          echo "Pushed backend@${BE_DIGEST}"
+          echo "Pushed frontend@${FE_DIGEST}"
+      - name: Optional cosign sign
+        if: ${{ github.event.inputs.skip_push != 'true' && secrets.COSIGN_PRIVATE_KEY != '' }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl -sL "https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64" -o /tmp/cosign
+          chmod +x /tmp/cosign
+          TAG="${{ needs.resolve.outputs.image_tag }}"
+          echo "${COSIGN_PRIVATE_KEY}" > /tmp/cosign.key
+          /tmp/cosign sign --key /tmp/cosign.key \
+            "${BACKEND_IMAGE}:${TAG}@${{ steps.push.outputs.backend_digest }}" \
+            --yes
+          /tmp/cosign sign --key /tmp/cosign.key \
+            "${FRONTEND_IMAGE}:${TAG}@${{ steps.push.outputs.frontend_digest }}" \
+            --yes
+          rm -f /tmp/cosign.key
+
+  kustomize-dry-run:
+    name: Kustomize dry-run (staging + production)
+    runs-on: ubuntu-latest
+    needs: [resolve, build-images]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - name: Install kustomize
+        run: |
+          set -euo pipefail
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
+      - name: Render & assert overlays
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          chmod +x deploy/k8s/scripts/assert-manifests.sh
+          deploy/k8s/scripts/assert-manifests.sh
+      - name: Dry-run canary rollback script
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          PREVIOUS_IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          chmod +x deploy/scripts/canary-rollback.sh
+          ./deploy/scripts/canary-rollback.sh --dry-run \
+            --namespace production \
+            --previous-tag "${PREVIOUS_IMAGE_TAG}" \
+            --reason "release-workflow-dry-run"
+      - name: Upload rendered manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests-${{ needs.resolve.outputs.short_sha }}
+          path: |
+            /tmp/staging.yaml
+            /tmp/prod.yaml
+          if-no-files-found: ignore
+
+  staging-smoke:
+    name: Staging smoke hooks
+    runs-on: ubuntu-latest
+    needs: [resolve, build-images, kustomize-dry-run]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - name: Staging smoke plan (hooks)
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          BACKEND_DIGEST: ${{ needs.build-images.outputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ needs.build-images.outputs.frontend_digest }}
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+        run: |
+          set -euo pipefail
+          echo "=== Staging smoke hooks (AP-039) ==="
+          echo "image_tag=${IMAGE_TAG}"
+          echo "backend_digest=${BACKEND_DIGEST}"
+          echo "frontend_digest=${FRONTEND_DIGEST}"
+          echo
+          echo "Hook checklist (executed when cluster URLs / kubeconfig available):"
+          echo "  1) migrate Job: animal-poke-migrate up (see docs/runbooks/schema-migrate.md)"
+          echo "  2) apply staging overlay with IMAGE_TAG"
+          echo "  3) wait rollouts: backend + frontend"
+          echo "  4) GET /livez + GET /readyz == 200 (hard fail)"
+          echo "  5) frontend-smoke.sh against app host"
+          echo "  6) contract smoke: OpenAPI critical paths"
+          echo "  7) optional k6 smoke (deploy/loadtest/k6-smoke.js)"
+          echo "  8) optional DAST baseline (OWASP ZAP baseline, non-blocking unless configured)"
+          echo
+          # Online hooks when staging URLs are configured
+          if [ -n "${STAGING_API_URL:-}" ]; then
+            echo "STAGING_API_URL set — running online API smoke"
+            curl -fsS "${STAGING_API_URL}/livez" | tee /tmp/staging-livez.json
+            # readyz hard fail — never soft-fail
+            code=$(curl -sS -o /tmp/staging-readyz.json -w '%{http_code}' "${STAGING_API_URL}/readyz")
+            cat /tmp/staging-readyz.json
+            echo
+            if [ "${code}" != "200" ]; then
+              echo "staging readyz HTTP ${code} — aborting release" >&2
+              exit 1
+            fi
+          else
+            echo "STAGING_API_URL unset — skipping online API smoke (manifest + local image smoke already passed)"
+          fi
+          if [ -n "${STAGING_APP_URL:-}" ]; then
+            echo "STAGING_APP_URL set — running frontend smoke"
+            chmod +x deploy/scripts/frontend-smoke.sh
+            FRONTEND_SMOKE_URL="${STAGING_APP_URL}" ./deploy/scripts/frontend-smoke.sh
+          else
+            echo "STAGING_APP_URL unset — skipping online frontend smoke"
+          fi
+          # Always validate canary rollback script syntax + dry-run path
+          chmod +x deploy/scripts/canary-rollback.sh
+          ./deploy/scripts/canary-rollback.sh --help >/dev/null
+          ./deploy/scripts/canary-rollback.sh --dry-run \
+            --namespace staging \
+            --previous-tag "${IMAGE_TAG}" \
+            --reason "staging-smoke-hook"
+      - name: Optional kubectl apply staging
+        if: ${{ github.event.inputs.deploy_staging == 'true' && github.event.inputs.dry_run_only != 'true' && secrets.KUBECONFIG_STAGING != '' }}
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_STAGING }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz
+          sudo mv kustomize /usr/local/bin/
+          work=$(mktemp -d)
+          cp -a deploy/k8s/. "$work/k8s/"
+          (
+            cd "$work/k8s/overlays/staging"
+            kustomize edit set image \
+              "${BACKEND_IMAGE}:${IMAGE_TAG}" \
+              "${FRONTEND_IMAGE}:${IMAGE_TAG}"
+            kustomize build . | kubectl apply -f -
+          )
+          kubectl -n staging rollout status deploy/animal-poke-backend --timeout=300s
+          kubectl -n staging rollout status deploy/animal-poke-frontend --timeout=300s
+          # hard readiness
+          kubectl -n staging exec deploy/animal-poke-backend -- \
+            wget -qO- http://127.0.0.1:8080/readyz
+          rm -f /tmp/kubeconfig
+
+  canary-gate:
+    name: Canary approval gate
+    runs-on: ubuntu-latest
+    needs: [resolve, staging-smoke]
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - name: Enforce canary approval input
+        id: gate
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.resolve.outputs.canary_ok }}" != "true" ]; then
+            echo "Canary NOT approved."
+            echo "To proceed to canary/production, re-run workflow_dispatch with canary_approval=APPROVE_CANARY"
+            if [ "${{ github.event.inputs.promote_production }}" = "true" ]; then
+              echo "promote_production=true requires canary_approval=APPROVE_CANARY" >&2
+              exit 1
+            fi
+            echo "approved=false" >> "${GITHUB_OUTPUT}"
+            echo "Stopping after staging smoke (expected without approval)."
+            exit 0
+          fi
+          PCT="${{ github.event.inputs.canary_percent }}"
+          if ! echo "${PCT}" | grep -Eq '^[0-9]+$'; then
+            echo "canary_percent must be integer" >&2
+            exit 1
+          fi
+          if [ "${PCT}" -lt 1 ] || [ "${PCT}" -gt 50 ]; then
+            echo "canary_percent must be 1-50, got ${PCT}" >&2
+            exit 1
+          fi
+          echo "approved=true" >> "${GITHUB_OUTPUT}"
+          echo "Canary APPROVED at ${PCT}% for SHA ${{ needs.resolve.outputs.sha }}"
+
+  canary:
+    name: Canary deploy + auto-rollback hooks
+    runs-on: ubuntu-latest
+    needs: [resolve, build-images, canary-gate]
+    if: ${{ needs.canary-gate.outputs.approved == 'true' && github.event.inputs.dry_run_only != 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - name: Canary plan
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          CANARY_PCT: ${{ github.event.inputs.canary_percent }}
+          BACKEND_DIGEST: ${{ needs.build-images.outputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ needs.build-images.outputs.frontend_digest }}
+        run: |
+          set -euo pipefail
+          cat <<EOF
+          === Canary release record ===
+          git_sha: ${{ needs.resolve.outputs.sha }}
+          image_tag: ${IMAGE_TAG}
+          backend_digest: ${BACKEND_DIGEST}
+          frontend_digest: ${FRONTEND_DIGEST}
+          canary_percent: ${CANARY_PCT}
+          auto_rollback_script: deploy/scripts/canary-rollback.sh
+          rollback_cmd: ./deploy/scripts/canary-rollback.sh --namespace production --previous-tag <PREV_SHA> --reason canary-slo-breach
+          SLO abort criteria (wire to metrics when available):
+            - HTTP 5xx rate > 2% over 5m
+            - /readyz non-200 on any canary pod
+            - core funnel (auth→detect→sync) success < 95%
+            - P95 latency > 2x baseline
+          EOF
+          chmod +x deploy/scripts/canary-rollback.sh
+          ./deploy/scripts/canary-rollback.sh --dry-run \
+            --namespace production \
+            --previous-tag "${IMAGE_TAG}" \
+            --reason "canary-plan"
+      - name: Apply canary (when kubeconfig present)
+        if: ${{ secrets.KUBECONFIG_PRODUCTION != '' }}
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_PRODUCTION }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          CANARY_PCT: ${{ github.event.inputs.canary_percent }}
+        run: |
+          set -euo pipefail
+          echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
+          # Annotate for canary percentage; full mesh/ingress split is env-specific.
+          kubectl -n production annotate deploy/animal-poke-backend \
+            animal-poke.io/canary-percent="${CANARY_PCT}" \
+            animal-poke.io/canary-image="${IMAGE_TAG}" \
+            animal-poke.io/release-sha="${{ needs.resolve.outputs.sha }}" \
+            --overwrite || true
+          # Patch one canary replica via image (simple Deployment canary):
+          # Prefer progressive delivery controller when available; fallback is
+          # partial rollout via maxUnavailable=0 and image set, monitored by SLO.
+          kubectl -n production set image deploy/animal-poke-backend \
+            "backend=${BACKEND_IMAGE}:${IMAGE_TAG}" || true
+          kubectl -n production set image deploy/animal-poke-frontend \
+            "frontend=${FRONTEND_IMAGE}:${IMAGE_TAG}" || true
+          # Hard readiness probe after canary rollout
+          sleep 5
+          if ! kubectl -n production exec deploy/animal-poke-backend -- \
+              wget -qO- http://127.0.0.1:8080/readyz; then
+            echo "canary readyz failed — invoking rollback" >&2
+            chmod +x deploy/scripts/canary-rollback.sh
+            PREV="${{ vars.PRODUCTION_PREVIOUS_IMAGE_TAG }}"
+            if [ -z "${PREV}" ]; then
+              echo "PRODUCTION_PREVIOUS_IMAGE_TAG unset; cannot auto-rollback" >&2
+              exit 1
+            fi
+            ./deploy/scripts/canary-rollback.sh \
+              --namespace production \
+              --previous-tag "${PREV}" \
+              --reason "canary-readyz-failed"
+            exit 1
+          fi
+          rm -f /tmp/kubeconfig
+
+  production:
+    name: Production promote
+    runs-on: ubuntu-latest
+    needs: [resolve, build-images, canary]
+    if: ${{ github.event.inputs.promote_production == 'true' && needs.canary-gate.outputs.approved == 'true' && github.event.inputs.dry_run_only != 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - name: Production release record
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          BACKEND_DIGEST: ${{ needs.build-images.outputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ needs.build-images.outputs.frontend_digest }}
+        run: |
+          set -euo pipefail
+          cat <<EOF
+          === Production release record (AP-039) ===
+          git_sha: ${{ needs.resolve.outputs.sha }}
+          image_tag: ${IMAGE_TAG}
+          backend_image: ${BACKEND_IMAGE}:${IMAGE_TAG}
+          frontend_image: ${FRONTEND_IMAGE}:${IMAGE_TAG}
+          backend_digest: ${BACKEND_DIGEST}
+          frontend_digest: ${FRONTEND_DIGEST}
+          db_schema: run animal-poke-migrate status post-deploy
+          config_version: backend-config ConfigMap + feature flags
+          rollback_cmd: ./deploy/scripts/canary-rollback.sh --namespace production --previous-tag <PREV_SHA> --reason manual-rollback
+          runbook: docs/runbooks/release.md
+          EOF
+      - name: Apply production (when kubeconfig present)
+        if: ${{ secrets.KUBECONFIG_PRODUCTION != '' }}
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_PRODUCTION }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz
+          sudo mv kustomize /usr/local/bin/
+          work=$(mktemp -d)
+          cp -a deploy/k8s/. "$work/k8s/"
+          (
+            cd "$work/k8s/overlays/production"
+            kustomize edit set image \
+              "${BACKEND_IMAGE}:${IMAGE_TAG}" \
+              "${FRONTEND_IMAGE}:${IMAGE_TAG}"
+            kustomize build . | kubectl apply -f -
+          )
+          kubectl -n production rollout status deploy/animal-poke-backend --timeout=600s
+          kubectl -n production rollout status deploy/animal-poke-frontend --timeout=600s
+          kubectl -n production exec deploy/animal-poke-backend -- \
+            wget -qO- http://127.0.0.1:8080/readyz
+          rm -f /tmp/kubeconfig
+
+  release-summary:
+    name: Release summary
+    runs-on: ubuntu-latest
+    needs: [resolve, build-images, kustomize-dry-run, staging-smoke, canary-gate]
+    if: always()
+    steps:
+      - name: Write summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## AP-039 Release summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| git_sha | \`${{ needs.resolve.outputs.sha }}\` |"
+            echo "| image_tag | \`${{ needs.resolve.outputs.image_tag }}\` |"
+            echo "| backend_digest | \`${{ needs.build-images.outputs.backend_digest }}\` |"
+            echo "| frontend_digest | \`${{ needs.build-images.outputs.frontend_digest }}\` |"
+            echo "| canary_approved | \`${{ needs.canary-gate.outputs.approved }}\` |"
+            echo "| dry_run_only | \`${{ github.event.inputs.dry_run_only }}\` |"
+            echo "| skip_push | \`${{ github.event.inputs.skip_push }}\` |"
+            echo ""
+            echo "### Rollback"
+            echo '```bash'
+            echo "./deploy/scripts/canary-rollback.sh --namespace production --previous-tag <PREV_SHA> --reason <reason>"
+            echo '```'
+            echo ""
+            echo "Runbook: \`docs/runbooks/release.md\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

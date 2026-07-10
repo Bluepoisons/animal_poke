@@ -223,6 +223,30 @@ jobs:
           done
           docker logs ap-be
           exit 1
+      - name: Wait for backend readyz (hard fail)
+        # AP-039: /readyz non-200 must fail the job. Never soft-fail with `|| true`.
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            # Capture HTTP status without swallowing failures on the final assertion.
+            if docker exec ap-be wget -qO- http://127.0.0.1:8080/readyz > /tmp/ap-readyz.json 2>/tmp/ap-readyz.err; then
+              echo "readyz body: $(cat /tmp/ap-readyz.json)"
+              # double-check via curl on the docker network for a numeric status code
+              code=$(docker run --rm --network ap-ci curlimages/curl:8.5.0 \
+                -sS -o /tmp/readyz-body -w '%{http_code}' \
+                http://animal-poke-backend:8080/readyz || echo "000")
+              echo "readyz HTTP ${code}"
+              if [ "${code}" = "200" ]; then
+                exit 0
+              fi
+              echo "readyz returned HTTP ${code}, retrying..."
+            fi
+            sleep 1
+          done
+          echo "readyz never became HTTP 200" >&2
+          docker logs ap-be
+          cat /tmp/ap-readyz.err 2>/dev/null || true
+          exit 1
       - name: Wait for frontend healthz
         run: |
           for i in $(seq 1 40); do
@@ -238,10 +262,19 @@ jobs:
         run: |
           chmod +x deploy/scripts/frontend-smoke.sh
           FRONTEND_SMOKE_URL=http://127.0.0.1:18081 ./deploy/scripts/frontend-smoke.sh
-      - name: Backend direct smoke (compat)
+      - name: Backend direct smoke (livez + readyz hard)
         run: |
+          set -euo pipefail
           docker run --rm --network ap-ci curlimages/curl:8.5.0 \
             -fsS http://animal-poke-backend:8080/livez
+          # AP-039: hard fail on non-200 readyz — do not append `|| true`
+          code=$(docker run --rm --network ap-ci curlimages/curl:8.5.0 \
+            -sS -o /tmp/readyz.json -w '%{http_code}' \
+            http://animal-poke-backend:8080/readyz)
+          echo "readyz HTTP ${code}"
+          cat /tmp/readyz.json || true
+          echo
+          test "${code}" = "200"
       - name: Cleanup
         if: always()
         run: |
@@ -249,6 +282,7 @@ jobs:
           docker logs ap-be 2>/dev/null | tail -n 80 || true
           docker rm -f ap-fe ap-be || true
           docker network rm ap-ci || true
+
 
   k8s:
     name: K8s manifests
