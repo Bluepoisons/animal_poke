@@ -1,0 +1,862 @@
+openapi: 3.1.0
+info:
+  title: Animal Poke Backend API
+  version: 1.0.0
+  description: |
+    Go 后端 API 契约（OpenAPI 3.1）。
+    客户端仅持有 API Base URL + 设备 Token；第三方 Key 永不进入前端。
+  contact:
+    name: animal_poke team
+servers:
+  - url: http://localhost:8080
+    description: Local
+  - url: https://api.animal-poke.example.com
+    description: Production example
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Geo
+  - name: Weather
+  - name: Vision
+  - name: Value
+  - name: Sync
+  - name: Privacy
+  - name: Security
+  - name: Commerce
+  - name: Admin
+  - name: Observability
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness (legacy)
+      operationId: getHealth
+      responses:
+        "200":
+          description: Process alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /livez:
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: getLivez
+      responses:
+        "200":
+          description: Process alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness (legacy)
+      operationId: getReady
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness
+      operationId: getReadyz
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+  /metrics:
+    get:
+      tags: [Observability]
+      summary: Prometheus metrics
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Prometheus text exposition
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/ping:
+    get:
+      tags: [Health]
+      summary: Ping
+      operationId: ping
+      responses:
+        "200":
+          description: Pong
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [msg]
+                properties:
+                  msg:
+                    type: string
+                    example: pong
+                  db:
+                    type: boolean
+                  app_env:
+                    type: string
+                  request_id:
+                    type: string
+
+  /api/v1/time:
+    get:
+      tags: [Security]
+      summary: Trusted server time
+      operationId: getTime
+      responses:
+        "200":
+          description: Signed server time
+          headers:
+            X-Server-Time:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeResponse"
+
+  /api/v1/auth/device:
+    post:
+      tags: [Auth]
+      summary: Register device and issue JWT
+      operationId: authDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthDeviceRequest"
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthDeviceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/geo/city:
+    get:
+      tags: [Geo]
+      summary: Reverse geocode city
+      operationId: getCity
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Lat"
+        - $ref: "#/components/parameters/Lng"
+      responses:
+        "200":
+          description: City info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/weather/week:
+    get:
+      tags: [Weather]
+      summary: Weekly weather
+      operationId: getWeatherWeek
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Lat"
+        - $ref: "#/components/parameters/Lng"
+      responses:
+        "200":
+          description: Week weather
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherWeekResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/vision/detect:
+    post:
+      tags: [Vision]
+      summary: Detect animals in image
+      operationId: visionDetect
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Detection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisionDetectResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/vision/analyze:
+    post:
+      tags: [Vision]
+      summary: Analyze animal image
+      operationId: visionAnalyze
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/value/generate:
+    post:
+      tags: [Value]
+      summary: Generate pet stats/narrative
+      operationId: valueGenerate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Generated value
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/sync/animal:
+    post:
+      tags: [Sync]
+      summary: Upsert single animal (idempotent)
+      operationId: syncAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Synced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/sync/animals:
+    post:
+      tags: [Sync]
+      summary: Batch upsert animals
+      operationId: syncAnimalsBatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    get:
+      tags: [Sync]
+      summary: Pull animals (cursor)
+      operationId: pullAnimals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Animals page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/privacy/consent:
+    post:
+      tags: [Privacy]
+      summary: Record consent
+      operationId: putConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Saved
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/privacy/export:
+    post:
+      tags: [Privacy]
+      summary: Request data export
+      operationId: exportData
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Export accepted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/privacy/delete:
+    post:
+      tags: [Privacy]
+      summary: Request data deletion
+      operationId: deleteData
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Delete accepted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/privacy/requests/{id}:
+    get:
+      tags: [Privacy]
+      summary: Get privacy request status
+      operationId: getPrivacyRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/security/report:
+    post:
+      tags: [Security]
+      summary: Client security report
+      operationId: securityReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Accepted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/commerce/orders:
+    post:
+      tags: [Commerce]
+      summary: Create order
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Order created
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/commerce/orders/fulfill:
+    post:
+      tags: [Commerce]
+      summary: Fulfill order
+      operationId: fulfillOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Fulfilled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/commerce/orders/refund:
+    post:
+      tags: [Commerce]
+      summary: Refund order
+      operationId: refundOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Refunded
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/commerce/orders/{id}:
+    get:
+      tags: [Commerce]
+      summary: Get order
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/commerce/entitlements:
+    get:
+      tags: [Commerce]
+      summary: List entitlements
+      operationId: listEntitlements
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/admin/audit/logs:
+    get:
+      tags: [Admin]
+      summary: List audit logs
+      operationId: listAuditLogs
+      security:
+        - adminKey: []
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/admin/audit/logs/{id}/ack:
+    post:
+      tags: [Admin]
+      summary: Ack audit log
+      operationId: ackAuditLog
+      security:
+        - adminKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Acked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    adminKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+
+  parameters:
+    Lat:
+      name: lat
+      in: query
+      required: true
+      schema:
+        type: number
+        format: double
+        minimum: -90
+        maximum: 90
+    Lng:
+      name: lng
+      in: query
+      required: true
+      schema:
+        type: number
+        format: double
+        minimum: -180
+        maximum: 180
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+
+  headers:
+    RequestID:
+      description: Request correlation ID
+      schema:
+        type: string
+    RetryAfter:
+      description: Seconds to wait before retry
+      schema:
+        type: integer
+
+  responses:
+    BadRequest:
+      description: Bad request
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Unauthorized
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    PayloadTooLarge:
+      description: Image too large
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnsupportedMediaType:
+      description: Unsupported media type
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limited
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServiceUnavailable:
+      description: Dependency unavailable
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceUnavailableError"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        reason_code:
+          type: string
+        request_id:
+          type: string
+    ServiceUnavailableError:
+      type: object
+      required: [error, reason_code]
+      properties:
+        error:
+          type: string
+          example: service unavailable
+        reason_code:
+          type: string
+          example: db_unavailable
+        request_id:
+          type: string
+    HealthResponse:
+      type: object
+      required: [status, time]
+      properties:
+        status:
+          type: string
+          example: ok
+        time:
+          type: string
+          format: date-time
+    ReadyResponse:
+      type: object
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+        app_env:
+          type: string
+        db:
+          type: string
+          enum: [up, down, unavailable]
+        schema:
+          type: string
+        config_errors:
+          type: array
+          items:
+            type: string
+    TimeResponse:
+      type: object
+      required: [server_time, unix_ms, nonce, signature, expires_in]
+      properties:
+        server_time:
+          type: string
+        unix_ms:
+          type: integer
+          format: int64
+        nonce:
+          type: string
+        signature:
+          type: string
+        expires_in:
+          type: integer
+    AuthDeviceRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id:
+          type: string
+          description: UUID or 8-64 alphanumeric/_-
+    AuthDeviceResponse:
+      type: object
+      required: [token, expires_at, token_type]
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+    CityResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        city:
+          type: string
+        province:
+          type: string
+        country:
+          type: string
+    WeatherWeekResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        week:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        source:
+          type: string
+    VisionDetectResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        animals:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        inference_id:
+          type: string
