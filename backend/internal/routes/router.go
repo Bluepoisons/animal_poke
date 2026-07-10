@@ -202,9 +202,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
 				auth.POST("/security/report", sec.Report)
 
-				commerce := handlers.NewCommerceHandler(db)
+				commerce := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
+					Production:  cfg.IsProduction(),
+					Enabled:     cfg.CommerceEnabled,
+					StoreVerify: cfg.CommerceStoreVerify,
+				})
 				auth.POST("/commerce/orders", commerce.CreateOrder)
 				auth.POST("/commerce/orders/fulfill", commerce.FulfillOrder)
+				// 设备 JWT 退款永久 403；真实退款走 admin/webhook
 				auth.POST("/commerce/orders/refund", commerce.RefundOrder)
 				auth.GET("/commerce/orders/:id", commerce.GetOrder)
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
@@ -230,12 +235,27 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				ah := handlers.NewAuditHandler(auditRepo)
 				admin.GET("/audit/logs", ah.List)
 				admin.POST("/audit/logs/:id/ack", ah.Ack)
+
+				if db != nil {
+					commerceAdmin := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
+						Production:  cfg.IsProduction(),
+						Enabled:     cfg.CommerceEnabled,
+						StoreVerify: cfg.CommerceStoreVerify,
+					})
+					admin.POST("/commerce/orders/refund", commerceAdmin.AdminRefundOrder)
+					admin.POST("/commerce/webhooks/refund", commerceAdmin.WebhookRefundOrder)
+				} else {
+					admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+					admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
+				}
 			}
 		} else {
 			admin := api.Group("/admin")
 			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey))
 			admin.GET("/audit/logs", unavailable("db_unavailable"))
 			admin.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
+			admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+			admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
 		}
 	}
 	return r

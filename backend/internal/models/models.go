@@ -150,19 +150,20 @@ type Product struct {
 func (Product) TableName() string { return "products" }
 
 // Order 服务端订单。
+// 幂等作用域为 (device_id, idempotency_key)；receipt_hash 为空时使用 NULL（可多单未履约）。
 type Order struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	OrderID        string     `gorm:"uniqueIndex;size:64;not null" json:"order_id"`
-	DeviceID       string     `gorm:"index;size:64;not null" json:"device_id"`
+	DeviceID       string     `gorm:"uniqueIndex:idx_order_device_idem,priority:1;index;size:64;not null" json:"device_id"`
 	ProductID      string     `gorm:"index;size:64;not null" json:"product_id"`
 	Status         string     `gorm:"size:32;not null" json:"status"` // created|paid|fulfilled|refunded|failed
 	Platform       string     `gorm:"size:32" json:"platform"`        // apple|google|mock
-	ReceiptHash    string     `gorm:"uniqueIndex;size:128" json:"receipt_hash"`
+	ReceiptHash    *string    `gorm:"uniqueIndex;size:128" json:"receipt_hash,omitempty"`
 	AmountCents    int        `json:"amount_cents"`
 	Currency       string     `gorm:"size:8" json:"currency"`
 	FulfilledAt    *time.Time `json:"fulfilled_at,omitempty"`
 	RefundedAt     *time.Time `json:"refunded_at,omitempty"`
-	IdempotencyKey string     `gorm:"uniqueIndex;size:64" json:"idempotency_key"`
+	IdempotencyKey string     `gorm:"uniqueIndex:idx_order_device_idem,priority:2;size:64" json:"idempotency_key"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }

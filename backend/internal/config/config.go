@@ -28,12 +28,18 @@ type Config struct {
 	AIMockEnabled      bool
 	RedisURL           string
 	AdminAPIKey        string
-	MaxImageBytes      int64
-	MaxImagePixels     int
-	CORSAllowedOrigins []string
-	Database           DatabaseConfig
-	ThirdParty         ThirdPartyConfig
-	Server             ServerTimeouts
+	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
+	// 环境变量 COMMERCE_ENABLED 可覆盖。
+	CommerceEnabled bool
+	// CommerceStoreVerify 是否启用真实商店验签路径。production 履约在未开启时返回 not ready。
+	// 环境变量 COMMERCE_STORE_VERIFY。
+	CommerceStoreVerify bool
+	MaxImageBytes       int64
+	MaxImagePixels      int
+	CORSAllowedOrigins  []string
+	Database            DatabaseConfig
+	ThirdParty          ThirdPartyConfig
+	Server              ServerTimeouts
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -181,6 +187,12 @@ func Load() *Config {
 	if cfg.IsProduction() {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
 	}
+
+	// 商业化：production 默认关闭；非 production 默认开启。COMMERCE_ENABLED 可覆盖。
+	commerceDefault := !cfg.IsProduction()
+	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
+	// 真实商店验签：默认关闭，需显式开启 COMMERCE_STORE_VERIFY=true。
+	cfg.CommerceStoreVerify = getEnvBool("COMMERCE_STORE_VERIFY", false)
 	return cfg
 }
 
