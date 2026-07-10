@@ -106,10 +106,10 @@ func ComputeDeterministicValue(input ValueInput, seedID, secret, configVersion s
 	// 个体 ±15% 浮动（seed 有限随机）
 	indiv := func() float64 { return 0.85 + rng.Float64()*0.30 }
 
-	hp := clampInt(int(math.Round((hpBase*(1+rarityBoost)*statMul*indiv()))), 10, 100)
-	atk := clampInt(int(math.Round((atkBase*(1+rarityBoost)*statMul*indiv()))), 5, 50)
-	def := clampInt(int(math.Round((defBase*(1+rarityBoost)*statMul*indiv()))), 5, 50)
-	spd := clampInt(int(math.Round((spdBase*(1+rarityBoost)*statMul*indiv()))), 5, 50)
+	hp := clampInt(int(math.Round((hpBase * (1 + rarityBoost) * statMul * indiv()))), 10, 100)
+	atk := clampInt(int(math.Round((atkBase * (1 + rarityBoost) * statMul * indiv()))), 5, 50)
+	def := clampInt(int(math.Round((defBase * (1 + rarityBoost) * statMul * indiv()))), 5, 50)
+	spd := clampInt(int(math.Round((spdBase * (1 + rarityBoost) * statMul * indiv()))), 5, 50)
 
 	classes := []string{"Warrior", "Mage", "Ranger", "Tank", "Support", "Assassin"}
 	elements := []string{"Fire", "Water", "Grass", "Electric", "Ice", "Dark", "Light", "Earth", "Wind"}

@@ -100,6 +100,7 @@ type AIService struct {
 	mock           bool
 	visionProvider *Provider
 	llmProvider    *Provider
+	statsSecret    string
 }
 
 // NewAIService 构造 AIService（开发默认允许 mock）。

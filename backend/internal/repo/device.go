@@ -29,6 +29,11 @@ func NewDeviceRepo(db *gorm.DB) *DeviceRepo {
 // DB 暴露底层 DB。
 func (r *DeviceRepo) DB() *gorm.DB { return r.db }
 
+// WithTx 返回绑定事务的 DeviceRepo。
+func (r *DeviceRepo) WithTx(tx *gorm.DB) *DeviceRepo {
+	return &DeviceRepo{db: tx}
+}
+
 // Enable 重新启用设备（登录恢复）。
 func (r *DeviceRepo) Enable(deviceID string) error {
 	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
