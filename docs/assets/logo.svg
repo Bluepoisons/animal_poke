@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Animal Poke logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF9A4D"/>
+      <stop offset="100%" stop-color="#E67300"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <ellipse cx="64" cy="78" rx="30" ry="24" fill="#FFF8F0"/>
+  <ellipse cx="36" cy="48" rx="12" ry="15" fill="#FFF8F0"/>
+  <ellipse cx="92" cy="48" rx="12" ry="15" fill="#FFF8F0"/>
+  <circle cx="54" cy="74" r="4" fill="#4A2C1A"/>
+  <circle cx="74" cy="74" r="4" fill="#4A2C1A"/>
+  <path d="M56 86 Q64 94 72 86" stroke="#4A2C1A" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="96" cy="30" r="8" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3"/>
+</svg>

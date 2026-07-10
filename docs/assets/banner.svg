@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="Animal Poke banner">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF3E0"/>
+      <stop offset="45%" stop-color="#FFE0B8"/>
+      <stop offset="100%" stop-color="#FFB06B"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7BC67E"/>
+      <stop offset="100%" stop-color="#4E9A57"/>
+    </linearGradient>
+    <linearGradient id="btn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF9A4D"/>
+      <stop offset="100%" stop-color="#E67300"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#E67300" flood-opacity="0.22"/>
+    </filter>
+    <filter id="pop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="#4A2C1A" flood-opacity="0.18"/>
+    </filter>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="2" fill="#FF8C42" opacity="0.12"/>
+    </pattern>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="420" rx="36" fill="url(#sky)"/>
+  <rect width="1280" height="420" rx="36" fill="url(#dots)"/>
+
+  <!-- sun -->
+  <circle cx="1080" cy="86" r="54" fill="#FFE566" opacity="0.95"/>
+  <circle cx="1080" cy="86" r="72" fill="#FFE566" opacity="0.18"/>
+
+  <!-- hills -->
+  <path d="M0 300 C180 220 320 340 480 280 C640 220 760 320 920 260 C1080 200 1180 280 1280 240 L1280 420 L0 420 Z" fill="url(#hill)" opacity="0.92"/>
+  <path d="M0 340 C200 300 360 380 540 330 C720 280 860 370 1040 320 C1160 290 1220 330 1280 310 L1280 420 L0 420 Z" fill="#3F8A4A" opacity="0.55"/>
+
+  <!-- floating stickers -->
+  <g filter="url(#pop)">
+    <!-- map pin -->
+    <g transform="translate(980 150)">
+      <path d="M36 8 C18 8 6 22 6 38 C6 62 36 92 36 92 C36 92 66 62 66 38 C66 22 54 8 36 8 Z" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="4"/>
+      <circle cx="36" cy="36" r="12" fill="#FF8C42"/>
+    </g>
+    <!-- ball -->
+    <g transform="translate(1120 210)">
+      <circle cx="34" cy="34" r="34" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="4"/>
+      <path d="M0 34 H68" stroke="#4A2C1A" stroke-width="4"/>
+      <path d="M34 0 V68" stroke="#4A2C1A" stroke-width="4"/>
+      <circle cx="34" cy="34" r="10" fill="#FF8C42" stroke="#4A2C1A" stroke-width="3"/>
+    </g>
+    <!-- star -->
+    <path d="M170 88 l10 22 24 2 -18 16 6 24 -22-14 -22 14 6-24 -18-16 24-2 z" fill="#F2E66B" stroke="#4A2C1A" stroke-width="3" stroke-linejoin="round"/>
+    <!-- heart -->
+    <path d="M240 120 C240 104 256 96 268 108 C280 96 296 104 296 120 C296 148 268 168 268 168 C268 168 240 148 240 120 Z" fill="#FF9EC6" stroke="#4A2C1A" stroke-width="3"/>
+  </g>
+
+  <!-- mascot blob -->
+  <g filter="url(#soft)" transform="translate(920 230)">
+    <ellipse cx="90" cy="96" rx="78" ry="70" fill="#FFB3D0" stroke="#4A2C1A" stroke-width="5"/>
+    <circle cx="62" cy="86" r="8" fill="#4A2C1A"/>
+    <circle cx="118" cy="86" r="8" fill="#4A2C1A"/>
+    <path d="M70 118 C86 132 110 132 126 118" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
+    <path d="M40 50 C50 18 78 12 96 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
+    <path d="M140 50 C130 18 102 12 84 36" fill="none" stroke="#4A2C1A" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="150" cy="34" r="14" fill="#F2E66B" stroke="#4A2C1A" stroke-width="4"/>
+  </g>
+
+  <!-- title card -->
+  <g filter="url(#soft)">
+    <rect x="72" y="78" width="620" height="250" rx="28" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="5"/>
+    <rect x="72" y="300" width="620" height="28" rx="0" fill="#E67300" opacity="0.18"/>
+  </g>
+
+  <text x="108" y="150" font-family="Verdana, Geneva, sans-serif" font-size="28" font-weight="700" fill="#E67300" letter-spacing="4">LBS · VLM · COLLECTION</text>
+  <text x="104" y="220" font-family="Verdana, Geneva, sans-serif" font-size="72" font-weight="900" fill="#4A2C1A">Animal Poke</text>
+  <text x="108" y="268" font-family="Verdana, Geneva, sans-serif" font-size="26" fill="#7A4A2E">走出门，用相机捕捉真实世界的小动物</text>
+
+  <!-- pill tags -->
+  <g font-family="Verdana, Geneva, sans-serif" font-size="16" font-weight="700">
+    <rect x="108" y="292" width="118" height="34" rx="17" fill="url(#btn)" stroke="#4A2C1A" stroke-width="3"/>
+    <text x="167" y="314" text-anchor="middle" fill="#FFF8F0">发现</text>
+    <rect x="238" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
+    <text x="297" y="314" text-anchor="middle" fill="#4A2C1A">捕获</text>
+    <rect x="368" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
+    <text x="427" y="314" text-anchor="middle" fill="#4A2C1A">收藏</text>
+    <rect x="498" y="292" width="118" height="34" rx="17" fill="#FFF8F0" stroke="#4A2C1A" stroke-width="3"/>
+    <text x="557" y="314" text-anchor="middle" fill="#4A2C1A">对战</text>
+  </g>
+</svg>
