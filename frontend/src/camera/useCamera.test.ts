@@ -32,4 +32,44 @@ describe('useCamera', () => {
     act(() => result.current.stop())
     expect(track.stop).toHaveBeenCalled()
   })
+
+  it('stops tracks from stale generation after rapid stop', async () => {
+    let resolveGum!: (s: MediaStream) => void
+    const track = { stop: vi.fn(), enabled: true }
+    const stream = { getTracks: () => [track] } as unknown as MediaStream
+    // @ts-expect-error mock
+    navigator.mediaDevices = {
+      getUserMedia: vi.fn().mockImplementation(
+        () =>
+          new Promise<MediaStream>((resolve) => {
+            resolveGum = resolve
+          }),
+      ),
+    }
+    const { result } = renderHook(() => useCamera())
+    let startP: Promise<void>
+    act(() => {
+      startP = result.current.start()
+    })
+    act(() => {
+      result.current.stop()
+    })
+    await act(async () => {
+      resolveGum(stream)
+      await startP!
+    })
+    expect(track.stop).toHaveBeenCalled()
+  })
+
+  it('maps NotAllowedError to denied', async () => {
+    // @ts-expect-error mock
+    navigator.mediaDevices = {
+      getUserMedia: vi.fn().mockRejectedValue(Object.assign(new Error('x'), { name: 'NotAllowedError' })),
+    }
+    const { result } = renderHook(() => useCamera())
+    await act(async () => {
+      await result.current.start()
+    })
+    expect(result.current.status).toBe('denied')
+  })
 })
