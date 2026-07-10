@@ -35,6 +35,7 @@
   <a href="docs/ui_design_m1.html">🎨 UI 设计稿</a> ·
   <a href="docs/legal/privacy-policy.md">🔏 隐私政策</a> ·
   <a href="docs/legal/terms-of-service.md">📜 用户协议</a> ·
+  <a href="docs/legal/sdk-and-services.md">📦 SDK 清单</a> ·
   <a href="docs/legal/README.md">⚖️ 法律合规</a> ·
   <a href="CONTRIBUTING.md">🤝 贡献指南</a> ·
   <a href="SECURITY.md">🔐 安全披露</a>
@@ -354,7 +355,9 @@ GitHub Actions 覆盖：
 | 未成年人保护 | [`docs/legal/minors-protection.md`](docs/legal/minors-protection.md) |
 | 个人信息收集清单 | [`docs/legal/personal-info-collection-list.md`](docs/legal/personal-info-collection-list.md) |
 | 第三方共享清单 | [`docs/legal/third-party-sharing-list.md`](docs/legal/third-party-sharing-list.md) |
+| **SDK 与第三方服务** | [`docs/legal/sdk-and-services.md`](docs/legal/sdk-and-services.md) |
 | 应用权限说明 | [`docs/legal/permissions-notice.md`](docs/legal/permissions-notice.md) |
+| **待补充信息（回填表）** | [`docs/legal/FILL-IN-CHECKLIST.md`](docs/legal/FILL-IN-CHECKLIST.md) |
 
 ---
 
@@ -369,9 +372,12 @@ GitHub Actions 覆盖：
 | [未成年人保护与防沉迷](docs/legal/minors-protection.md) | 年龄门槛、时段时长、消费限制、监护人权利 |
 | [个人信息收集清单](docs/legal/personal-info-collection-list.md) | 收集目的 / 场景一览 |
 | [第三方共享清单](docs/legal/third-party-sharing-list.md) | 地图 / 天气 / VLM / LLM 委托处理 |
+| [SDK 与第三方服务](docs/legal/sdk-and-services.md) | 客户端库 + 服务端 API 实装对照（**无客户端广告/统计 SDK**） |
 | [应用权限说明](docs/legal/permissions-notice.md) | 相机、定位等最小必要说明 |
+| [待补充信息清单](docs/legal/FILL-IN-CHECKLIST.md) | 运营主体 / 资质 / 第三方主体 **回填表** |
 
-> ⚠️ 文本中含「运营主体 / 邮箱」等占位，**上线前须由律师结合 ICP、版号、实名防沉迷与真实数据处理活动审定**。产品内 ConsentGate 应链到上述全文。
+> ⚠️ 文本中含「运营主体 / 邮箱」等占位，**上线前须由律师结合 ICP、版号、实名防沉迷与真实数据处理活动审定**。  
+> 请按 [`docs/legal/FILL-IN-CHECKLIST.md`](docs/legal/FILL-IN-CHECKLIST.md) 填写后发回，可一键写回全部协议。产品内 ConsentGate 应链到上述全文。
 
 ---
 
