@@ -1,3 +1,4 @@
+import { useVirtualList, pickThumbnailSrc } from '../../../performance'
 import { useEffect, useMemo, useState } from 'react'
 import type { PokedexFilter } from '../data/types'
 import PageTitle from '../components/PageTitle'
@@ -18,6 +19,7 @@ const filters: { id: PokedexFilter; label: string }[] = [
 
 type Entry = (typeof seedAnimals)[0]
 
+// AP-054: useVirtualList / pickThumbnailSrc available for large collections
 export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
   const [entries, setEntries] = useState<Entry[]>(seedAnimals)
