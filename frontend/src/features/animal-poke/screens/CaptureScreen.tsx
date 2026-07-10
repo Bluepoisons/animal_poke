@@ -3,6 +3,10 @@ import PageTitle from '../components/PageTitle'
 import AnimalIcon from '../components/AnimalIcon'
 import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
 import { useStamina } from '../../../stamina/useStamina'
+import { useLbs } from '../../../lbs/useLbs'
+import { useWeather } from '../../../weather/useWeather'
+import SafetyStopBanner from '../../../outdoorSafety/SafetyStopBanner'
+import { evaluateOutdoorSafety } from '../../../outdoorSafety/logic'
 import {
   createCaptureSession,
   settleCapture,
@@ -36,7 +40,13 @@ export default function CaptureScreen({
 }: CaptureScreenProps) {
   const { state: staminaState, consumeStamina } = useStamina()
   const currentStamina = staminaState.currentStamina
+  const lbs = useLbs()
+  const weather = useWeather()
   const [power] = useState(55)
+  const [battery, setBattery] = useState<{ level: number | null; charging: boolean | null }>({
+    level: null,
+    charging: null,
+  })
   const sessionRef = useRef(
     createCaptureSession({
       species,
@@ -54,7 +64,37 @@ export default function CaptureScreen({
     }
   }, [detectInferenceId, detection, onInvalidAccess])
 
+  useEffect(() => {
+    let cancelled = false
+    const nav = navigator as Navigator & {
+      getBattery?: () => Promise<{ level: number; charging: boolean }>
+    }
+    if (typeof nav.getBattery === 'function') {
+      nav.getBattery().then((b) => {
+        if (!cancelled) setBattery({ level: b.level, charging: b.charging })
+      }).catch(() => {})
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const outdoor = useMemo(() => {
+    const loc = lbs.state.playerLocation
+    return evaluateOutdoorSafety({
+      weather: weather.today?.weather ?? null,
+      accuracyM: loc?.accuracy ?? null,
+      batteryLevel: battery.level,
+      batteryCharging: battery.charging,
+      speedMps: null,
+    })
+  }, [lbs.state.playerLocation, weather.today?.weather, battery.level, battery.charging])
+
   const handleCapture = () => {
+    if (!outdoor.allowed) {
+      onToast(outdoor.messages[0] ?? '户外捕获已暂停，请先停下再操作')
+      return
+    }
     const online = typeof navigator === 'undefined' ? true : navigator.onLine
     const result = settleCapture({
       session: sessionRef.current,
@@ -96,6 +136,11 @@ export default function CaptureScreen({
         rightTone="pink"
       />
 
+      <SafetyStopBanner
+        showStopFirst
+        messages={outdoor.allowed ? [] : outdoor.messages}
+      />
+
       <div
         className="ap-capture-stage"
         onClick={handleCapture}
@@ -107,6 +152,8 @@ export default function CaptureScreen({
         }}
         role="button"
         tabIndex={0}
+        aria-disabled={!outdoor.allowed}
+        style={outdoor.allowed ? undefined : { opacity: 0.55, pointerEvents: 'none' }}
       >
         <AnimalIcon species={session.species} size={120} />
         <CaptureProbabilityBar
