@@ -6,6 +6,7 @@ import { useStamina } from '../../../stamina/useStamina'
 import type { DetectionResult } from '../../../services/visionDetect'
 import type { SpeciesType } from '../../../types'
 import WelfareNotice from '../components/WelfareNotice'
+import { announceRareReveal } from '../feedbackPrefs'
 import {
   BEST_MAX,
   BEST_MIN,
@@ -110,7 +111,9 @@ export default function CaptureScreen({
       })
       next = result.enc
       if (result.ok) {
-        onToast(`捕获成功：${species} · 力度 ${powerRef.current}`)
+        onToast(`捕获成功：${species} · 力度 ${Math.round(powerRef.current)}`)
+        const rare = announceRareReveal(String(detection.confidence > 0.95 ? 'legendary' : 'common'))
+        if (rare) onToast(rare)
         if (!settledOnce.current) {
           settledOnce.current = true
           onSettled?.(true)
