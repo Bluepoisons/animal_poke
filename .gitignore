@@ -17,6 +17,7 @@ Thumbs.db
 .env.*
 # 保留示例文件(不含真实值), 供团队参考字段
 !.env.example
+!.env.*.example
 *.local
 secrets.json
 config.local.*
@@ -32,3 +33,27 @@ config.local.*
 *.unitypackage
 *.csproj
 *.sln
+
+# 依赖与构建产物
+node_modules/
+frontend/node_modules/
+frontend/dist/
+**/coverage/
+**/*.tsbuildinfo
+backend/bin/
+backend/coverage.out
+*.out
+
+# 本地对话 / 工具记忆（勿提交）
+conversations/
+.workbuddy/
+.workbuddy/**
+
+# Vite / 测试缓存
+**/.vite/
+**/playwright-report/
+**/test-results/
+
+# 杂项
+*.log
+.turbo/
