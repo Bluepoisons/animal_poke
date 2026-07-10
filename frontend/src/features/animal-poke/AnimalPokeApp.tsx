@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef, useEffect, useReducer } from 'react'
+import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from 'react'
 import type { ScreenId } from './data/types'
 import PhoneFrame from './components/PhoneFrame'
 import BottomTabBar from './components/BottomTabBar'
+import DailyGoalsPanel from './components/DailyGoalsPanel'
 import DiscoverScreen from './screens/DiscoverScreen'
 import HuntMapScreen from './screens/HuntMapScreen'
 import CaptureScreen from './screens/CaptureScreen'
@@ -12,6 +13,8 @@ import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
 import { useLbs } from '../../lbs/useLbs'
 import { useWeather } from '../../weather/useWeather'
+import { useProgression } from '../../progression'
+import type { FeatureId } from '../../progression'
 import {
   canEnterCapture,
   createInitialCaptureFlow,
@@ -43,6 +46,7 @@ export default function AnimalPokeApp() {
   })
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
   const { state: staminaState, addGold } = useStamina()
+const progression = useProgression()
   const level = staminaState.level
   const exp = staminaState.exp
   const lbs = useLbs()
@@ -65,13 +69,28 @@ export default function AnimalPokeApp() {
     toastTimer.current = window.setTimeout(() => setToastMessage(null), 1800)
   }, [])
 
-  const navigate = useCallback((nextScreen: ScreenId, opts?: { replace?: boolean }) => {
-    setScreen(nextScreen)
-    if (typeof history === 'undefined') return
-    const url = `#${nextScreen}`
-    if (opts?.replace) history.replaceState({ screen: nextScreen }, '', url)
-    else history.pushState({ screen: nextScreen }, '', url)
-  }, [])
+  const navigate = useCallback(
+    (nextScreen: ScreenId, opts?: { replace?: boolean }) => {
+      // Hide locked features instead of toast spam
+      const feature = nextScreen as FeatureId
+      if (
+        (feature === 'battle' ||
+          feature === 'map' ||
+          feature === 'pokedex' ||
+          feature === 'store' ||
+          feature === 'discover') &&
+        !progression.isFeatureUnlocked(feature)
+      ) {
+        return
+      }
+      setScreen(nextScreen)
+      if (typeof history === 'undefined') return
+      const url = `#${nextScreen}`
+      if (opts?.replace) history.replaceState({ screen: nextScreen }, '', url)
+      else history.pushState({ screen: nextScreen }, '', url)
+    },
+    [progression],
+  )
 
   const handleEnterCapture = useCallback(() => {
     const f = flowRef.current
@@ -81,7 +100,6 @@ export default function AnimalPokeApp() {
       return
     }
     if (!canEnterCapture(f) && f.phase !== 'target_confirmed') {
-      // 多目标已选中但未 CONFIRM：先确认
       dispatch({ type: 'CONFIRM_TARGET' })
     }
     const attemptId = newAttemptId()
@@ -108,7 +126,6 @@ export default function AnimalPokeApp() {
     const onPop = () => applyRoute(parseHashScreen())
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onPop)
-    // 初始 deep link 规范化
     if (typeof location !== 'undefined' && !location.hash) {
       history.replaceState({ screen: 'discover' }, '', '#discover')
     }
@@ -118,7 +135,6 @@ export default function AnimalPokeApp() {
     }
   }, [navigate, showToast])
 
-  // 切走 capture 时若未完成，不保留默认鹅会话：离开 capture 且非 capturing 完成则保持 flow
   useEffect(() => {
     if (screen !== 'capture' && flow.phase === 'capturing') {
       // 允许返回查看；不自动 reset
@@ -131,13 +147,34 @@ export default function AnimalPokeApp() {
     showToast('捕获会话无效，已返回发现')
   }, [dispatch, navigate, showToast])
 
+// Achievement entry only when flag + unlock — never toast-spam locked features
   const handleAchievement = useCallback(() => {
     if (!FEATURE_FLAGS.achievements) {
       showToast('成就暂未开放')
       return
     }
+    if (!progression.isFeatureUnlocked('achievement')) return
     showToast(`等级 Lv.${level} · 经验 ${exp} · 成就进度开发中`)
-  }, [showToast, level, exp])
+  }, [progression, showToast, level, exp])
+
+  const showReturnBanner = useMemo(() => {
+    const { returnSummary, state } = progression
+    if (!returnSummary.isReturning) return false
+    if (state.returnBannerDismissedAt == null) return true
+    return state.returnBannerDismissedAt <= state.lastActiveAt
+  }, [progression])
+
+  const handleNavigateWithProgress = useCallback(
+    (next: ScreenId) => {
+      if (next === 'pokedex') progression.openPokedex()
+      if (next === 'map') {
+        // Map open counts as free safe-explore activity
+        progression.safeExplore()
+      }
+      navigate(next)
+    },
+    [navigate, progression],
+  )
   const handleCoinsChange = useCallback(
     (next: number) => {
       const delta = next - gold
@@ -146,36 +183,51 @@ export default function AnimalPokeApp() {
     [gold, addGold],
   )
 
+  const cityLabel =
+    lbs.state.cityName ||
+    (lbs.state.geoStatus === 'locating'
+      ? '定位中'
+      : lbs.state.geoStatus === 'denied'
+        ? '定位关闭'
+        : '未知城市')
+
+  const weatherLabel = weather.todayMeta
+    ? `${weather.todayMeta.emoji}${weather.todayMeta.name}`
+    : weather.state.status === 'loading'
+      ? '天气…'
+      : weather.state.source === 'internal'
+        ? '本地天气'
+        : '—'
+
+  const discoverBlock = (
+    <>
+      <DiscoverScreen
+        energy={currentStamina}
+        coins={gold}
+        flow={flow}
+        dispatch={dispatch}
+        onNavigate={handleNavigateWithProgress}
+        onEnterCapture={handleEnterCapture}
+        city={cityLabel}
+        weather={weatherLabel}
+      />
+      <DailyGoalsPanel
+        goals={progression.dailyGoals}
+        returnSummary={progression.returnSummary}
+        showReturnBanner={showReturnBanner}
+        onDismissReturn={progression.dismissReturnBanner}
+        onNavigate={handleNavigateWithProgress}
+        onSafeExplore={progression.safeExplore}
+        onSeasonCheckin={progression.seasonCheckin}
+        staminaEmpty={currentStamina <= 0}
+      />
+    </>
+  )
+
   const renderScreen = () => {
     switch (screen) {
       case 'discover':
-        return (
-          <DiscoverScreen
-            energy={currentStamina}
-            coins={gold}
-            flow={flow}
-            dispatch={dispatch}
-            onNavigate={navigate}
-            onEnterCapture={handleEnterCapture}
-            city={
-              lbs.state.cityName ||
-              (lbs.state.geoStatus === 'locating'
-                ? '定位中'
-                : lbs.state.geoStatus === 'denied'
-                  ? '定位关闭'
-                  : '未知城市')
-            }
-            weather={
-              weather.todayMeta
-                ? `${weather.todayMeta.emoji}${weather.todayMeta.name}`
-                : weather.state.status === 'loading'
-                  ? '天气…'
-                  : weather.state.source === 'internal'
-                    ? '本地天气'
-                    : '—'
-            }
-          />
-        )
+        return discoverBlock
       case 'map':
         return (
           <HuntMapScreen
@@ -186,20 +238,8 @@ export default function AnimalPokeApp() {
         )
       case 'capture': {
         if (!flow.selectedBox || !flow.detectInferenceId || !flow.captureAttemptId) {
-          // 守卫：无状态不允许停留
           queueMicrotask(() => handleInvalidCapture())
-          return (
-            <DiscoverScreen
-              energy={currentStamina}
-              coins={gold}
-              flow={flow}
-              dispatch={dispatch}
-              onNavigate={navigate}
-              onEnterCapture={handleEnterCapture}
-              city={lbs.state.cityName || '未知城市'}
-              weather={weather.todayMeta ? `${weather.todayMeta.emoji}${weather.todayMeta.name}` : '—'}
-            />
-          )
+          return discoverBlock
         }
         return (
           <CaptureScreen
@@ -211,8 +251,12 @@ export default function AnimalPokeApp() {
             captureAttemptId={flow.captureAttemptId}
             onInvalidAccess={handleInvalidCapture}
             onSettled={(ok) => {
-              if (ok) dispatch({ type: 'COMPLETE' })
-              else dispatch({ type: 'FAIL', code: 'capture_failed', message: '捕获失败' })
+              if (ok) {
+                dispatch({ type: 'COMPLETE' })
+                progression.recordCapture(true)
+              } else {
+                dispatch({ type: 'FAIL', code: 'capture_failed', message: '捕获失败' })
+              }
             }}
           />
         )
@@ -235,9 +279,18 @@ export default function AnimalPokeApp() {
         跳到主要内容
       </a>
       <PhoneFrame variant={screen}>
-        <div className="ap-main" id="ap-main-content" tabIndex={-1}>{renderScreen()}</div>
+        <div className="ap-main" id="ap-main-content" tabIndex={-1}>
+          {renderScreen()}
+        </div>
         {screen !== 'map' && (
-          <BottomTabBar active={screen === 'capture' ? 'discover' : screen} onChange={navigate} onAchievement={handleAchievement} />
+          <BottomTabBar
+            active={screen === 'capture' ? 'discover' : screen}
+            onChange={handleNavigateWithProgress}
+            onAchievement={
+              progression.isFeatureUnlocked('achievement') ? handleAchievement : undefined
+            }
+            unlockedFeatures={progression.unlockedFeatures}
+          />
         )}
         <div className={`ap-toast ${toastMessage ? 'is-visible' : ''}`} role="status" aria-live="polite">
           {toastMessage}
