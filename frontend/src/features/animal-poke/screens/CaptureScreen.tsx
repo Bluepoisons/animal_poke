@@ -3,6 +3,10 @@ import PageTitle from '../components/PageTitle'
 import AnimalIcon from '../components/AnimalIcon'
 import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
 import { useStamina } from '../../../stamina/useStamina'
+import { useLbs } from '../../../lbs/useLbs'
+import { useWeather } from '../../../weather/useWeather'
+import SafetyStopBanner from '../../../outdoorSafety/SafetyStopBanner'
+import { evaluateOutdoorSafety } from '../../../outdoorSafety/logic'
 import type { DetectionResult } from '../../../services/visionDetect'
 import type { SpeciesType } from '../../../types'
 import WelfareNotice from '../components/WelfareNotice'
@@ -48,7 +52,13 @@ export default function CaptureScreen({
   const { state: staminaState, consumeStamina } = useStamina()
   const currentStamina = staminaState.currentStamina
   const profile = SPECIES_THROW_PROFILES[species]
+  const lbs = useLbs()
+  const weather = useWeather()
   const [enc, setEnc] = useState<EncounterState>(() => createEncounter(species, 3))
+  const [battery, setBattery] = useState<{ level: number | null; charging: boolean | null }>({
+    level: null,
+    charging: null,
+  })
   const chargingRef = useRef(false)
   const rafRef = useRef<number | null>(null)
   const powerRef = useRef(0)
@@ -60,10 +70,34 @@ export default function CaptureScreen({
   }, [detectInferenceId, detection, onInvalidAccess])
 
   useEffect(() => {
+    let cancelled = false
+    const nav = navigator as Navigator & {
+      getBattery?: () => Promise<{ level: number; charging: boolean }>
+    }
+    if (typeof nav.getBattery === 'function') {
+      nav
+        .getBattery()
+        .then((b) => {
+          if (!cancelled) setBattery({ level: b.level, charging: b.charging })
+        })
+        .catch(() => {})
+    }
     return () => {
+      cancelled = true
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
+
+  const outdoor = useMemo(() => {
+    const loc = lbs.state.playerLocation
+    return evaluateOutdoorSafety({
+      weather: weather.today?.weather ?? null,
+      accuracyM: loc?.accuracy ?? null,
+      batteryLevel: battery.level,
+      batteryCharging: battery.charging,
+      speedMps: null,
+    })
+  }, [lbs.state.playerLocation, weather.today?.weather, battery.level, battery.charging])
 
   const att = currentAttempt(enc)
   const power = att?.power ?? 0
@@ -145,6 +179,7 @@ export default function CaptureScreen({
   }, [att?.phase, currentStamina, consumeStamina, onToast, onSettled, species, profile.bestMin, profile.bestMax])
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (!outdoor.allowed) return
     if (enc.locked || enc.success) return
     if (att?.settled) return
     e.currentTarget.setPointerCapture?.(e.pointerId)
@@ -158,6 +193,10 @@ export default function CaptureScreen({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault()
+      if (!outdoor.allowed) {
+        onToast(outdoor.messages[0] ?? '户外捕获已暂停，请先停下再操作')
+        return
+      }
       if (!chargingRef.current && att && !att.settled && !enc.locked) {
         startChargeLoop()
       } else if (chargingRef.current) {
@@ -182,6 +221,8 @@ export default function CaptureScreen({
         rightTone="pink"
       />
 
+      <SafetyStopBanner showStopFirst messages={outdoor.allowed ? [] : outdoor.messages} />
+
       <div
         className="ap-capture-stage"
         onPointerDown={onPointerDown}
@@ -194,13 +235,15 @@ export default function CaptureScreen({
         role="button"
         tabIndex={0}
         aria-label="按住蓄力，松开投掷"
+        aria-disabled={!outdoor.allowed}
+        style={outdoor.allowed ? undefined : { opacity: 0.55, pointerEvents: 'none' }}
       >
         <AnimalIcon species={species} size={120} />
         <CaptureProbabilityBar
           title={att?.phase === 'charging' ? `蓄力 ${power}` : '捕获判定'}
           successRate={captureRate}
-          bestMin={profile.bestMin}
-          bestMax={profile.bestMax}
+          bestMin={BEST_MIN}
+          bestMax={BEST_MAX}
         />
         <div style={{ fontSize: 12, marginTop: 8, opacity: 0.75 }}>
           置信度 {Math.round(detection.confidence * 100)}% · 按住蓄力 / 空格键

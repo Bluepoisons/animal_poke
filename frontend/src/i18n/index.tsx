@@ -1,17 +1,24 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { zh, type TranslationKey } from './locales/zh'
 import { en } from './locales/en'
+import { ja } from './locales/ja'
 
-export type Locale = 'zh' | 'en'
+export type Locale = 'zh' | 'en' | 'ja'
 
-const dictionaries: Record<Locale, Record<TranslationKey, string>> = { zh, en }
+const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = {
+  zh,
+  en,
+  ja,
+}
 
 const STORAGE_KEY = 'animal-poke-locale'
 
 interface I18nContextValue {
   locale: Locale
   setLocale: (locale: Locale) => void
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+  t: (key: TranslationKey | string, params?: Record<string, string | number>) => string
+  /** List of supported locales (ja is stub) */
+  supportedLocales: Locale[]
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null)
@@ -20,14 +27,36 @@ function detectInitialLocale(): Locale {
   if (typeof localStorage !== 'undefined') {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved === 'zh' || saved === 'en') return saved
+      if (saved === 'zh' || saved === 'en' || saved === 'ja') return saved
     } catch { /* ignore */ }
   }
   if (typeof navigator !== 'undefined') {
     const lang = navigator.language.toLowerCase()
     if (lang.startsWith('en')) return 'en'
+    if (lang.startsWith('ja')) return 'ja'
   }
   return 'zh'
+}
+
+/**
+ * Resolve message: current locale → zh fallback → key string.
+ * Never throws on missing keys (AP-053).
+ */
+export function resolveMessage(
+  locale: Locale,
+  key: string,
+  params?: Record<string, string | number>,
+): string {
+  const dict = dictionaries[locale] ?? zh
+  const template =
+    (dict as Record<string, string>)[key] ??
+    (zh as Record<string, string>)[key] ??
+    (en as Record<string, string>)[key] ??
+    key
+  if (!params) return template
+  return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+    params[name] !== undefined ? String(params[name]) : `{${name}}`,
+  )
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -41,22 +70,21 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
+    const lang = locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja' : 'en'
+    document.documentElement.lang = lang
   }, [locale])
 
   const t = useCallback(
-    (key: TranslationKey, params?: Record<string, string | number>): string => {
-      const template = dictionaries[locale]?.[key] ?? zh[key] ?? key
-      if (!params) return template
-      return template.replace(/\{(\w+)\}/g, (_, name: string) =>
-        params[name] !== undefined ? String(params[name]) : `{${name}}`,
-      )
+    (key: TranslationKey | string, params?: Record<string, string | number>): string => {
+      return resolveMessage(locale, key, params)
     },
     [locale],
   )
 
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t }}>
+    <I18nContext.Provider
+      value={{ locale, setLocale, t, supportedLocales: ['zh', 'en', 'ja'] }}
+    >
       {children}
     </I18nContext.Provider>
   )

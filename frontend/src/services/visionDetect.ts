@@ -10,6 +10,8 @@ export interface DetectionResult {
   confidence: number
   /** 归一化检测框 [x, y, width, height]，值范围 0~1 */
   boundingBox: [number, number, number, number]
+  /** 服务端稳定 target_id（多目标） */
+  targetId?: string
   /** 服务端 inference id（若有） */
   inferenceId?: string
   /** 原始 label */
@@ -107,6 +109,21 @@ type BackendDetectResponse = {
     species?: string
     label?: string
     confidence?: number
+    target_id?: string
+    bounding_box?: {
+      x?: number
+      y?: number
+      w?: number
+      h?: number
+      width?: number
+      height?: number
+    }
+  }>
+  targets?: Array<{
+    species?: string
+    label?: string
+    confidence?: number
+    target_id?: string
     bounding_box?: {
       x?: number
       y?: number
@@ -173,7 +190,8 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
       ? crypto.randomUUID()
       : `detect-${Date.now()}`)
   const animals: DetectionResult[] = []
-  for (const a of data.animals || []) {
+  const rawList = (data.targets && data.targets.length > 0 ? data.targets : data.animals) || []
+  for (const a of rawList) {
     const mapped = mapSpecies(a.species || a.label)
     if (!mapped) {
       // 未知/不支持：保留 label 仅用于审计，不进入捕获列表
@@ -184,6 +202,7 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
       species: mapped,
       confidence: Math.round((a.confidence || 0) * 1000) / 1000,
       boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
+      targetId: a.target_id,
       label: a.label || a.species,
       inferenceId,
     })

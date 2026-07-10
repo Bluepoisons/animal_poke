@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/models"
@@ -15,7 +17,33 @@ import (
 	"animalpoke/backend/internal/taxonomy"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+)
+
+// 批量上限（请求级）。
+const maxBatchItems = 100
+
+// 时间窗口：允许有限时钟漂移与离线延迟。
+const (
+	syncFutureSkew    = 2 * time.Minute
+	syncMaxAge        = 30 * 24 * time.Hour
+	maxBreedLen       = 64
+	maxCityLen        = 64
+	maxClassLen       = 32
+	maxElementLen     = 32
+	maxInferenceIDLen = 128
+)
+
+var (
+	validSyncClasses = map[string]bool{
+		"Warrior": true, "Mage": true, "Ranger": true,
+		"Tank": true, "Support": true, "Assassin": true,
+	}
+	validSyncElements = map[string]bool{
+		"Fire": true, "Water": true, "Grass": true, "Electric": true,
+		"Ice": true, "Dark": true, "Light": true, "Earth": true, "Wind": true,
+	}
 )
 
 // SyncHandler 动物同步处理器。
@@ -67,42 +95,64 @@ type syncResponse struct {
 	ReviewStatus string `json:"review_status,omitempty"`
 }
 
+// syncOutcome 单条同步领域结果（单条/批量共用，禁止向 gin.Context 塞 item）。
+type syncOutcome struct {
+	UUID         string
+	Status       string // synced | conflict | error
+	HTTPStatus   int
+	Error        string
+	ReasonCode   string
+	ReviewStatus string
+}
+
+func failOutcome(uuid, status string, httpStatus int, msg, code string) syncOutcome {
+	return syncOutcome{
+		UUID:       uuid,
+		Status:     status,
+		HTTPStatus: httpStatus,
+		Error:      msg,
+		ReasonCode: code,
+	}
+}
+
 // SyncAnimal POST /sync/animal 接收客户端上传的动物元数据。
 func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	var req syncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: uuid, species, rarity, generated_at are required"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":       "invalid request: uuid, species, rarity, generated_at are required",
+			"reason_code": "invalid_request",
+		})
 		return
 	}
-
-	normSpecies, _ := taxonomy.Normalize(req.Species)
-	if !taxonomy.Capturable(normSpecies) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "species not capturable", "reason_code": "species_unsupported", "species": normSpecies})
-		return
-	}
-	req.Species = normSpecies
 
 	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid generated_at format, use RFC3339"})
-		return
+		// 兼容 RFC3339Nano
+		generatedAt, err = time.Parse(time.RFC3339Nano, req.GeneratedAt)
+		if err != nil {
+			return failOutcome(req.UUID, "error", http.StatusBadRequest, "invalid generated_at format, use RFC3339", "invalid_generated_at")
+		}
+	}
+	if errOut := validateGeneratedAt(req.UUID, generatedAt); errOut != nil {
+		return *errOut
+	}
+
+	// 有 InferenceRepo 时强制 value inference
+	if h.inferenceRepo != nil && strings.TrimSpace(req.InferenceRequestID) == "" {
+		return failOutcome(req.UUID, "error", http.StatusBadRequest, "inference_request_id required", "inference_required")
 	}
 
 	exists, err := h.animalRepo.ExistsByUUID(req.UUID)
 	if err != nil {
 		slog.Error("去重查询失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "sync failed"})
-		return
+		return failOutcome(req.UUID, "error", http.StatusInternalServerError, "sync failed", "sync_failed")
 	}
 	if exists {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":       "animal already exists",
-			"uuid":        req.UUID,
-			"reason_code": "duplicate_animal",
-		})
-		return
+		return failOutcome(req.UUID, "conflict", http.StatusConflict, "animal already exists", "duplicate_animal")
 	}
 
 	// 位置最小化
@@ -116,6 +166,7 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 	animal := &models.Animal{
 		UUID:               req.UUID,
 		DeviceID:           deviceID,
+		AccountID:          accountID,
 		Species:            req.Species,
 		Breed:              req.Breed,
 		Rarity:             req.Rarity,
@@ -141,13 +192,6 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 		animal.PreciseExpiresAt = &exp
 	}
 
-	// 服务端权威：有 InferenceRepo 时强制 value inference
-	if h.inferenceRepo != nil && req.InferenceRequestID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "inference_request_id required", "reason_code": "inference_required"})
-		return
-	}
-
-	// 事务：原子消费 value inference + 用服务端结果覆盖关键字段 + 落库 + 审计
 	var review string
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		animalRepo := h.animalRepo.WithTx(tx)
@@ -173,7 +217,6 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 					Element string `json:"element"`
 				}
 				if err := json.Unmarshal([]byte(inf.ResultJSON), &auth); err == nil {
-					// 严格比对或覆盖：客户端伪造 legendary/超范围属性将被覆盖为服务端值
 					if auth.Species != "" {
 						animal.Species = auth.Species
 					}
@@ -221,71 +264,42 @@ func (h *SyncHandler) SyncAnimal(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
-			c.JSON(http.StatusConflict, gin.H{
-				"error":       "animal already exists",
-				"uuid":        req.UUID,
-				"reason_code": "duplicate_animal",
-			})
-			return
-		}
-		if req.InferenceRequestID != "" || h.inferenceRepo != nil {
-			switch {
-			case errors.Is(err, repo.ErrInferenceAlreadyUsed):
-				c.JSON(http.StatusConflict, gin.H{"error": "inference already consumed", "reason_code": "inference_consumed"})
-				return
-			case errors.Is(err, repo.ErrInferenceExpired):
-				c.JSON(http.StatusConflict, gin.H{"error": "inference expired", "reason_code": "inference_expired"})
-				return
-			case errors.Is(err, repo.ErrInferenceWrongKind):
-				c.JSON(http.StatusConflict, gin.H{"error": "detect/analyze inference cannot create animals", "reason_code": "inference_wrong_kind"})
-				return
-			case errors.Is(err, repo.ErrInferenceSpeciesMismatch), errors.Is(err, repo.ErrInferenceTampered):
-				c.JSON(http.StatusConflict, gin.H{"error": "forged or mismatched stats rejected", "reason_code": "inference_tampered"})
-				return
-			case errors.Is(err, repo.ErrInferenceNotFound), errors.Is(err, repo.ErrInferenceNotSuccess), errors.Is(err, gorm.ErrRecordNotFound):
-				c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
-				return
-			case contains(err.Error(), "inference"):
-				c.JSON(http.StatusConflict, gin.H{"error": "invalid or reused inference", "reason_code": "inference_invalid"})
-				return
-			}
-		}
-		slog.Error("动物同步失败", "uuid", req.UUID, "device_id", deviceID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "sync failed"})
-		return
+		return mapSyncPersistError(req.UUID, err, h.inferenceRepo != nil || req.InferenceRequestID != "")
 	}
 
-	slog.Info("动物同步成功", "uuid", req.UUID, "device_id", deviceID, "species", req.Species, "rarity", req.Rarity)
-	c.JSON(http.StatusCreated, syncResponse{
-		Status:       "synced",
+	slog.Info("动物同步成功", "uuid", req.UUID, "device_id", deviceID, "species", req.Species, "rarity", animal.Rarity)
+	return syncOutcome{
 		UUID:         req.UUID,
+		Status:       "synced",
+		HTTPStatus:   http.StatusCreated,
 		ReviewStatus: review,
-	})
+	}
 }
 
-// BatchSyncRequest 批量推送。
-type BatchSyncRequest struct {
-	Items []syncRequest `json:"items" binding:"required"`
-}
+// validateSyncFields 严格字段校验（单条/批量共用；会规范化 species）。
+func validateSyncFields(req *syncRequest) *syncOutcome {
+	uuidStr := strings.TrimSpace(req.UUID)
+	speciesRaw := strings.TrimSpace(req.Species)
+	generatedAt := strings.TrimSpace(req.GeneratedAt)
 
-// BatchSyncResponse 批量结果。
-type BatchSyncResponse struct {
-	Results []batchItemResult `json:"results"`
-}
+	if uuidStr == "" || speciesRaw == "" || req.Rarity == 0 || generatedAt == "" {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest,
+			"invalid request: uuid, species, rarity, generated_at are required", "invalid_request")
+		return &o
+	}
+	req.UUID = uuidStr
+	req.GeneratedAt = generatedAt
 
-type batchItemResult struct {
-	UUID   string `json:"uuid"`
-	Status string `json:"status"` // synced|conflict|error
-	Error  string `json:"error,omitempty"`
-}
+	if _, err := uuid.Parse(uuidStr); err != nil {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "invalid uuid", "invalid_uuid")
+		return &o
+	}
 
-// SyncAnimalsBatch POST /sync/animals
-func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
-	var req BatchSyncRequest
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Items) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "items required"})
-		return
+	normSpecies, _ := taxonomy.Normalize(speciesRaw)
+	if !taxonomy.Capturable(normSpecies) {
+		req.Species = normSpecies
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "species not capturable", "species_unsupported")
+		return &o
 	}
 	if len(req.Items) > 100 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch"})
@@ -296,26 +310,33 @@ func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
 		// 复用单条逻辑：构造临时 context 调用较重，这里内联简化
 		c.Set("batch_item", item)
 		// 直接调用内部
-		status, errMsg := h.syncOne(middleware.GetDeviceID(c), item)
+		status, errMsg := h.syncOneScoped(middleware.GetDeviceID(c), middleware.GetAccountID(c), item)
 		results = append(results, batchItemResult{UUID: item.UUID, Status: status, Error: errMsg})
 	}
 	c.JSON(http.StatusOK, BatchSyncResponse{Results: results})
 }
 
 func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string) {
+	return h.syncOneScoped(deviceID, "", req)
+}
+
+func (h *SyncHandler) syncOneScoped(deviceID, accountID string, req syncRequest) (string, string) {
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt)
 	if err != nil {
 		return "error", "invalid generated_at"
 	}
-	exists, err := h.animalRepo.ExistsByUUID(req.UUID)
-	if err != nil {
-		return "error", "db error"
+
+	// 可选数值：为 0 表示未提供（可由服务端 inference 覆盖）；非 0 则校验范围。
+	if req.HP != 0 && (req.HP < 10 || req.HP > 100) {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "hp out of range", "invalid_stats")
+		return &o
 	}
-	if exists {
-		return "conflict", "already exists"
+	if req.ATK != 0 && (req.ATK < 5 || req.ATK > 50) {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "atk out of range", "invalid_stats")
+		return &o
 	}
 	animal := &models.Animal{
-		UUID: req.UUID, DeviceID: deviceID, Species: req.Species, Breed: req.Breed,
+		UUID: req.UUID, DeviceID: deviceID, AccountID: accountID, Species: req.Species, Breed: req.Breed,
 		Rarity: req.Rarity, HP: req.HP, ATK: req.ATK, DEF: req.DEF, SPD: req.SPD,
 		Class: req.Class, Element: req.Element, City: req.City,
 		Latitude: services.RoundCoord(req.Latitude), Longitude: services.RoundCoord(req.Longitude),
@@ -323,80 +344,119 @@ func (h *SyncHandler) syncOne(deviceID string, req syncRequest) (string, string)
 		GeneratedAt: generatedAt, InferenceRequestID: req.InferenceRequestID,
 		ServerVersion: time.Now().UTC().UnixNano(),
 	}
-	err = h.db.Transaction(func(tx *gorm.DB) error {
-		ar := h.animalRepo.WithTx(tx)
-		auditRepo := repo.NewAuditLogRepo(tx)
-		audit := h.auditService.WithTx(ar, auditRepo)
-		if h.inferenceRepo != nil {
-			if req.InferenceRequestID == "" {
-				return errors.New("inference_request_id required")
-			}
-			inf, err := h.inferenceRepo.WithTx(tx).ConsumeValue(tx, req.InferenceRequestID, deviceID, req.Species)
-			if err != nil {
-				return err
-			}
-			if inf.ResultJSON != "" {
-				var auth struct {
-					Species string `json:"species"`
-					Rarity  int    `json:"rarity"`
-					HP      int    `json:"hp"`
-					ATK     int    `json:"atk"`
-					DEF     int    `json:"def"`
-					SPD     int    `json:"spd"`
-					Class   string `json:"class"`
-					Element string `json:"element"`
-				}
-				if json.Unmarshal([]byte(inf.ResultJSON), &auth) == nil {
-					if auth.Species != "" {
-						animal.Species = auth.Species
-					}
-					if auth.Rarity > 0 {
-						animal.Rarity = auth.Rarity
-					}
-					if auth.HP > 0 {
-						animal.HP = auth.HP
-					}
-					if auth.ATK > 0 {
-						animal.ATK = auth.ATK
-					}
-					if auth.DEF > 0 {
-						animal.DEF = auth.DEF
-					}
-					if auth.SPD > 0 {
-						animal.SPD = auth.SPD
-					}
-					if auth.Class != "" {
-						animal.Class = auth.Class
-					}
-					if auth.Element != "" {
-						animal.Element = auth.Element
-					}
-				}
-			}
-		}
-		_ = audit.CheckAnomaly(deviceID, animal)
-		if err := ar.Create(animal); err != nil {
-			return err
-		}
-		audit.LogSync(deviceID, animal)
-		return nil
-	})
-	if err != nil {
-		if isDuplicate(err) {
-			return "conflict", "already exists"
-		}
-		return "error", err.Error()
+	if req.SPD != 0 && (req.SPD < 5 || req.SPD > 50) {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "spd out of range", "invalid_stats")
+		return &o
 	}
-	return "synced", ""
+
+	if req.Class != "" {
+		if utf8.RuneCountInString(req.Class) > maxClassLen || !validSyncClasses[req.Class] {
+			o := failOutcome(uuidStr, "error", http.StatusBadRequest, "invalid class", "invalid_class")
+			return &o
+		}
+	}
+	if req.Element != "" {
+		if utf8.RuneCountInString(req.Element) > maxElementLen || !validSyncElements[req.Element] {
+			o := failOutcome(uuidStr, "error", http.StatusBadRequest, "invalid element", "invalid_element")
+			return &o
+		}
+	}
+
+	if req.Latitude < -90 || req.Latitude > 90 || req.Longitude < -180 || req.Longitude > 180 {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "coordinates out of range", "invalid_coords")
+		return &o
+	}
+
+	if utf8.RuneCountInString(req.Breed) > maxBreedLen || utf8.RuneCountInString(req.City) > maxCityLen {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "string field too long", "invalid_string_length")
+		return &o
+	}
+	if utf8.RuneCountInString(req.InferenceRequestID) > maxInferenceIDLen {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "inference_request_id too long", "invalid_string_length")
+		return &o
+	}
+
+	return nil
+}
+
+func validateGeneratedAt(uuidStr string, generatedAt time.Time) *syncOutcome {
+	now := time.Now().UTC()
+	ga := generatedAt.UTC()
+	if ga.After(now.Add(syncFutureSkew)) {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "generated_at in future", "invalid_time")
+		return &o
+	}
+	if ga.Before(now.Add(-syncMaxAge)) {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "generated_at too old", "invalid_time")
+		return &o
+	}
+	return nil
+}
+
+// mapSyncPersistError 将持久化/推理错误映射为稳定 reason_code，禁止泄露原始 DB 错误。
+func mapSyncPersistError(uuidStr string, err error, inferenceAware bool) syncOutcome {
+	if errors.Is(err, gorm.ErrDuplicatedKey) || isDuplicate(err) {
+		return failOutcome(uuidStr, "conflict", http.StatusConflict, "animal already exists", "duplicate_animal")
+	}
+	if inferenceAware {
+		switch {
+		case errors.Is(err, repo.ErrInferenceAlreadyUsed):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "inference already consumed", "inference_consumed")
+		case errors.Is(err, repo.ErrInferenceExpired):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "inference expired", "inference_expired")
+		case errors.Is(err, repo.ErrInferenceWrongKind):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "detect/analyze inference cannot create animals", "inference_wrong_kind")
+		case errors.Is(err, repo.ErrInferenceSpeciesMismatch), errors.Is(err, repo.ErrInferenceTampered):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "forged or mismatched stats rejected", "inference_tampered")
+		case errors.Is(err, repo.ErrInferenceNotFound), errors.Is(err, repo.ErrInferenceNotSuccess), errors.Is(err, gorm.ErrRecordNotFound):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "invalid or reused inference", "inference_invalid")
+		case contains(err.Error(), "inference"):
+			return failOutcome(uuidStr, "conflict", http.StatusConflict, "invalid or reused inference", "inference_invalid")
+		}
+	}
+	slog.Error("动物同步失败", "uuid", uuidStr, "err", err)
+	return failOutcome(uuidStr, "error", http.StatusInternalServerError, "sync failed", "sync_failed")
+}
+
+func writeSyncOutcome(c *gin.Context, out syncOutcome) {
+	switch out.Status {
+	case "synced":
+		c.JSON(out.HTTPStatus, syncResponse{
+			Status:       "synced",
+			UUID:         out.UUID,
+			ReviewStatus: out.ReviewStatus,
+		})
+	case "conflict":
+		body := gin.H{
+			"error":       out.Error,
+			"uuid":        out.UUID,
+			"reason_code": out.ReasonCode,
+		}
+		c.JSON(out.HTTPStatus, body)
+	default:
+		body := gin.H{
+			"error":       out.Error,
+			"reason_code": out.ReasonCode,
+		}
+		if out.UUID != "" {
+			body["uuid"] = out.UUID
+		}
+		// 物种不支持时附带规范化 species 便于客户端处理
+		if out.ReasonCode == "species_unsupported" {
+			// no extra fields required
+		}
+		c.JSON(out.HTTPStatus, body)
+	}
 }
 
 // PullAnimals GET /sync/animals?since_version=
 func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
+	accountID := middleware.GetAccountID(c)
 	var since int64
 	if v := c.Query("since_version"); v != "" {
 		if _, err := parseInt64(v, &since); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid since_version"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid since_version", "reason_code": "invalid_request"})
 			return
 		}
 	}
@@ -410,25 +470,55 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			}
 		}
 	}
-	items, err := h.animalRepo.ListSinceVersion(deviceID, since, limit)
+	items, err := h.animalRepo.ListSinceVersionScoped(deviceID, accountID, since, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed", "reason_code": "sync_failed"})
 		return
 	}
-	// 脱敏：不返回精确坐标
+	// 二次脱敏：活跃行精确坐标；软删已在 repo 裁剪为 tombstone。
+	out := make([]gin.H, 0, len(items))
 	for i := range items {
+		if items[i].DeletedAt != nil {
+			out = append(out, gin.H{
+				"uuid":           items[i].UUID,
+				"deleted_at":     items[i].DeletedAt,
+				"server_version": items[i].ServerVersion,
+			})
+			continue
+		}
 		items[i].PreciseLat = nil
 		items[i].PreciseLng = nil
 		items[i].PreciseExpiresAt = nil
+		out = append(out, gin.H{
+			"uuid":                 items[i].UUID,
+			"device_id":            items[i].DeviceID,
+			"species":              items[i].Species,
+			"breed":                items[i].Breed,
+			"rarity":               items[i].Rarity,
+			"hp":                   items[i].HP,
+			"atk":                  items[i].ATK,
+			"def":                  items[i].DEF,
+			"spd":                  items[i].SPD,
+			"class":                items[i].Class,
+			"element":              items[i].Element,
+			"city":                 items[i].City,
+			"geohash":              items[i].GeoHash,
+			"latitude":             items[i].Latitude,
+			"longitude":            items[i].Longitude,
+			"generated_at":         items[i].GeneratedAt,
+			"inference_request_id": items[i].InferenceRequestID,
+			"server_version":       items[i].ServerVersion,
+			"created_at":           items[i].CreatedAt,
+		})
 	}
+	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
 	var next int64 = since
 	if len(items) > 0 {
 		next = items[len(items)-1].ServerVersion
 	}
-	// 空页保持当前 since，禁止 next_version 回到 0 导致游标回退
 	hasMore := len(items) >= limit
 	c.JSON(http.StatusOK, gin.H{
-		"items":        items,
+		"items":        out,
 		"next_version": next,
 		"next_cursor":  next,
 		"has_more":     hasMore,
