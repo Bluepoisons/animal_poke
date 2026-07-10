@@ -5,7 +5,7 @@ package prompts
 const (
 	DetectPromptVersion  = "detect-v3"
 	AnalyzePromptVersion = "analyze-v1"
-	ValuePromptVersion   = "value-v2"
+	ValuePromptVersion   = "value-v3"
 )
 
 // DetectPrompt VLM 动物检测 Prompt —— 从图片中识别动物物种与边界框。

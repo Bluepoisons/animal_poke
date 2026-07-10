@@ -80,25 +80,28 @@ type AnalysisResult struct {
 
 // ---------- LLM 相关类型 ----------
 
-// ValueResult LLM 数值生成结果。
+// ValueResult 数值生成结果（稀有度/属性由确定性算法产生；narrative 可来自 LLM）。
 type ValueResult struct {
-	Rarity        int    `json:"rarity"`    // 1-5 星级
-	HP            int    `json:"hp"`        // 10-100
-	ATK           int    `json:"atk"`       // 5-50
-	DEF           int    `json:"def"`       // 5-50
-	SPD           int    `json:"spd"`       // 5-50
-	Class         string `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
-	Element       string `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
-	Narrative     string `json:"narrative"` // 2-3 句叙事
-	Source        string `json:"source,omitempty"`
-	Degraded      bool   `json:"degraded,omitempty"`
-	ReasonCode    string `json:"reason_code,omitempty"`
-	InferenceID   string `json:"inference_id,omitempty"`
-	Model         string `json:"model,omitempty"`
-	PromptVersion string `json:"prompt_version,omitempty"`
+	Rarity        int           `json:"rarity"`    // 1-5 星级
+	HP            int           `json:"hp"`        // 10-100
+	ATK           int           `json:"atk"`       // 5-50
+	DEF           int           `json:"def"`       // 5-50
+	SPD           int           `json:"spd"`       // 5-50
+	Class         string        `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
+	Element       string        `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
+	Narrative     string        `json:"narrative"` // 2-3 句叙事
+	Factors       *ValueFactors `json:"factors,omitempty"`
+	ConfigVersion string        `json:"config_version,omitempty"`
+	SeedID        string        `json:"seed_id,omitempty"`
+	Source        string        `json:"source,omitempty"`
+	Degraded      bool          `json:"degraded,omitempty"`
+	ReasonCode    string        `json:"reason_code,omitempty"`
+	InferenceID   string        `json:"inference_id,omitempty"`
+	Model         string        `json:"model,omitempty"`
+	PromptVersion string        `json:"prompt_version,omitempty"`
 }
 
-// ValueInput LLM 输入参数。
+// ValueInput 数值生成输入（分析字段 + 稳定 seed）。
 type ValueInput struct {
 	Species             string
 	Breed               string
@@ -110,6 +113,8 @@ type ValueInput struct {
 	Composition         int
 	Pose                int
 	Angle               int
+	// SeedID capture/parent inference id；同一 SeedID + config 永远产出相同 rarity/stats。
+	SeedID string
 }
 
 // Validate 校验 Value 输入边界。
@@ -243,28 +248,31 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 
 // ---------- 文本生成方法 ----------
 
-// GenerateValue 调用 LLM 生成稀有度/六维属性/叙事。
+// GenerateValue 确定性 rarity/stats + 可选 LLM 叙事。
 func (s *AIService) GenerateValue(input ValueInput) (*ValueResult, error) {
 	return s.GenerateValueContext(context.Background(), input)
 }
 
-// GenerateValueContext 带 context 的数值生成。
+// GenerateValueContext 服务端权威：HMAC 派生 rarity/stats；LLM 仅补 narrative。
 func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) (*ValueResult, error) {
 	if err := input.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	result := ComputeDeterministicValue(input, input.SeedID, s.statsSecret, StatsConfigVersion)
+	result.PromptVersion = prompts.ValuePromptVersion
+
+	// LLM 仅叙事；未配置时用确定性模板
 	if !s.cfg.LLMConfigured() {
 		if !s.mock {
 			return nil, fmt.Errorf("llm provider not configured")
 		}
-		slog.Debug("LLM 未配置, 返回 mock 数值")
-		r := mockValue(input)
-		r.Source = "mock"
-		r.Degraded = true
-		r.ReasonCode = "provider_not_configured"
-		r.PromptVersion = prompts.ValuePromptVersion
-		return r, nil
+		slog.Debug("LLM 未配置, 使用确定性 stats + mock 叙事")
+		result.Narrative = narrativeFallback(input, result)
+		result.Source = "mock"
+		result.Degraded = true
+		result.ReasonCode = "provider_not_configured"
+		return result, nil
 	}
 
 	prompt, err := renderValuePrompt(input)
@@ -277,28 +285,46 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 
 	body, model, err := s.callText(ctx, prompt)
 	if err != nil {
-		return nil, err
+		slog.Warn("LLM 叙事失败, 使用确定性模板", "err", err)
+		result.Narrative = narrativeFallback(input, result)
+		result.Source = "algo"
+		result.Degraded = true
+		result.ReasonCode = "narrative_fallback"
+		result.Model = model
+		return result, nil
 	}
 
 	jsonStr, err := s.parseChatResponse(body)
 	if err != nil {
-		return nil, err
+		result.Narrative = narrativeFallback(input, result)
+		result.Source = "algo"
+		result.Degraded = true
+		result.ReasonCode = "narrative_parse_failed"
+		result.Model = model
+		return result, nil
 	}
-	var result ValueResult
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal value result: %w", err)
+	var llmOut struct {
+		Narrative string `json:"narrative"`
 	}
-	if err := result.Validate(); err != nil {
-		// 一次受控修复：clamp 非法字段后重验
-		clampValueResult(&result)
-		if err2 := result.Validate(); err2 != nil {
-			return nil, fmt.Errorf("invalid model output: %w", err)
+	if err := json.Unmarshal([]byte(jsonStr), &llmOut); err != nil || strings.TrimSpace(llmOut.Narrative) == "" {
+		// 兼容旧模型仍返回完整 value JSON：只取 narrative，忽略 rarity/stats
+		var full ValueResult
+		if err2 := json.Unmarshal([]byte(jsonStr), &full); err2 == nil && strings.TrimSpace(full.Narrative) != "" {
+			result.Narrative = full.Narrative
+		} else {
+			result.Narrative = narrativeFallback(input, result)
+			result.Degraded = true
+			result.ReasonCode = "narrative_missing"
 		}
+	} else {
+		result.Narrative = llmOut.Narrative
 	}
-	result.Source = "real"
+	if len(result.Narrative) > 2000 {
+		result.Narrative = result.Narrative[:2000]
+	}
+	result.Source = "algo"
 	result.Model = model
-	result.PromptVersion = prompts.ValuePromptVersion
-	return &result, nil
+	return result, nil
 }
 
 // ---------- 统一 HTTP 调用 ----------
@@ -696,43 +722,11 @@ func mockAnalyze() *AnalysisResult {
 	}
 }
 
+// mockValue 确定性 mock：与生产同一算法，仅叙事用模板。
 func mockValue(input ValueInput) *ValueResult {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	classes := []string{"Warrior", "Mage", "Ranger", "Tank", "Support", "Assassin"}
-	elements := []string{"Fire", "Water", "Grass", "Electric", "Ice", "Dark", "Light", "Earth", "Wind"}
-
-	rarity := weightedRarity(rng)
-	qualityAvg := (input.SubjectCompleteness + input.Clarity + input.Lighting + input.Composition + input.Pose + input.Angle) / 6
-	if qualityAvg == 0 {
-		qualityAvg = 5
-	}
-
-	return &ValueResult{
-		Rarity:    rarity,
-		HP:        10 + qualityAvg*5 + rng.Intn(21),
-		ATK:       5 + rarity*5 + rng.Intn(11),
-		DEF:       5 + qualityAvg/2 + rng.Intn(16),
-		SPD:       5 + rng.Intn(46),
-		Class:     classes[rng.Intn(len(classes))],
-		Element:   elements[rng.Intn(len(elements))],
-		Narrative: fmt.Sprintf("A %s %s discovered in the wild. Its %s coat gleams with potential. Trainers seek it for its unique battle style.", input.Breed, input.Species, input.Color),
-	}
-}
-
-func weightedRarity(rng *rand.Rand) int {
-	r := rng.Intn(100)
-	switch {
-	case r < 40:
-		return 1
-	case r < 70:
-		return 2
-	case r < 88:
-		return 3
-	case r < 97:
-		return 4
-	default:
-		return 5
-	}
+	r := ComputeDeterministicValue(input, input.SeedID, "", StatsConfigVersion)
+	r.Narrative = narrativeFallback(input, r)
+	return r
 }
 
 // ScoreString 用于日志脱敏，不输出敏感内容。

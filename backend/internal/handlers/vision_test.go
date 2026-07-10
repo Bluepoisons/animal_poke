@@ -3,6 +3,10 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -99,7 +103,6 @@ func TestVisionDetect_RejectsNonImage(t *testing.T) {
 func TestVisionDetect_Success(t *testing.T) {
 	r, _ := setupVisionTest()
 
-	// 构造可通过 DecodeConfig 的小 PNG
 	png := tinyPNG()
 	ct, buf := createMultipartBody("image", "test.png", png)
 	w := httptest.NewRecorder()
@@ -109,7 +112,7 @@ func TestVisionDetect_Success(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	var result services.DetectResult
-	json.Unmarshal(w.Body.Bytes(), &result)
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
 	assert.NotEmpty(t, result.Animals)
 	assert.Equal(t, "cat", result.Animals[0].Species)
 }
@@ -126,8 +129,106 @@ func TestVisionAnalyze_Success(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	var result services.AnalysisResult
-	json.Unmarshal(w.Body.Bytes(), &result)
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
 	assert.Equal(t, "British Shorthair", result.Breed)
+}
+
+// TestMinimizeForProvider_StripsEXIF ensures re-encode drops APP1 Exif markers.
+func TestMinimizeForProvider_StripsEXIF(t *testing.T) {
+	withExif := jpegWithFakeEXIF(t)
+	require.True(t, bytes.Contains(withExif, []byte("Exif")), "fixture must contain Exif marker")
+
+	out, w, h, err := minimizeForProvider(withExif, 12_000_000, nil)
+	require.NoError(t, err)
+	assert.Greater(t, w, 0)
+	assert.Greater(t, h, 0)
+	assert.True(t, bytes.HasPrefix(out, []byte{0xFF, 0xD8, 0xFF}), "output must be JPEG")
+	assert.False(t, bytes.Contains(out, []byte("Exif")), "re-encoded JPEG must not contain Exif")
+	assert.False(t, bytes.Contains(out, []byte{0xFF, 0xE1}), "re-encoded JPEG must not contain APP1")
+}
+
+// TestValidateImage_RejectsBadWebP: RIFF/WEBP magic alone is not enough.
+func TestValidateImage_RejectsBadWebP(t *testing.T) {
+	// Truncated / malicious RIFF WEBP that cannot fully decode.
+	bad := []byte{
+		'R', 'I', 'F', 'F',
+		0x08, 0x00, 0x00, 0x00,
+		'W', 'E', 'B', 'P',
+		'V', 'P', '8', ' ',
+		0x00, 0x00, 0x00, 0x00,
+	}
+	err := validateImage(bad, 12_000_000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid image")
+}
+
+// TestValidateImage_RejectsHugePixels enforces maxPixels after dimension discovery.
+func TestValidateImage_RejectsHugePixels(t *testing.T) {
+	// 8x8 image → 64 pixels; limit 16 must reject.
+	img := solidPNG(t, 8, 8)
+	err := validateImage(img, 16)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pixels exceed")
+}
+
+// TestMinimizeForProvider_CropPath crops before re-encode.
+func TestMinimizeForProvider_CropPath(t *testing.T) {
+	src := solidPNG(t, 40, 20)
+	crop := &cropBox{X: 0.25, Y: 0.0, W: 0.5, H: 1.0}
+	out, w, h, err := minimizeForProvider(src, 12_000_000, crop)
+	require.NoError(t, err)
+	assert.True(t, bytes.HasPrefix(out, []byte{0xFF, 0xD8, 0xFF}))
+	// 40*0.5 = 20 width, full height 20
+	assert.Equal(t, 20, w)
+	assert.Equal(t, 20, h)
+
+	// Round-trip decode to confirm JPEG is valid.
+	_, err = jpeg.Decode(bytes.NewReader(out))
+	require.NoError(t, err)
+}
+
+func TestVisionAnalyze_WithCrop(t *testing.T) {
+	r, _ := setupVisionTest()
+	png := solidPNG(t, 32, 32)
+	ct, buf := createMultipartBodyWithFields("cat.png", png, map[string]string{
+		"crop_x": "0.1",
+		"crop_y": "0.1",
+		"crop_w": "0.5",
+		"crop_h": "0.5",
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/vision/analyze", buf)
+	req.Header.Set("Content-Type", ct)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	var result services.AnalysisResult
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
+	assert.Equal(t, "British Shorthair", result.Breed)
+}
+
+func TestVisionAnalyze_InvalidCrop(t *testing.T) {
+	r, _ := setupVisionTest()
+	png := solidPNG(t, 16, 16)
+	ct, buf := createMultipartBodyWithFields("cat.png", png, map[string]string{
+		"crop_x": "0.8",
+		"crop_y": "0.8",
+		"crop_w": "0.5",
+		"crop_h": "0.5",
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/vision/analyze", buf)
+	req.Header.Set("Content-Type", ct)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+}
+
+func TestDetectAllowedImageType_Strict(t *testing.T) {
+	_, err := detectAllowedImageType([]byte("not-an-image"))
+	require.Error(t, err)
+
+	_, err = detectAllowedImageType(tinyPNG())
+	require.NoError(t, err)
 }
 
 // 1x1 PNG

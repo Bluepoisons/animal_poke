@@ -52,9 +52,10 @@ func NewWeatherServiceWithOptions(cfg *config.ThirdPartyConfig, mockAllowed bool
 // AIService 统一 AI 编排(视觉检测/深度分析/数值生成)。
 // Vision 与 Text 使用独立 Endpoint/Key/Model，可指向同一供应商。
 type AIService struct {
-	cfg    *config.ThirdPartyConfig
-	client *http.Client
-	mock   bool
+	cfg         *config.ThirdPartyConfig
+	client      *http.Client
+	mock        bool
+	statsSecret string // HMAC key for deterministic rarity/stats (AP-048)
 }
 
 // NewAIService 构造 AIService（开发默认允许 mock）。
@@ -68,6 +69,14 @@ func NewAIServiceWithOptions(cfg *config.ThirdPartyConfig, mockAllowed bool, cli
 		client = DefaultHTTPClient(30 * time.Second)
 	}
 	return &AIService{cfg: cfg, client: client, mock: mockAllowed}
+}
+
+// WithStatsSecret 注入 rarity/stats HMAC 密钥（通常为 JWT secret）。
+func (s *AIService) WithStatsSecret(secret string) *AIService {
+	if s != nil {
+		s.statsSecret = secret
+	}
+	return s
 }
 
 // NewVisionService 兼容旧测试命名，实际返回 AIService。
