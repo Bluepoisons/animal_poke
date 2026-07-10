@@ -1,17 +1,15 @@
-# 前端 API 客户端（基于 OpenAPI 生成类型）
-# 重新生成:
-#   npx openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts
+// 前端 API 客户端（基于 OpenAPI 生成类型）
+// 重新生成:
+//   npx openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts
 
 export type { paths, components, operations } from './generated/schema'
 
+import { getApiBaseUrl as getConfigBase } from '../config/publicConfig'
+import { fetchWithRetry, FetchTimeoutError } from '../services/fetchWithRetry'
+
 /** 公开配置：仅 API Base URL，禁止第三方 Key */
 export function getApiBaseUrl(): string {
-  const fromEnv = import.meta.env.VITE_API_BASE_URL as string | undefined
-  if (fromEnv && fromEnv.trim()) {
-    return fromEnv.replace(/\/$/, '')
-  }
-  // 开发默认走 Vite 代理
-  return ''
+  return getConfigBase()
 }
 
 export type ApiErrorBody = {
@@ -44,16 +42,24 @@ export type RequestOptions = {
   headers?: Record<string, string>
   signal?: AbortSignal
   idempotencyKey?: string
+  /** 仅对幂等请求或显式允许时重试 */
+  allowRetry?: boolean
+  timeoutMs?: number
+}
+
+function isIdempotent(method: string): boolean {
+  return ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
 }
 
 /** 统一 API 请求：附加 Request-ID、Bearer、错误模型 */
 export async function apiRequest<T = unknown>(opts: RequestOptions): Promise<T> {
   const base = getApiBaseUrl()
   const url = `${base}${opts.path.startsWith('/') ? opts.path : `/${opts.path}`}`
+  const method = (opts.method || 'GET').toUpperCase()
   const requestId =
-    (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
-      : `req-${Date.now()}`)
+      : `req-${Date.now()}`
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'X-Request-ID': requestId,
@@ -69,12 +75,23 @@ export async function apiRequest<T = unknown>(opts: RequestOptions): Promise<T> 
     headers['Content-Type'] = 'application/json'
   }
 
-  const res = await fetch(url, {
-    method: opts.method || 'GET',
-    headers,
-    body: opts.body,
-    signal: opts.signal,
-  })
+  const allowRetry = opts.allowRetry ?? (isIdempotent(method) || Boolean(opts.idempotencyKey))
+  const res = await fetchWithRetry(
+    url,
+    {
+      method,
+      headers,
+      body: opts.body,
+    },
+    {
+      retries: allowRetry ? 2 : 0,
+      retryDelay: 400,
+      timeout: opts.timeoutMs ?? 15000,
+      signal: opts.signal,
+      method,
+      allowRetryOnWrite: allowRetry && !isIdempotent(method),
+    },
+  )
 
   const retryAfterHeader = res.headers.get('Retry-After')
   const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined
@@ -99,3 +116,5 @@ export async function apiRequest<T = unknown>(opts: RequestOptions): Promise<T> 
   }
   return (await res.text()) as T
 }
+
+export { FetchTimeoutError }
