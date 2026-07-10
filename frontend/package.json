@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install chromium",
+    "test:e2e:install": "playwright install chromium webkit",
     "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts",
     "preinstall": "node ./scripts/check-node.mjs",
     "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs",

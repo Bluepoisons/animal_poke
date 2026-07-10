@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
     VitePWA({
       strategies: 'generateSW',
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // AP-040: controlled update (capture-safe)
       includeAssets: ['favicon.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
