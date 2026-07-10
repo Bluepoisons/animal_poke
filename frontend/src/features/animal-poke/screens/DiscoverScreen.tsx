@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 import type { ScreenId } from '../data/types'
 import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
@@ -123,7 +123,7 @@ export default function DiscoverScreen({
             <span />
           </div>
           <video
-            ref={camera.videoRef}
+            ref={camera.videoRef as RefObject<HTMLVideoElement>}
             playsInline
             muted
             autoPlay

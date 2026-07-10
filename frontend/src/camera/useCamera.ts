@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 
 export type CameraStatus =
   | 'idle'
@@ -12,7 +12,7 @@ export type CameraStatus =
 export type UseCameraResult = {
   status: CameraStatus
   error?: string
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  videoRef: RefObject<HTMLVideoElement | null>
   start: () => Promise<void>
   stop: () => void
   captureFrame: (maxEdge?: number, quality?: number) => Promise<Blob | null>

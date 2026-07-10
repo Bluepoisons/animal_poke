@@ -20,7 +20,9 @@ export default function AnimalPokeApp() {
 })()
   const [screen, setScreen] = useState<ScreenId>(initialScreen)
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
-  const { currentStamina, gold, addGold } = useStamina()
+  const { state: staminaState, addGold } = useStamina()
+  const currentStamina = staminaState.currentStamina
+  const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 

@@ -11,7 +11,8 @@ interface CaptureScreenProps {
 }
 
 export default function CaptureScreen({ onToast, species = 'goose' }: CaptureScreenProps) {
-  const { currentStamina, consumeStamina } = useStamina()
+  const { state: staminaState, consumeStamina } = useStamina()
+  const currentStamina = staminaState.currentStamina
   const [power] = useState(55)
   const sessionRef = useRef(createCaptureSession({ species, power }))
   const session = sessionRef.current
@@ -70,7 +71,7 @@ export default function CaptureScreen({ onToast, species = 'goose' }: CaptureScr
         tabIndex={0}
       >
         <AnimalIcon species={session.species} size={120} />
-        <CaptureProbabilityBar rate={captureRate} power={power} bestMin={BEST_MIN} bestMax={BEST_MAX} />
+        <CaptureProbabilityBar title="捕获判定" successRate={captureRate} bestMin={BEST_MIN} bestMax={BEST_MAX} />
       </div>
     </div>
   )
