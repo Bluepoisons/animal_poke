@@ -49,7 +49,7 @@ func (h *WeatherHandler) GetWeek(c *gin.Context) {
 	result, err := h.weatherService.GetWeekWeatherContext(c.Request.Context(), lat, lng)
 	if err != nil {
 		slog.Error("天气查询失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "weather lookup failed", "reason_code": "provider_error"})
+		WriteProviderError(c, err, "weather lookup failed")
 		return
 	}
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { ConsentGate } from '../compliance/ConsentGate'
 import { I18nProvider } from '../i18n'
+import { SettingsProvider } from '../settings'
 import { LbsProvider } from '../lbs/LbsContext'
 import { WeatherProvider } from '../weather/WeatherContext'
 import { StaminaProvider } from '../stamina/StaminaContext'
@@ -63,9 +64,11 @@ function ReadOnlyShell() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <I18nProvider>
-      <ConsentGate readonlyFallback={<ReadOnlyShell />}>
-        <GameProviders>{children}</GameProviders>
-      </ConsentGate>
+      <SettingsProvider>
+        <ConsentGate readonlyFallback={<ReadOnlyShell />}>
+          <GameProviders>{children}</GameProviders>
+        </ConsentGate>
+      </SettingsProvider>
     </I18nProvider>
   )
 }

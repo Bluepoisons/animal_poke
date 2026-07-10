@@ -74,13 +74,22 @@ func (s *GeoService) callTencentMap(ctx context.Context, lat, lng float64) (*Geo
 	if err != nil {
 		return nil, err
 	}
-	client := s.client
-	if client == nil {
-		client = DefaultHTTPClient(5 * time.Second)
+	var (
+		resp *http.Response
+		body []byte
+		err2 error
+	)
+	if s.provider != nil {
+		resp, body, err2 = s.provider.Do(ctx, req, 1<<20)
+	} else {
+		client := s.client
+		if client == nil {
+			client = DefaultHTTPClient(5 * time.Second)
+		}
+		resp, body, err2 = DoWithRetry(ctx, client, req, 1, 1<<20)
 	}
-	resp, body, err := DoWithRetry(ctx, client, req, 1, 1<<20)
-	if err != nil {
-		return nil, fmt.Errorf("http request failed: %w", err)
+	if err2 != nil {
+		return nil, err2
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tencent map returned status %d", resp.StatusCode)
