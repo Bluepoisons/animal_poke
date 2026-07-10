@@ -10,12 +10,16 @@ import AnimalPokeApp from './AnimalPokeApp'
 
 describe('AnimalPokeApp production entry', () => {
   beforeEach(() => {
+    localStorage.clear()
     grantConsent()
+    window.location.hash = '#discover'
+    history.replaceState({ screen: 'discover' }, '', '#discover')
     vi.useFakeTimers()
   })
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+    window.location.hash = ''
   })
 
   it('renders discover screen by default with energy and coins', () => {
@@ -38,13 +42,16 @@ describe('AnimalPokeApp production entry', () => {
     }
   })
 
-  it('shows achievement toast placeholder', () => {
+  it('hides locked achievement tab instead of toast spam', () => {
     render(<AppProviders><AnimalPokeApp /></AppProviders>)
-    // 成就按钮可能在 tab bar
+    // New players: achievement locked → tab omitted
     const achievement = screen.queryByText(/成就/)
-    if (achievement) {
-      fireEvent.click(achievement)
-      expect(screen.getByText(/成就暂未开放/)).toBeTruthy()
-    }
+    expect(achievement).toBeNull()
+  })
+
+  it('shows daily goals panel with three goals on discover', () => {
+    render(<AppProviders><AnimalPokeApp /></AppProviders>)
+    expect(screen.getByLabelText(/今日目标/)).toBeTruthy()
+    expect(screen.getAllByText(/完成首次捕获|打开图鉴|安全探索/).length).toBeGreaterThanOrEqual(3)
   })
 })
