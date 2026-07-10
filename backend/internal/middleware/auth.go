@@ -18,6 +18,8 @@ const (
 	ContextKeyTokenVersion = "token_version"
 	// ContextKeyJTI jti。
 	ContextKeyJTI = "jti"
+	// ContextKeyRole JWT role claim（可选，用于 ops/admin）。
+	ContextKeyRole = "role"
 )
 
 // DeviceChecker 可选：校验设备是否禁用 / token version。
@@ -161,7 +163,12 @@ func JWTAuthWithConfig(cfg JWTAuthConfig) gin.HandlerFunc {
 			}
 		}
 
-		c.Set(ContextKeyJTI, jti)
+		if jti, ok := claims["jti"].(string); ok {
+			c.Set(ContextKeyJTI, jti)
+		}
+		if role, ok := claims["role"].(string); ok && role != "" {
+			c.Set(ContextKeyRole, role)
+		}
 		c.Set(ContextKeyDeviceID, deviceID)
 		c.Set(ContextKeyTokenVersion, tokenVer)
 		if accountID, ok := claims["account_id"].(string); ok && accountID != "" {
@@ -249,10 +256,10 @@ func GetDeviceID(c *gin.Context) string {
 	return ""
 }
 
-// GetAccountID 从 Gin context 提取 account_id（未绑定则为空）。
-func GetAccountID(c *gin.Context) string {
-	id, _ := c.Get(ContextKeyAccountID)
-	if s, ok := id.(string); ok {
+// GetRole 从 Gin context 提取 JWT role claim。
+func GetRole(c *gin.Context) string {
+	r, _ := c.Get(ContextKeyRole)
+	if s, ok := r.(string); ok {
 		return s
 	}
 	return ""

@@ -188,7 +188,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/auth/account", unavailable("db_unavailable"))
 			}
 
-			product := handlers.NewProductHandler()
+			product := handlers.NewProductHandlerWithOptions(handlers.ProductOptions{
+				Flags:    cfg.FeatureFlags,
+				OpsToken: cfg.OpsToken,
+			})
 			auth.GET("/ranking/daily", product.RankingDaily)
 			auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
 			auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)

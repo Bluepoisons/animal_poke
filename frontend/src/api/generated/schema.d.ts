@@ -327,7 +327,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate pet stats/narrative */
+        /**
+         * Generate pet stats/narrative (deterministic rarity/stats)
+         * @description Rarity and battle stats are computed server-side via HMAC-seeded algorithm
+         *     (seed = parent/capture inference id + config_version + server secret).
+         *     LLM only supplies narrative. Response includes factors for transparency.
+         */
         post: operations["valueGenerate"];
         delete?: never;
         options?: never;
@@ -513,7 +518,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create order */
+        /**
+         * Create order
+         * @description Creates an order for an active catalog product.
+         *     Idempotent on (device_id, idempotency_key).
+         *     Returns 501/503 with reason_code commerce_not_ready when COMMERCE_ENABLED is false
+         *     or production lacks COMMERCE_STORE_VERIFY.
+         */
         post: operations["createOrder"];
         delete?: never;
         options?: never;
@@ -530,7 +541,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fulfill order */
+        /**
+         * Fulfill order
+         * @description Fulfills a device-scoped order after receipt checks.
+         *     Short receipts rejected. Outside production only platform=mock is allowed.
+         *     Production requires COMMERCE_STORE_VERIFY and real store verification.
+         */
         post: operations["fulfillOrder"];
         delete?: never;
         options?: never;
@@ -547,7 +563,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Refund order */
+        /**
+         * Device refund (forbidden)
+         * @description Device JWT clients cannot initiate refunds.
+         *     Always returns 403 with reason_code device_refund_forbidden.
+         *     Use admin POST /api/v1/admin/commerce/orders/refund or platform webhook.
+         */
         post: operations["refundOrder"];
         delete?: never;
         options?: never;
@@ -589,6 +610,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/commerce/orders/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin refund order
+         * @description Admin/ops refund path. Requires X-Admin-Key.
+         *     Device JWT clients must not call this.
+         */
+        post: operations["adminRefundOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/commerce/webhooks/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Platform refund webhook stub
+         * @description Stub webhook for store platform refund notifications.
+         *     Currently authenticated with Admin API key; real integration will verify platform signatures.
+         */
+        post: operations["webhookRefundOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit/logs": {
         parameters: {
             query?: never;
@@ -623,6 +686,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ranking/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily regional ranking board
+         * @description Requires FEATURE_RANKING=true. When disabled returns 501 with reason_code feature_unavailable.
+         *     Production defaults FEATURE_RANKING=false.
+         */
+        get: operations["rankingDaily"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pvp/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request PvP match
+         * @description Requires FEATURE_PVP=true. When disabled returns 501 feature_unavailable.
+         *     When enabled but matchmaking is not ready, returns 503 feature_unavailable (never empty match_id with 2xx).
+         */
+        post: operations["pvpMatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pvp/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report PvP result (server-authoritative)
+         * @description Requires FEATURE_PVP=true. Disabled or not-ready returns 501/503 feature_unavailable.
+         */
+        post: operations["pvpResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List friends
+         * @description Requires FEATURE_SOCIAL=true. When disabled returns 501 feature_unavailable.
+         */
+        get: operations["socialFriends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create share link
+         * @description Requires FEATURE_SOCIAL=true. When disabled or share not ready, returns 501/503 feature_unavailable
+         *     (never pending share_id with 2xx).
+         */
+        post: operations["socialShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/metrics-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Internal ops metrics summary
+         * @description Requires FEATURE_OPS=true AND internal authorization via X-AP-Ops-Token header
+         *     or JWT role claim in {admin,ops,internal}. Ordinary devices receive 403 ops_forbidden.
+         *     When FEATURE_OPS=false returns 501 feature_unavailable.
+         */
+        get: operations["opsMetricsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -650,7 +838,16 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        ServiceUnavailableError: components["schemas"]["Error"] & {
+        FeatureUnavailableError: {
+            /** @example feature unavailable */
+            error: string;
+            /** @example feature_unavailable */
+            reason_code: string;
+            /** @description ranking|pvp|social|ops */
+            feature?: string;
+            request_id?: string;
+        };
+        ServiceUnavailableError: {
             /** @example service unavailable */
             error: string;
             /** @example db_unavailable */
@@ -910,6 +1107,16 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ServiceUnavailableError"];
+            };
+        };
+        /** @description Product feature disabled or not ready (reason_code feature_unavailable) */
+        FeatureUnavailable: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["FeatureUnavailableError"];
             };
         };
     };
@@ -1438,18 +1645,56 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    species: string;
+                    breed?: string;
+                    color?: string;
+                    body_type?: string;
+                    subject_completeness?: number;
+                    clarity?: number;
+                    lighting?: number;
+                    composition?: number;
+                    pose?: number;
+                    angle?: number;
+                    parent_inference_id?: string;
+                    analyze_inference_id?: string;
+                    inference_request_id?: string;
+                    capture_id?: string;
+                } & {
                     [key: string]: unknown;
                 };
             };
         };
         responses: {
-            /** @description Generated value */
+            /** @description Generated value with deterministic stats and factors */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        rarity?: number;
+                        hp?: number;
+                        atk?: number;
+                        def?: number;
+                        spd?: number;
+                        class?: string;
+                        element?: string;
+                        narrative?: string;
+                        config_version?: string;
+                        seed_id?: string;
+                        factors?: {
+                            photo_quality?: number;
+                            completeness?: number;
+                            species_weight?: number;
+                            breed_weight?: number;
+                            color_weight?: number;
+                            base_score?: number;
+                            random_jitter?: number;
+                            final_score?: number;
+                            quality_band?: string;
+                        };
+                        inference_id?: string;
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -1721,19 +1966,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    product_id: string;
+                    idempotency_key: string;
+                    /** @enum {string} */
+                    platform?: "mock" | "apple" | "google";
                 };
             };
         };
         responses: {
-            /** @description Order created */
+            /** @description Existing order (idempotent replay) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Order created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Unauthorized"];
+            /** @description Unknown or inactive product (reason_code product_not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Commerce disabled (reason_code commerce_not_ready) */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -1747,19 +2016,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    order_id: string;
+                    receipt: string;
                 };
             };
         };
         responses: {
-            /** @description Fulfilled */
+            /** @description Fulfilled or already fulfilled */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Invalid receipt or platform (reason_code receipt_too_short|platform_not_allowed|receipt_invalid) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Unauthorized"];
+            /** @description Commerce not ready */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fulfill disabled in production (reason_code fulfill_disabled) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     refundOrder: {
@@ -1777,14 +2068,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Refunded */
-            200: {
+            401: components["responses"]["Unauthorized"];
+            /** @description Device-initiated refund forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
         };
     };
     getOrder: {
@@ -1835,6 +2126,87 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    adminRefundOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    order_id: string;
+                    device_id?: string;
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Refunded or already refunded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid admin key */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Commerce not ready */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    webhookRefundOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    order_id: string;
+                    device_id?: string;
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Refunded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid admin key */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listAuditLogs: {
         parameters: {
             query?: never;
@@ -1879,6 +2251,153 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    rankingDaily: {
+        parameters: {
+            query?: {
+                city?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranking board (may be empty but authoritative when enabled) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        city?: string;
+                        date?: string;
+                        entries?: Record<string, never>[];
+                        source?: string;
+                        request_id?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    pvpMatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+            503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    pvpResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+            503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriends: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Friends list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        friends?: Record<string, never>[];
+                        source?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+            503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    opsMetricsSummary: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Internal ops token (OPS_TOKEN or ADMIN_API_KEY) */
+                "X-AP-Ops-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metrics summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dau?: number;
+                        captures?: number;
+                        source?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Ops access denied (reason_code ops_forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
         };
     };
 }

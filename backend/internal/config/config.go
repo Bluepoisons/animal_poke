@@ -32,16 +32,32 @@ type Config struct {
 	AIMockEnabled      bool
 	RedisURL           string
 	AdminAPIKey        string
+	// OpsToken 运维内部接口 X-AP-Ops-Token 校验值（可与 AdminAPIKey 相同，但独立配置）。
+	OpsToken string
+	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
+	// 环境变量 COMMERCE_ENABLED 可覆盖。
+	CommerceEnabled bool
+	// CommerceStoreVerify 是否启用真实商店验签路径。production 履约在未开启时返回 not ready。
+	// 环境变量 COMMERCE_STORE_VERIFY。
+	CommerceStoreVerify bool
+	// FeatureFlags 未完成产品能力开关。production 默认全部 false。
+	FeatureFlags FeatureFlags
 	MaxImageBytes      int64
 	MaxImagePixels     int
 	CORSAllowedOrigins []string
-	// StrictMinorDefaults 未成年人更严格的时间/位置/社交默认（AP-056）。
-	StrictMinorDefaults bool
-	// ProviderNoTrainPolicy 断言 Provider 不训练/不保留原图并写审计（AP-056）。
-	ProviderNoTrainPolicy bool
-	Database              DatabaseConfig
-	ThirdParty            ThirdPartyConfig
-	Server                ServerTimeouts
+	Database           DatabaseConfig
+	ThirdParty         ThirdPartyConfig
+	Server             ServerTimeouts
+}
+
+// FeatureFlags Ranking / PvP / Social / Ops 产品能力开关（AP-042）。
+// 环境变量：FEATURE_RANKING / FEATURE_PVP / FEATURE_SOCIAL / FEATURE_OPS。
+// production 默认 false；非 production 默认 true（便于本地联调，仍可显式关闭）。
+type FeatureFlags struct {
+	Ranking bool
+	PvP     bool
+	Social  bool
+	Ops     bool
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -151,6 +167,7 @@ func Load() *Config {
 		AIMockEnabled:      getEnvBool("AI_MOCK_ENABLED", true),
 		RedisURL:           getEnv("REDIS_URL", ""),
 		AdminAPIKey:        getEnv("ADMIN_API_KEY", ""),
+		OpsToken:           getEnv("OPS_TOKEN", ""),
 		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
@@ -201,6 +218,21 @@ func Load() *Config {
 	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
 	// 真实商店验签：默认关闭，需显式开启 COMMERCE_STORE_VERIFY=true。
 	cfg.CommerceStoreVerify = getEnvBool("COMMERCE_STORE_VERIFY", false)
+
+	// 产品 feature flags：production 默认全部关闭；非 production 默认开启。
+	// FEATURE_RANKING / FEATURE_PVP / FEATURE_SOCIAL / FEATURE_OPS 可覆盖。
+	featureDefault := !cfg.IsProduction()
+	cfg.FeatureFlags = FeatureFlags{
+		Ranking: getEnvBool("FEATURE_RANKING", featureDefault),
+		PvP:     getEnvBool("FEATURE_PVP", featureDefault),
+		Social:  getEnvBool("FEATURE_SOCIAL", featureDefault),
+		Ops:     getEnvBool("FEATURE_OPS", featureDefault),
+	}
+
+	// OPS_TOKEN 未配置时回退到 ADMIN_API_KEY（仍要求显式配置才可通过 ops 校验）。
+	if cfg.OpsToken == "" {
+		cfg.OpsToken = cfg.AdminAPIKey
+	}
 	return cfg
 }
 
@@ -393,14 +425,16 @@ func (c *Config) ReadyErrors() []string {
 // CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
 func (c *Config) CapabilityStatus() map[string]interface{} {
 	return map[string]interface{}{
-		"vision_configured":        c.ThirdParty.VisionConfigured(),
-		"vision_source":            c.ThirdParty.VisionSource,
-		"vision_fingerprint":       c.ThirdParty.VisionFingerprint(),
-		"llm_configured":           c.ThirdParty.LLMConfigured(),
-		"mock_allowed":             c.MockAllowed(),
-		"vision_reuse_llm":         c.ThirdParty.VisionReuseLLM,
-		"strict_minor_defaults":    c.StrictMinorDefaults,
-		"provider_no_train_policy": c.ProviderNoTrainPolicy,
+		"vision_configured":  c.ThirdParty.VisionConfigured(),
+		"vision_source":      c.ThirdParty.VisionSource,
+		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),
+		"llm_configured":     c.ThirdParty.LLMConfigured(),
+		"mock_allowed":       c.MockAllowed(),
+		"vision_reuse_llm":   c.ThirdParty.VisionReuseLLM,
+		"feature_ranking":    c.FeatureFlags.Ranking,
+		"feature_pvp":        c.FeatureFlags.PvP,
+		"feature_social":     c.FeatureFlags.Social,
+		"feature_ops":        c.FeatureFlags.Ops,
 	}
 }
 
