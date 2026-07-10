@@ -146,7 +146,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r, err := h.aiService.DetectContext(c.Request.Context(), imageData, header.Filename)
 		if err != nil {
 			slog.Error("AI 检测失败", "device_id", deviceID, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "detection failed"})
+			WriteProviderError(c, err, "detection failed")
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
@@ -175,7 +175,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, header.Filename)
 		if err != nil {
 			slog.Error("AI 分析失败", "device_id", deviceID, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "analysis failed"})
+			WriteProviderError(c, err, "analysis failed")
 			return
 		}
 		model, pver = r.Model, r.PromptVersion

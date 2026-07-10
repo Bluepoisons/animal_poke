@@ -34,6 +34,63 @@ type Config struct {
 	Database           DatabaseConfig
 	ThirdParty         ThirdPartyConfig
 	Server             ServerTimeouts
+	Upstream           UpstreamConfig
+}
+
+// ProviderBudget 单个上游供应商的超时/重试/并发预算。
+type ProviderBudget struct {
+	// TotalDeadline 覆盖重试在内的总预算；0 表示不额外裁剪。
+	TotalDeadline time.Duration
+	// Timeout 单次 HTTP 请求超时（http.Client.Timeout）。
+	Timeout time.Duration
+	// MaxRetries 最大重试次数（不含首次请求）。
+	MaxRetries int
+	// MaxConcurrent 并发 bulkhead 上限。
+	MaxConcurrent int
+}
+
+// UpstreamConfig 上游韧性：按 provider 的预算 + 全局 Retry-After 硬上限。
+type UpstreamConfig struct {
+	Geo                     ProviderBudget
+	Weather                 ProviderBudget
+	Vision                  ProviderBudget
+	LLM                     ProviderBudget
+	MaxRetryAfter           time.Duration // 上游 Retry-After 硬上限
+	CircuitFailureThreshold int           // 连续失败触发熔断
+	CircuitOpenTimeout      time.Duration // 熔断打开后的冷却时间
+}
+
+// DefaultUpstreamConfig 返回安全默认预算（可被环境变量覆盖）。
+func DefaultUpstreamConfig() UpstreamConfig {
+	return UpstreamConfig{
+		Geo: ProviderBudget{
+			TotalDeadline: 8 * time.Second,
+			Timeout:       3 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 32,
+		},
+		Weather: ProviderBudget{
+			TotalDeadline: 8 * time.Second,
+			Timeout:       3 * time.Second,
+			MaxRetries:    1,
+			MaxConcurrent: 32,
+		},
+		Vision: ProviderBudget{
+			TotalDeadline: 45 * time.Second,
+			Timeout:       20 * time.Second,
+			MaxRetries:    2,
+			MaxConcurrent: 8,
+		},
+		LLM: ProviderBudget{
+			TotalDeadline: 30 * time.Second,
+			Timeout:       15 * time.Second,
+			MaxRetries:    2,
+			MaxConcurrent: 16,
+		},
+		MaxRetryAfter:           5 * time.Second,
+		CircuitFailureThreshold: 5,
+		CircuitOpenTimeout:      30 * time.Second,
+	}
 }
 
 // ServerTimeouts HTTP Server 超时配置。
@@ -172,6 +229,7 @@ func Load() *Config {
 			MaxHeader:  getEnvInt("HTTP_MAX_HEADER_BYTES", 1<<20),
 			Shutdown:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		},
+		Upstream: loadUpstreamConfig(),
 	}
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
@@ -421,6 +479,45 @@ func SetupLogger(level string) {
 	}
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l})
 	slog.SetDefault(slog.New(handler))
+}
+
+func loadUpstreamConfig() UpstreamConfig {
+	u := DefaultUpstreamConfig()
+	u.Geo = loadProviderBudget("UPSTREAM_GEO", u.Geo)
+	u.Weather = loadProviderBudget("UPSTREAM_WEATHER", u.Weather)
+	u.Vision = loadProviderBudget("UPSTREAM_VISION", u.Vision)
+	u.LLM = loadProviderBudget("UPSTREAM_LLM", u.LLM)
+	u.MaxRetryAfter = getEnvDuration("UPSTREAM_MAX_RETRY_AFTER", u.MaxRetryAfter)
+	u.CircuitFailureThreshold = getEnvInt("UPSTREAM_CIRCUIT_FAILURES", u.CircuitFailureThreshold)
+	u.CircuitOpenTimeout = getEnvDuration("UPSTREAM_CIRCUIT_OPEN_TIMEOUT", u.CircuitOpenTimeout)
+	if u.MaxRetryAfter <= 0 {
+		u.MaxRetryAfter = 5 * time.Second
+	}
+	if u.CircuitFailureThreshold <= 0 {
+		u.CircuitFailureThreshold = 5
+	}
+	if u.CircuitOpenTimeout <= 0 {
+		u.CircuitOpenTimeout = 30 * time.Second
+	}
+	return u
+}
+
+func loadProviderBudget(prefix string, def ProviderBudget) ProviderBudget {
+	b := def
+	b.TotalDeadline = getEnvDuration(prefix+"_DEADLINE", b.TotalDeadline)
+	b.Timeout = getEnvDuration(prefix+"_TIMEOUT", b.Timeout)
+	b.MaxRetries = getEnvInt(prefix+"_MAX_RETRIES", b.MaxRetries)
+	b.MaxConcurrent = getEnvInt(prefix+"_CONCURRENCY", b.MaxConcurrent)
+	if b.Timeout <= 0 {
+		b.Timeout = def.Timeout
+	}
+	if b.MaxRetries < 0 {
+		b.MaxRetries = 0
+	}
+	if b.MaxConcurrent <= 0 {
+		b.MaxConcurrent = def.MaxConcurrent
+	}
+	return b
 }
 
 func getEnv(k, def string) string {

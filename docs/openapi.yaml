@@ -791,6 +791,9 @@ components:
           type: string
         reason_code:
           type: string
+        retryable:
+          type: boolean
+          description: Whether the client may retry the request
         request_id:
           type: string
     ServiceUnavailableError:
@@ -803,6 +806,8 @@ components:
         reason_code:
           type: string
           example: db_unavailable
+        retryable:
+          type: boolean
         request_id:
           type: string
     HealthResponse:
