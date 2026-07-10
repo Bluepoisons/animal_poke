@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -75,17 +77,21 @@ func (d DatabaseConfig) DSN() string {
 type ThirdPartyConfig struct {
 	TencentMapKey    string
 	CaiyunWeatherKey string
-	// Vision 图片检测/分析
+	// Vision 图片检测/分析（原子三元组）
 	VisionEndpoint string
 	VisionKey      string
 	VisionModel    string
+	// VisionReuseLLM 为 true 时允许整组复用 LLM 配置（默认禁止隐式回退）
+	VisionReuseLLM bool
+	// VisionSource 记录配置来源：vision|vlm|llm_reuse|none（不含密钥）
+	VisionSource string
 	// Text/LLM 数值生成
 	LLMEndpoint string
 	LLMKey      string
 	LLMModel    string
 }
 
-// VisionConfigured 是否具备 Vision 调用条件。
+// VisionConfigured 是否具备 Vision 调用条件（完整三元组）。
 func (t ThirdPartyConfig) VisionConfigured() bool {
 	return t.VisionEndpoint != "" && t.VisionKey != "" && t.VisionModel != ""
 }
@@ -93,6 +99,16 @@ func (t ThirdPartyConfig) VisionConfigured() bool {
 // LLMConfigured 是否具备 Text 调用条件。
 func (t ThirdPartyConfig) LLMConfigured() bool {
 	return t.LLMEndpoint != "" && t.LLMKey != "" && t.LLMModel != ""
+}
+
+// VisionFingerprint 返回不含密钥的配置指纹（用于日志/readiness）。
+func (t ThirdPartyConfig) VisionFingerprint() string {
+	if !t.VisionConfigured() {
+		return "none"
+	}
+	raw := t.VisionSource + "|" + t.VisionEndpoint + "|" + t.VisionModel
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:8])
 }
 
 // IsProduction 判断是否生产环境。
@@ -112,6 +128,7 @@ func (c *Config) MockAllowed() bool {
 }
 
 // Load 读取配置, 优先级: OS 环境变量 > .env > 默认值。
+// Vision 配置视为原子三元组：禁止 VISION/VLM/LLM 字段级混合；默认禁止回退到 LLM_*。
 func Load() *Config {
 	cfg := &Config{
 		AppEnv:             getEnv("APP_ENV", "development"),
@@ -142,12 +159,10 @@ func Load() *Config {
 		ThirdParty: ThirdPartyConfig{
 			TencentMapKey:    getEnv("TENCENT_MAP_KEY", ""),
 			CaiyunWeatherKey: getEnv("CAIYUN_WEATHER_KEY", ""),
-			VisionEndpoint:   firstNonEmpty(getEnv("VISION_ENDPOINT", ""), getEnv("VLM_ENDPOINT", ""), getEnv("LLM_ENDPOINT", "")),
-			VisionKey:        firstNonEmpty(getEnv("VISION_KEY", ""), getEnv("VLM_KEY", ""), getEnv("LLM_KEY", "")),
-			VisionModel:      firstNonEmpty(getEnv("VISION_MODEL", ""), getEnv("VLM_MODEL", ""), getEnv("LLM_MODEL", "")),
 			LLMEndpoint:      getEnv("LLM_ENDPOINT", ""),
 			LLMKey:           getEnv("LLM_KEY", ""),
 			LLMModel:         getEnv("LLM_MODEL", ""),
+			VisionReuseLLM:   getEnvBool("VISION_REUSE_LLM", false),
 		},
 		Server: ServerTimeouts{
 			ReadHeader: getEnvDuration("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
@@ -158,6 +173,10 @@ func Load() *Config {
 			Shutdown:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
 		},
 	}
+
+	// 原子加载 Vision 三元组（禁止字段级混合）
+	cfg.ThirdParty.loadVisionTriplet()
+
 	// 开发默认开启 mock；生产强制关闭（即使 env 写了 true）
 	if cfg.IsProduction() {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
@@ -165,9 +184,83 @@ func Load() *Config {
 	return cfg
 }
 
+// loadVisionTriplet 按优先级加载完整 Vision 三元组。
+// 规则：
+//  1. 完整 VISION_* 优先；
+//  2. 否则完整 VLM_*（整组兼容，禁止与 VISION 字段混用）；
+//  3. 否则仅当 VISION_REUSE_LLM=true 且 LLM 三元组完整时复用 LLM；
+//  4. 任何前缀若只配置了部分字段，视为不完整（启动校验失败）。
+func (t *ThirdPartyConfig) loadVisionTriplet() {
+	vision := envTriplet("VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL")
+	vlm := envTriplet("VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL")
+	llm := envTriplet("LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL")
+
+	// 记录部分配置以便 Validate 拒绝混合/残缺
+	t.VisionEndpoint, t.VisionKey, t.VisionModel = "", "", ""
+	t.VisionSource = "none"
+
+	switch {
+	case vision.complete():
+		t.VisionEndpoint, t.VisionKey, t.VisionModel = vision.endpoint, vision.key, vision.model
+		t.VisionSource = "vision"
+	case vision.partial():
+		// 残缺 VISION_*：保留残缺值供 Validate 报错（禁止静默回退到 VLM/LLM）
+		t.VisionEndpoint, t.VisionKey, t.VisionModel = vision.endpoint, vision.key, vision.model
+		t.VisionSource = "vision_partial"
+	case vlm.complete():
+		t.VisionEndpoint, t.VisionKey, t.VisionModel = vlm.endpoint, vlm.key, vlm.model
+		t.VisionSource = "vlm"
+	case vlm.partial():
+		t.VisionEndpoint, t.VisionKey, t.VisionModel = vlm.endpoint, vlm.key, vlm.model
+		t.VisionSource = "vlm_partial"
+	case t.VisionReuseLLM && llm.complete():
+		t.VisionEndpoint, t.VisionKey, t.VisionModel = llm.endpoint, llm.key, llm.model
+		t.VisionSource = "llm_reuse"
+		slog.Info("vision 显式复用 LLM 完整配置",
+			"source", t.VisionSource,
+			"fingerprint", t.VisionFingerprint(),
+			"model", t.VisionModel,
+		)
+	default:
+		// 仅配置 LLM 且未显式复用 → Vision 未配置
+		t.VisionSource = "none"
+	}
+}
+
+type providerTriplet struct {
+	endpoint, key, model string
+}
+
+func envTriplet(epKey, keyKey, modelKey string) providerTriplet {
+	return providerTriplet{
+		endpoint: getEnv(epKey, ""),
+		key:      getEnv(keyKey, ""),
+		model:    getEnv(modelKey, ""),
+	}
+}
+
+func (p providerTriplet) complete() bool {
+	return p.endpoint != "" && p.key != "" && p.model != ""
+}
+
+func (p providerTriplet) partial() bool {
+	any := p.endpoint != "" || p.key != "" || p.model != ""
+	return any && !p.complete()
+}
+
+func (p providerTriplet) empty() bool {
+	return p.endpoint == "" && p.key == "" && p.model == ""
+}
+
 // Validate 集中配置校验。production 缺必需项时返回 error。
+// 同时拒绝不完整/混合的 Vision 三元组与生产不安全 endpoint。
 func (c *Config) Validate() error {
 	var errs []string
+
+	// Vision 原子三元组完整性（任何环境）
+	if err := c.ThirdParty.validateVisionTriplet(); err != nil {
+		errs = append(errs, err.Error())
+	}
 
 	if c.IsProduction() {
 		if c.JWTSecret == "" || c.JWTSecret == DefaultDevJWTSecret || len(c.JWTSecret) < 32 {
@@ -191,6 +284,17 @@ func (c *Config) Validate() error {
 		if len(c.CORSAllowedOrigins) == 0 {
 			errs = append(errs, "production requires CORS_ALLOWED_ORIGINS allowlist")
 		}
+		// 生产 Vision/LLM endpoint 必须 HTTPS，拒绝 localhost / 明文 HTTP / 空模型
+		if c.ThirdParty.VisionConfigured() {
+			if err := validateProductionEndpoint("VISION", c.ThirdParty.VisionEndpoint, c.ThirdParty.VisionModel); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
+		if c.ThirdParty.LLMConfigured() {
+			if err := validateProductionEndpoint("LLM", c.ThirdParty.LLMEndpoint, c.ThirdParty.LLMModel); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
 	}
 
 	if c.JWTAccessTTL <= 0 {
@@ -206,14 +310,56 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// ReadyErrors 返回 readiness 维度的配置问题（不输出 Secret 值）。
+func (t ThirdPartyConfig) validateVisionTriplet() error {
+	src := t.VisionSource
+	if src == "vision_partial" || src == "vlm_partial" {
+		return fmt.Errorf("vision config must be a complete triplet (endpoint+key+model); incomplete/mixed %s rejected", src)
+	}
+	// 检测字段级混合：若环境中同时存在 VISION 与 VLM 的部分交叉且最终不完整
+	// loadVisionTriplet 已处理；此处再校验“显式混合前缀”场景：
+	// 例如 VISION_ENDPOINT + VLM_KEY + LLM_MODEL（各有值但无完整 VISION 或 VLM）
+	vision := envTriplet("VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL")
+	vlm := envTriplet("VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL")
+	if !vision.empty() && !vlm.empty() && !vision.complete() && !vlm.complete() {
+		return errors.New("mixed VISION_* and VLM_* fields are forbidden; use one complete triplet")
+	}
+	// 混合 VISION + VLM + LLM 字段
+	if (vision.partial() || vlm.partial()) && !t.VisionConfigured() {
+		return errors.New("incomplete vision/vlm triplet (field-level mixing with LLM is forbidden)")
+	}
+	return nil
+}
+
+func validateProductionEndpoint(name, endpoint, model string) error {
+	if strings.TrimSpace(model) == "" {
+		return fmt.Errorf("production %s_MODEL must not be empty", name)
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("production %s_ENDPOINT is not a valid URL", name)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("production %s_ENDPOINT must use HTTPS", name)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".local") {
+		return fmt.Errorf("production %s_ENDPOINT must not target localhost", name)
+	}
+	return nil
+}
+
+// ReadyErrors 返回 readiness 维度的配置问题（不输出 Secret/endpoint/key）。
 func (c *Config) ReadyErrors() []string {
 	var issues []string
 	if c.IsProduction() {
 		if err := c.Validate(); err != nil {
-			issues = append(issues, err.Error())
+			// 脱敏：去掉可能含 endpoint 的细节，只保留安全 capability 状态
+			issues = append(issues, sanitizeReadyErrors(err.Error())...)
 		}
 	} else {
+		if err := c.ThirdParty.validateVisionTriplet(); err != nil {
+			issues = append(issues, err.Error())
+		}
 		if !c.ThirdParty.VisionConfigured() && !c.MockAllowed() {
 			issues = append(issues, "vision provider not configured and mock disabled")
 		}
@@ -222,6 +368,42 @@ func (c *Config) ReadyErrors() []string {
 		}
 	}
 	return issues
+}
+
+// CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
+func (c *Config) CapabilityStatus() map[string]interface{} {
+	return map[string]interface{}{
+		"vision_configured":  c.ThirdParty.VisionConfigured(),
+		"vision_source":      c.ThirdParty.VisionSource,
+		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),
+		"llm_configured":     c.ThirdParty.LLMConfigured(),
+		"mock_allowed":       c.MockAllowed(),
+		"vision_reuse_llm":   c.ThirdParty.VisionReuseLLM,
+	}
+}
+
+func sanitizeReadyErrors(joined string) []string {
+	parts := strings.Split(joined, "; ")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		// 不透出具体 URL
+		if strings.Contains(strings.ToLower(p), "http://") || strings.Contains(strings.ToLower(p), "https://") {
+			if strings.Contains(p, "VISION") {
+				out = append(out, "vision endpoint failed production safety checks")
+				continue
+			}
+			if strings.Contains(p, "LLM") {
+				out = append(out, "llm endpoint failed production safety checks")
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // SetupLogger 根据级别配置 slog 全局默认 logger。
