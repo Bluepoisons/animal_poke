@@ -117,7 +117,7 @@ test.describe('AP-014 production capture hard gate', () => {
     )
 
     await page.getByTestId('capture-stage').click()
-    await expect(page.getByText(/捕获成功/)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/捕获成功/).first()).toBeVisible({ timeout: 30_000 })
 
     const [a, v, s] = await Promise.all([analyzeResp, valueResp, syncResp])
     expect(a.ok()).toBeTruthy()
