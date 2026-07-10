@@ -324,6 +324,8 @@ func (h *SyncHandler) SyncAnimalsBatch(c *gin.Context) {
 		status, errMsg := h.syncOneScoped(middleware.GetDeviceID(c), middleware.GetAccountID(c), item)
 		results = append(results, batchItemResult{UUID: item.UUID, Status: status, Error: errMsg})
 	}
+	middleware.ObserveSyncOutcome("accepted")
+	middleware.ObserveFunnel("sync", "accepted")
 	c.JSON(http.StatusOK, BatchSyncResponse{Results: results})
 }
 

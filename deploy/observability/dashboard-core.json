@@ -1,0 +1,11 @@
+{
+  "title": "Animal Poke Core Loop",
+  "panels": [
+    { "title": "HTTP RED", "targets": ["http_requests_total", "http_request_duration_ms_sum"] },
+    { "title": "AI calls", "targets": ["ai_calls_total", "ai_detect_empty_total", "ai_confidence_bucket_total"] },
+    { "title": "Funnel", "targets": ["game_funnel_total"] },
+    { "title": "Sync", "targets": ["sync_outcomes_total"] },
+    { "title": "Release", "targets": ["app_info"] }
+  ],
+  "notes": "Import into Grafana; map to management metrics Service :9090"
+}

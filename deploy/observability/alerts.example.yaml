@@ -1,0 +1,30 @@
+# Example PrometheusRule — not applied by default.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: animal-poke-slo
+  namespace: production
+spec:
+  groups:
+    - name: animal-poke.slo
+      rules:
+        - alert: HighHTTP5xx
+          expr: |
+            sum(rate(http_requests_total{status="5xx"}[5m]))
+              /
+            clamp_min(sum(rate(http_requests_total[5m])), 1e-9) > 0.05
+          for: 5m
+          labels: { severity: page }
+          annotations:
+            summary: High 5xx rate
+            runbook: docs/runbooks/slo-and-alerts.md
+        - alert: VisionEmptySurge
+          expr: rate(ai_detect_empty_total[10m]) > 1
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: Empty vision detections elevated
+        - alert: RateLimitStorm
+          expr: rate(rate_limit_hits_total[5m]) > 10
+          for: 10m
+          labels: { severity: ticket }

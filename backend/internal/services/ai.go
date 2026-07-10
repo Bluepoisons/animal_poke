@@ -2,6 +2,7 @@
 package services
 
 import (
+	"animalpoke/backend/internal/middleware"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -178,6 +179,16 @@ func (s *AIService) Detect(imageData []byte, filename string) (*DetectResult, er
 
 // DetectContext 带 context 的检测。
 func (s *AIService) DetectContext(ctx context.Context, imageData []byte, filename string) (*DetectResult, error) {
+	observe := func(provider, outcome string, conf float64, empty bool) {
+		middleware.ObserveAI("detect", provider, outcome)
+		if empty {
+			middleware.ObserveDetectEmpty()
+		}
+		if conf > 0 {
+			middleware.ObserveConfidence(conf)
+		}
+		middleware.ObserveFunnel("detect", outcome)
+	}
 	if !s.cfg.VisionConfigured() {
 		if !s.mock {
 			return nil, fmt.Errorf("vision provider not configured")
@@ -188,28 +199,42 @@ func (s *AIService) DetectContext(ctx context.Context, imageData []byte, filenam
 		r.Degraded = true
 		r.ReasonCode = "provider_not_configured"
 		r.PromptVersion = prompts.DetectPromptVersion
+		observe("mock", "ok", 0.5, len(r.Animals) == 0)
 		return r, nil
 	}
 
 	body, model, err := s.callVision(ctx, imageData, filename, prompts.DetectPrompt)
 	if err != nil {
+		observe("vision", "error", 0, false)
 		return nil, err
 	}
 
 	jsonStr, err := s.parseChatResponse(body)
 	if err != nil {
+		observe("vision", "error", 0, false)
 		return nil, err
 	}
 	result, err := parseDetectJSON(jsonStr)
 	if err != nil {
+		observe("vision", "error", 0, false)
 		return nil, err
 	}
 	if err := validateDetectResult(result); err != nil {
+		observe("vision", "error", 0, false)
 		return nil, err
 	}
 	result.Source = "real"
+	middleware.ObserveAI("value", "llm", "ok")
+	middleware.ObserveFunnel("value", "ok")
 	result.Model = model
 	result.PromptVersion = prompts.DetectPromptVersion
+	maxConf := 0.0
+	for _, box := range result.Animals {
+		if box.Confidence > maxConf {
+			maxConf = box.Confidence
+		}
+	}
+	observe("vision", "ok", maxConf, len(result.Animals) == 0)
 	return result, nil
 }
 
@@ -220,6 +245,10 @@ func (s *AIService) Analyze(imageData []byte, filename string) (*AnalysisResult,
 
 // AnalyzeContext 带 context 的分析。
 func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filename string) (*AnalysisResult, error) {
+	observeA := func(provider, outcome string) {
+		middleware.ObserveAI("analyze", provider, outcome)
+		middleware.ObserveFunnel("analyze", outcome)
+	}
 	if !s.cfg.VisionConfigured() {
 		if !s.mock {
 			return nil, fmt.Errorf("vision provider not configured")
@@ -230,11 +259,13 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 		r.Degraded = true
 		r.ReasonCode = "provider_not_configured"
 		r.PromptVersion = prompts.AnalyzePromptVersion
+		observeA("mock", "ok")
 		return r, nil
 	}
 
 	body, model, err := s.callVision(ctx, imageData, filename, prompts.AnalyzePrompt)
 	if err != nil {
+		observeA("vision", "error")
 		return nil, err
 	}
 
@@ -252,6 +283,7 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 	result.Source = "real"
 	result.Model = model
 	result.PromptVersion = prompts.AnalyzePromptVersion
+	observeA("vision", "ok")
 	return &result, nil
 }
 
@@ -265,6 +297,8 @@ func (s *AIService) GenerateValue(input ValueInput) (*ValueResult, error) {
 // GenerateValueContext 服务端权威：HMAC 派生 rarity/stats；LLM 仅补 narrative。
 func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) (*ValueResult, error) {
 	if err := input.Validate(); err != nil {
+		middleware.ObserveAI("value", "unknown", "error")
+		middleware.ObserveFunnel("value", "error")
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
@@ -280,6 +314,8 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 		result.Narrative = narrativeFallback(input, result)
 		result.Source = "mock"
 		result.Degraded = true
+		middleware.ObserveAI("value", "mock", "ok")
+		middleware.ObserveFunnel("value", "ok")
 		result.ReasonCode = "provider_not_configured"
 		return result, nil
 	}
