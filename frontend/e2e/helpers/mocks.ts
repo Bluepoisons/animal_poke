@@ -92,6 +92,16 @@ export async function installApiMocks(
           {
             species: 'cat',
             label: 'cat',
+            target_id: '0',
+            confidence: 0.94,
+            bounding_box: { x: 0.2, y: 0.2, w: 0.4, h: 0.4 },
+          },
+        ],
+        targets: [
+          {
+            species: 'cat',
+            label: 'cat',
+            target_id: '0',
             confidence: 0.94,
             bounding_box: { x: 0.2, y: 0.2, w: 0.4, h: 0.4 },
           },
@@ -113,6 +123,9 @@ export async function installApiMocks(
         composition: 8,
         pose: 7,
         angle: 6,
+        inference_id: 'inf-e2e-analyze-1',
+        species: 'cat',
+        target_id: '0',
       })
     }
 
@@ -127,6 +140,7 @@ export async function installApiMocks(
         class: 'Ranger',
         element: 'Wind',
         narrative: 'E2E stub companion found near the test park.',
+        inference_id: 'inf-e2e-value-1',
       })
     }
 
@@ -166,6 +180,12 @@ export async function installBrowserMocks(page: Page): Promise<void> {
   await page.addInitScript(() => {
     window.__AP_FORCE_CAPTURE_SUCCESS = true
     window.__AP_FORCE_CAMERA_READY = true
+    try {
+      localStorage.setItem(
+        'animal-poke-onboarding-v1',
+        JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
+      )
+    } catch {}
 
     class FakeTrack {
       kind = 'video'

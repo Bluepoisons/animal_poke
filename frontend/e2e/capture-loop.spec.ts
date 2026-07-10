@@ -238,7 +238,7 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    await expect(page.getByText(/相机权限被拒绝|无可用相机|相机/i)).toBeVisible({
+    await expect(page.getByText('相机权限被拒绝')).toBeVisible({
       timeout: 20_000,
     })
   })
