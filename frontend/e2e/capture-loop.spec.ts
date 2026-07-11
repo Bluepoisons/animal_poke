@@ -152,7 +152,14 @@ test.describe('AP-014 production capture hard gate', () => {
     expect(beforeReload.pending).toBe(0)
 
     await page.reload()
-    await expect(page.getByText('DISCOVER MODE').or(page.getByText(/POKEDEX/i))).toBeVisible({
+    // After i18n (AP-069) default locale is zh; pokedex subtitle is no longer "POKEDEX".
+    await expect(
+      page
+        .getByText('DISCOVER MODE')
+        .or(page.getByText(/POKEDEX/i))
+        .or(page.getByText(/图鉴/))
+        .or(page.getByRole('button', { name: /发现|Discover/i })),
+    ).toBeVisible({
       timeout: 20_000,
     })
 
