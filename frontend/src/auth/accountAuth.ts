@@ -1,5 +1,5 @@
 /**
- * 账号绑定 / 登录恢复 / 设备管理（AP-055）
+ * 账号绑定 / 登录恢复 / 设备管理（AP-055 / AP-078）
  * 凭证仅发送到后端；refresh_token 若返回则存本地（服务端只存哈希）。
  */
 
@@ -9,11 +9,12 @@ import {
   getOrCreateDeviceId,
   clearAuth,
   __resetAuthForTests,
+  persistRefreshToken,
+  clearRefreshToken,
   type AuthState,
 } from './deviceAuth'
 
 const ACCOUNT_ID_KEY = 'ap_account_id'
-const REFRESH_TOKEN_KEY = 'ap_refresh_token_hash_client' // 客户端持有明文 refresh 一次；命名避免与服务端混淆
 
 export type AccountInfo = {
   guest: boolean
@@ -62,7 +63,7 @@ function persistBound(state: AuthState, accountId?: string, refresh?: string) {
   storage().setItem('ap_access_token', state.token)
   storage().setItem('ap_token_expires_at', state.expiresAt)
   if (accountId) storage().setItem(ACCOUNT_ID_KEY, accountId)
-  if (refresh) storage().setItem(REFRESH_TOKEN_KEY, refresh)
+  if (refresh) persistRefreshToken(refresh, accountId)
 }
 
 export function readAccountId(): string | null {
@@ -71,7 +72,7 @@ export function readAccountId(): string | null {
 
 export function clearAccountLocal(): void {
   storage().removeItem(ACCOUNT_ID_KEY)
-  storage().removeItem(REFRESH_TOKEN_KEY)
+  clearRefreshToken()
   clearAuth()
 }
 

@@ -396,6 +396,24 @@ func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
 		if err := drRepo.UpdateConsent(deviceID, "", "", true); err != nil {
 			return err
 		}
+		// 吊销 refresh family（AP-078）
+		if err := tx.Model(&models.RefreshToken{}).
+			Where("device_id = ? AND status IN ?", deviceID, []string{"active", "rotated"}).
+			Updates(map[string]interface{}{
+				"status":     "revoked",
+				"revoked_at": time.Now().UTC(),
+			}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.DeviceAccount{}).
+			Where("device_id = ?", deviceID).
+			Updates(map[string]interface{}{
+				"refresh_token_hash": "",
+				"refresh_expires_at": nil,
+			}).Error; err != nil {
+			return err
+		}
+		// 吊销已有 Token（使旧 JWT 失效）；不 Disable 设备以便用户可重新授权注册。
 		if err := drRepo.BumpTokenVersion(deviceID); err != nil {
 			return err
 		}
@@ -664,6 +682,7 @@ type createOrderRequest struct {
 	IdempotencyKey string `json:"idempotency_key" binding:"required"`
 	Platform       string `json:"platform"`
 }
+
 // commerceGate 检查商业化是否可用。不可用时写入响应并返回 true。
 // op: create|fulfill|refund
 func (h *CommerceHandler) commerceGate(c *gin.Context, op string) bool {
@@ -686,6 +705,7 @@ func (h *CommerceHandler) commerceGate(c *gin.Context, op string) bool {
 	}
 	return false
 }
+
 // CreateOrder POST /commerce/orders
 func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 	if h.commerceGate(c, "create") {
@@ -748,6 +768,7 @@ type fulfillRequest struct {
 	OrderID string `json:"order_id" binding:"required"`
 	Receipt string `json:"receipt" binding:"required"`
 }
+
 // FulfillOrder POST /commerce/orders/fulfill — 校验回执并幂等发放权益。
 func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 	if h.commerceGate(c, "fulfill") {

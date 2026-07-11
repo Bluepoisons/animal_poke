@@ -171,105 +171,70 @@ func (r *AccountRepo) UpsertBinding(accountID, provider, subject, credentialHash
 }
 
 // LinkDevice 将设备关联到账号（创建/复活 DeviceAccount，更新 Device.AccountID）。
+// 签发新的 refresh family（AP-078）；refreshTTL 映射为绝对过期（兼容旧调用方）。
 func (r *AccountRepo) LinkDevice(deviceID, accountID, refreshPlain string, refreshTTL time.Duration) (*models.DeviceAccount, string, error) {
-	now := time.Now().UTC()
-	var refresh string
-	var refreshHash string
-	var exp *time.Time
-	if refreshPlain != "" {
-		refresh = refreshPlain
-	} else {
-		refresh = uuid.NewString() + uuid.NewString()
-	}
-	refreshHash = r.HashToken(refresh)
-	if refreshTTL > 0 {
-		e := now.Add(refreshTTL)
-		exp = &e
-	}
-
-	var da models.DeviceAccount
-	err := r.db.Where("device_id = ?", deviceID).First(&da).Error
-	if err == nil {
-		if da.AccountID != accountID && da.Status == "active" {
-			return nil, "", ErrAlreadyBound
+	var outDA *models.DeviceAccount
+	var outRefresh string
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		da, refresh, err := r.WithTx(tx).linkDeviceTx(tx, deviceID, accountID, refreshPlain, refreshTTL)
+		if err != nil {
+			return err
 		}
-		da.AccountID = accountID
-		da.Status = "active"
-		da.RefreshTokenHash = refreshHash
-		da.RefreshExpiresAt = exp
-		da.LinkedAt = now
-		da.LastSeenAt = &now
-		da.RevokedAt = nil
-		if err := r.db.Save(&da).Error; err != nil {
-			return nil, "", err
-		}
-	} else if errors.Is(err, gorm.ErrRecordNotFound) {
-		da = models.DeviceAccount{
-			DeviceID:         deviceID,
-			AccountID:        accountID,
-			Status:           "active",
-			RefreshTokenHash: refreshHash,
-			RefreshExpiresAt: exp,
-			LinkedAt:         now,
-			LastSeenAt:       &now,
-		}
-		if err := r.db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "device_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"account_id", "status", "refresh_token_hash", "refresh_expires_at", "linked_at", "last_seen_at", "revoked_at", "updated_at"}),
-		}).Create(&da).Error; err != nil {
-			return nil, "", err
-		}
-	} else {
+		outDA = da
+		outRefresh = refresh
+		return nil
+	})
+	if err != nil {
 		return nil, "", err
 	}
-
-	if err := r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
-		Update("account_id", accountID).Error; err != nil {
-		return nil, "", err
-	}
-	return &da, refresh, nil
+	return outDA, outRefresh, nil
 }
 
-// UnlinkDevice 退出登录：清空 refresh，保留 account 关联（或按策略保留）。
+// LogoutDevice 退出登录：清空 refresh family，保留 account 关联，bump token_version。
 func (r *AccountRepo) LogoutDevice(deviceID string) error {
 	now := time.Now().UTC()
-	// 吊销本设备 refresh + bump token_version
-	if err := r.db.Model(&models.DeviceAccount{}).Where("device_id = ? AND status = ?", deviceID, "active").
-		Updates(map[string]interface{}{
-			"refresh_token_hash": "",
-			"refresh_expires_at": nil,
-			"last_seen_at":       now,
-		}).Error; err != nil {
-		return err
-	}
-	return r.db.Model(&models.Device{}).Where("device_id = ?", deviceID).
-		Update("token_version", gorm.Expr("token_version + 1")).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := r.WithTx(tx).revokeDeviceRefreshTx(tx, deviceID, now); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.DeviceAccount{}).Where("device_id = ? AND status = ?", deviceID, "active").
+			Update("last_seen_at", now).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.Device{}).Where("device_id = ?", deviceID).
+			Update("token_version", gorm.Expr("token_version + 1")).Error
+	})
 }
 
 // RevokeDevice 吊销设备（丢失设备场景）。
 func (r *AccountRepo) RevokeDevice(accountID, targetDeviceID string) error {
 	now := time.Now().UTC()
-	res := r.db.Model(&models.DeviceAccount{}).
-		Where("device_id = ? AND account_id = ? AND status = ?", targetDeviceID, accountID, "active").
-		Updates(map[string]interface{}{
-			"status":             "revoked",
-			"revoked_at":         now,
-			"refresh_token_hash": "",
-			"refresh_expires_at": nil,
-		})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	// 禁用设备并 bump token
-	return r.db.Model(&models.Device{}).Where("device_id = ?", targetDeviceID).
-		Updates(map[string]interface{}{
-			"disabled":      true,
-			"token_version": gorm.Expr("token_version + 1"),
-			"account_id":    "",
-		}).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.DeviceAccount{}).
+			Where("device_id = ? AND account_id = ? AND status = ?", targetDeviceID, accountID, "active").
+			Updates(map[string]interface{}{
+				"status":             "revoked",
+				"revoked_at":         now,
+				"refresh_token_hash": "",
+				"refresh_expires_at": nil,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := r.WithTx(tx).revokeDeviceRefreshTx(tx, targetDeviceID, now); err != nil {
+			return err
+		}
+		// 禁用设备并 bump token
+		return tx.Model(&models.Device{}).Where("device_id = ?", targetDeviceID).
+			Updates(map[string]interface{}{
+				"disabled":      true,
+				"token_version": gorm.Expr("token_version + 1"),
+				"account_id":    "",
+			}).Error
+	})
 }
 
 // ListDevices 列出账号下设备。
@@ -624,20 +589,10 @@ func (r *AccountRepo) mergeGuestIntoAccountTx(tx *gorm.DB, guestDeviceID, accoun
 }
 
 // linkDeviceTx 事务内链接设备（不自动启用已禁用 Device.Disabled——由调用方显式 Enable）。
+// 始终签发新 refresh family（AP-078）；refreshPlain 非空时仅用于兼容测试注入。
 func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlain string, refreshTTL time.Duration) (*models.DeviceAccount, string, error) {
 	now := time.Now().UTC()
-	var refresh string
-	if refreshPlain != "" {
-		refresh = refreshPlain
-	} else {
-		refresh = uuid.NewString() + uuid.NewString()
-	}
-	refreshHash := r.HashToken(refresh)
-	var exp *time.Time
-	if refreshTTL > 0 {
-		e := now.Add(refreshTTL)
-		exp = &e
-	}
+	policy := RefreshPolicy{AbsoluteTTL: refreshTTL, IdleTTL: DefaultRefreshIdleTTL}.Normalize()
 
 	var da models.DeviceAccount
 	err := tx.Where("device_id = ?", deviceID).First(&da).Error
@@ -647,8 +602,6 @@ func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlai
 		}
 		da.AccountID = accountID
 		da.Status = "active"
-		da.RefreshTokenHash = refreshHash
-		da.RefreshExpiresAt = exp
 		da.LinkedAt = now
 		da.LastSeenAt = &now
 		da.RevokedAt = nil
@@ -657,17 +610,15 @@ func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlai
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
 		da = models.DeviceAccount{
-			DeviceID:         deviceID,
-			AccountID:        accountID,
-			Status:           "active",
-			RefreshTokenHash: refreshHash,
-			RefreshExpiresAt: exp,
-			LinkedAt:         now,
-			LastSeenAt:       &now,
+			DeviceID:   deviceID,
+			AccountID:  accountID,
+			Status:     "active",
+			LinkedAt:   now,
+			LastSeenAt: &now,
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "device_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"account_id", "status", "refresh_token_hash", "refresh_expires_at", "linked_at", "last_seen_at", "revoked_at", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"account_id", "status", "linked_at", "last_seen_at", "revoked_at", "updated_at"}),
 		}).Create(&da).Error; err != nil {
 			return nil, "", err
 		}
@@ -677,6 +628,32 @@ func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlai
 
 	if err := tx.Model(&models.Device{}).Where("device_id = ?", deviceID).
 		Update("account_id", accountID).Error; err != nil {
+		return nil, "", err
+	}
+
+	// 签发 family；若调用方注入 plain（测试），先走通用签发再覆盖哈希
+	issued, err := r.WithTx(tx).issueRefreshFamilyTx(tx, deviceID, accountID, policy)
+	if err != nil {
+		return nil, "", err
+	}
+	refresh := issued.Plain
+	if refreshPlain != "" {
+		// 测试注入：替换为指定明文（同 family 重建一行）
+		if err := tx.Model(&models.RefreshToken{}).Where("token_id = ?", issued.TokenID).
+			Updates(map[string]interface{}{
+				"token_hash": r.HashToken(refreshPlain),
+			}).Error; err != nil {
+			return nil, "", err
+		}
+		if err := tx.Model(&models.DeviceAccount{}).Where("device_id = ?", deviceID).
+			Update("refresh_token_hash", r.HashToken(refreshPlain)).Error; err != nil {
+			return nil, "", err
+		}
+		refresh = refreshPlain
+	}
+
+	// 回读 da 以带上 refresh 字段
+	if err := tx.Where("device_id = ?", deviceID).First(&da).Error; err != nil {
 		return nil, "", err
 	}
 	return &da, refresh, nil

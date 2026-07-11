@@ -59,7 +59,11 @@ type Config struct {
 	JWTIssuer              string
 	JWTAudience            string
 	JWTAccessTTL           time.Duration
-	AIMockEnabled          bool
+	// JWTRefreshAbsoluteTTL refresh family 绝对过期（AP-078）。
+	JWTRefreshAbsoluteTTL time.Duration
+	// JWTRefreshIdleTTL refresh 空闲过期（自上次成功使用起算）。
+	JWTRefreshIdleTTL time.Duration
+	AIMockEnabled     bool
 	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
 	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
 	AuthMockOAuthEnabled bool
@@ -253,17 +257,19 @@ func Load() *Config {
 		MetricsAddr: getEnv("METRICS_ADDR", ":9090"),
 		LogLevel:    getEnv("LOG_LEVEL", "INFO"),
 		// 密钥在下方 load* 中按用途填充（AP-087）
-		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
-		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
-		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
-		AIMockEnabled:      getEnvBool("AI_MOCK_ENABLED", true),
-		RedisURL:           getEnv("REDIS_URL", ""),
-		AdminAPIKey:        getEnv("ADMIN_API_KEY", ""),
-		OpsToken:           getEnv("OPS_TOKEN", ""),
-		MaxImageBytes:      int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
-		MaxImagePixels:     getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
-		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
-		TrustedProxies:     splitCSV(getEnv("TRUSTED_PROXIES", "")),
+		JWTIssuer:             getEnv("JWT_ISSUER", "animal-poke"),
+		JWTAudience:           getEnv("JWT_AUDIENCE", "animal-poke-client"),
+		JWTAccessTTL:          getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
+		JWTRefreshAbsoluteTTL: getEnvDuration("JWT_REFRESH_ABSOLUTE_TTL", 30*24*time.Hour),
+		JWTRefreshIdleTTL:     getEnvDuration("JWT_REFRESH_IDLE_TTL", 7*24*time.Hour),
+		AIMockEnabled:         getEnvBool("AI_MOCK_ENABLED", true),
+		RedisURL:              getEnv("REDIS_URL", ""),
+		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),
+		OpsToken:              getEnv("OPS_TOKEN", ""),
+		MaxImageBytes:         int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
+		MaxImagePixels:        getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
+		CORSAllowedOrigins:    splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		TrustedProxies:        splitCSV(getEnv("TRUSTED_PROXIES", "")),
 		// 默认开启：未成年人严格默认 + Provider 不训练审计
 		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
 		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),
@@ -467,6 +473,12 @@ func (c *Config) Validate() error {
 
 	if c.JWTAccessTTL <= 0 {
 		errs = append(errs, "JWT_ACCESS_TTL must be positive")
+	}
+	if c.JWTRefreshAbsoluteTTL <= 0 {
+		errs = append(errs, "JWT_REFRESH_ABSOLUTE_TTL must be positive")
+	}
+	if c.JWTRefreshIdleTTL <= 0 {
+		errs = append(errs, "JWT_REFRESH_IDLE_TTL must be positive")
 	}
 	if c.MaxImageBytes <= 0 {
 		errs = append(errs, "MAX_IMAGE_BYTES must be positive")

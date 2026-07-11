@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0013_wallet_inventory_ledger"
+const CurrentVersion = "0014_refresh_token_rotation"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -79,6 +79,7 @@ func allMigrations() []migrationSpec {
 		{"0011_account_merge_proof", migrate0011},
 		{"0012_collection_item_fields", migrate0012},
 		{"0013_wallet_inventory_ledger", migrate0013},
+		{"0014_refresh_token_rotation", migrate0014},
 	}
 }
 
@@ -277,4 +278,15 @@ func migrate0013(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrate0014 刷新令牌族：rotate-on-use、绝对/空闲过期、重用检测（AP-078）。
+// 同时确保 accounts / account_bindings / device_accounts 表存在（历史路径可能仅 AutoMigrate）。
+func migrate0014(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.Account{},
+		&models.AccountBinding{},
+		&models.DeviceAccount{},
+		&models.RefreshToken{},
+	)
 }

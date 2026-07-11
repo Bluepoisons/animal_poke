@@ -27,10 +27,15 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open("file:acct_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
+	// SQLite 写串行化，便于并发 refresh 竞态测试稳定
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
+		&models.RefreshToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -40,6 +45,7 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 	r := gin.New()
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
 	r.POST("/api/v1/auth/login", acctH.Login)
+	r.POST("/api/v1/auth/refresh", acctH.Refresh)
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
 	{
@@ -377,6 +383,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
+		&models.RefreshToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -386,6 +393,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 	r := gin.New()
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
 	r.POST("/api/v1/auth/login", acctH.Login)
+	r.POST("/api/v1/auth/refresh", acctH.Refresh)
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
 	{
@@ -663,4 +671,241 @@ func TestLogin_ConcurrentMergeOnce(t *testing.T) {
 		seen[op.OperationID] = struct{}{}
 	}
 	_ = accountRepo
+}
+
+func postRefresh(t *testing.T, r *gin.Engine, refreshToken, deviceID string) *httptest.ResponseRecorder {
+	t.Helper()
+	payload := map[string]string{"refresh_token": refreshToken}
+	if deviceID != "" {
+		payload["device_id"] = deviceID
+	}
+	body, _ := json.Marshal(payload)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/auth/refresh", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func bindAndGetRefresh(t *testing.T, r *gin.Engine, deviceID, email string) (access, refresh, accountID string) {
+	t.Helper()
+	token := deviceAuth(t, r, deviceID)
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", token, map[string]string{
+		"provider": "email", "email": email, "password": "password123",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var resp accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.RefreshToken)
+	require.NotEmpty(t, resp.Token)
+	return resp.Token, resp.RefreshToken, resp.AccountID
+}
+
+// AP-078: 正常刷新只产生一对新 token。
+func TestRefresh_RotateOnUse(t *testing.T) {
+	r, db, _, _ := setupAccountTest(t)
+	_, refresh, accountID := bindAndGetRefresh(t, r, "dev-refresh-1", "refresh1@example.com")
+
+	w := postRefresh(t, r, refresh, "dev-refresh-1")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var resp accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, resp.RefreshToken)
+	assert.NotEqual(t, refresh, resp.RefreshToken)
+	assert.Equal(t, accountID, resp.AccountID)
+	assert.Equal(t, "Bearer", resp.TokenType)
+
+	// 新 access 可用
+	w2 := authedJSON(t, r, "GET", "/api/v1/auth/account", resp.Token, nil)
+	require.Equal(t, 200, w2.Code, w2.Body.String())
+
+	// 旧 refresh 在宽限内为 conflict（不整族吊销）
+	w3 := postRefresh(t, r, refresh, "")
+	require.Equal(t, http.StatusConflict, w3.Code, w3.Body.String())
+	assert.Contains(t, w3.Body.String(), "refresh_conflict")
+
+	// 新 refresh 可继续轮换
+	w4 := postRefresh(t, r, resp.RefreshToken, "")
+	require.Equal(t, 200, w4.Code, w4.Body.String())
+
+	var n int64
+	require.NoError(t, db.Model(&models.RefreshToken{}).Where("device_id = ?", "dev-refresh-1").Count(&n).Error)
+	assert.GreaterOrEqual(t, n, int64(2))
+}
+
+// AP-078: 并发 20 次刷新仅一次成功。
+func TestRefresh_ConcurrentOnlyOneSuccess(t *testing.T) {
+	r, _, _, _ := setupAccountTest(t)
+	_, refresh, _ := bindAndGetRefresh(t, r, "dev-refresh-conc", "refresh-conc@example.com")
+
+	const n = 20
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			w := postRefresh(t, r, refresh, "dev-refresh-conc")
+			codes[i] = w.Code
+		}(i)
+	}
+	wg.Wait()
+
+	ok, conflict, other := 0, 0, 0
+	for _, c := range codes {
+		switch c {
+		case 200:
+			ok++
+		case http.StatusConflict, http.StatusUnauthorized:
+			conflict++
+		default:
+			other++
+		}
+	}
+	assert.Equal(t, 1, ok, "codes=%v", codes)
+	assert.Equal(t, n-1, conflict+other, "codes=%v", codes)
+	assert.Equal(t, 0, other, "unexpected codes=%v", codes)
+}
+
+// AP-078: 宽限外重用已 rotated 令牌 → 整族吊销。
+func TestRefresh_ReuseRevokesFamily(t *testing.T) {
+	r, db, deviceRepo, accountRepo := setupAccountTest(t)
+	_, refresh, _ := bindAndGetRefresh(t, r, "dev-refresh-reuse", "reuse@example.com")
+
+	// 第一次成功轮换
+	w := postRefresh(t, r, refresh, "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var resp accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	// 将 rotated_at 推到宽限外
+	past := time.Now().UTC().Add(-time.Minute)
+	require.NoError(t, db.Model(&models.RefreshToken{}).
+		Where("token_hash = ?", accountRepo.HashToken(refresh)).
+		Update("rotated_at", past).Error)
+
+	// 重用旧 token → 吊销
+	w2 := postRefresh(t, r, refresh, "")
+	require.Equal(t, http.StatusUnauthorized, w2.Code, w2.Body.String())
+	assert.Contains(t, w2.Body.String(), "refresh_token_reused")
+
+	// 新 token 也失效（族吊销）
+	w3 := postRefresh(t, r, resp.RefreshToken, "")
+	require.Equal(t, http.StatusUnauthorized, w3.Code, w3.Body.String())
+
+	// access token_version 已 bump
+	dev, err := deviceRepo.Find("dev-refresh-reuse")
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, dev.TokenVersion, 2)
+
+	// 新 access 因 version 失效
+	w4 := authedJSON(t, r, "GET", "/api/v1/auth/account", resp.Token, nil)
+	assert.Equal(t, http.StatusUnauthorized, w4.Code)
+}
+
+// AP-078: 设备撤销后 refresh 失效。
+func TestRefresh_DeviceRevokeInvalidates(t *testing.T) {
+	r, _, _, _ := setupAccountTest(t)
+	tokenA, _, _ := bindAndGetRefresh(t, r, "dev-main-rev", "rev-main@example.com")
+
+	// 第二台设备登录
+	body, _ := json.Marshal(map[string]string{
+		"device_id": "dev-lost-rev", "provider": "email",
+		"email": "rev-main@example.com", "password": "password123",
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var login accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &login))
+	require.NotEmpty(t, login.RefreshToken)
+
+	// 主设备撤销 lost 设备
+	w2 := authedJSON(t, r, "POST", "/api/v1/auth/devices/revoke", tokenA, map[string]string{
+		"device_id": "dev-lost-rev",
+	})
+	require.Equal(t, 200, w2.Code, w2.Body.String())
+
+	// lost 设备 refresh 不可用
+	w3 := postRefresh(t, r, login.RefreshToken, "dev-lost-rev")
+	require.Equal(t, http.StatusUnauthorized, w3.Code, w3.Body.String())
+}
+
+// AP-078: 登出后 refresh 失效。
+func TestRefresh_LogoutInvalidates(t *testing.T) {
+	r, _, _, _ := setupAccountTest(t)
+	token, refresh, _ := bindAndGetRefresh(t, r, "dev-logout-ref", "logout-ref@example.com")
+
+	w := authedJSON(t, r, "POST", "/api/v1/auth/logout", token, nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	w2 := postRefresh(t, r, refresh, "")
+	require.Equal(t, http.StatusUnauthorized, w2.Code, w2.Body.String())
+}
+
+// AP-078: 绝对过期。
+func TestRefresh_AbsoluteExpiry(t *testing.T) {
+	r, db, _, accountRepo := setupAccountTest(t)
+	_, refresh, _ := bindAndGetRefresh(t, r, "dev-abs-exp", "abs@example.com")
+
+	past := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Model(&models.RefreshToken{}).
+		Where("token_hash = ?", accountRepo.HashToken(refresh)).
+		Update("absolute_expires_at", past).Error)
+
+	w := postRefresh(t, r, refresh, "")
+	require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "refresh_token_expired")
+}
+
+// AP-078: 空闲过期。
+func TestRefresh_IdleExpiry(t *testing.T) {
+	r, db, _, accountRepo := setupAccountTest(t)
+	_, refresh, _ := bindAndGetRefresh(t, r, "dev-idle-exp", "idle@example.com")
+
+	past := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Model(&models.RefreshToken{}).
+		Where("token_hash = ?", accountRepo.HashToken(refresh)).
+		Update("idle_expires_at", past).Error)
+
+	w := postRefresh(t, r, refresh, "")
+	require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "refresh_token_expired")
+}
+
+// AP-078: pepper 轮换双读 — previous pepper 签发的 refresh 仍可轮换。
+func TestRefresh_PepperPreviousStillWorks(t *testing.T) {
+	r, db, deviceRepo, _ := setupAccountTest(t)
+	// 用 previous pepper 手工写入一条 active refresh
+	token := deviceAuth(t, r, "dev-pepper-rot")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", token, map[string]string{
+		"provider": "email", "email": "pepper@example.com", "password": "password123",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var bind accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
+
+	// 重建 repo 带 previous pepper，把当前 hash 改写成 previous 哈希
+	oldRepo := repo.NewAccountRepo(db, "old-pepper-value")
+	plain := "legacy-refresh-token-plain-value-xx"
+	oldHash := oldRepo.HashToken(plain)
+	require.NoError(t, db.Model(&models.RefreshToken{}).
+		Where("device_id = ? AND status = ?", "dev-pepper-rot", "active").
+		Update("token_hash", oldHash).Error)
+
+	// 使用带 previous 的 handler
+	accountRepo := repo.NewAccountRepoWithPeppers(db, "test-pepper-secret", "old-pepper-value")
+	acctH := NewAccountHandler(deviceRepo, accountRepo, "test-secret", 24*time.Hour, "animal-poke", "animal-poke-client", true)
+	r2 := gin.New()
+	r2.POST("/api/v1/auth/refresh", acctH.Refresh)
+
+	w2 := postRefresh(t, r2, plain, "dev-pepper-rot")
+	require.Equal(t, 200, w2.Code, w2.Body.String())
+	var resp accountAuthResponse
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.RefreshToken)
+	assert.NotEqual(t, plain, resp.RefreshToken)
 }

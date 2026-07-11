@@ -34,6 +34,8 @@ func setupPrivacyLifecycle(t *testing.T) (*gin.Engine, *gorm.DB, *repo.AnimalRep
 		&models.Order{},
 		&models.Entitlement{},
 		&models.AuditLog{},
+		&models.DeviceAccount{},
+		&models.RefreshToken{},
 	))
 
 	deviceRepo := repo.NewDeviceRepo(db)
@@ -214,7 +216,7 @@ func TestPullAnimals_TombstoneOnlyAfterDelete(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open("file:pull_tomb_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.Animal{}, &models.Device{}, &models.DataRequest{}, &models.Inference{}, &models.SecurityReport{}, &models.Entitlement{}, &models.Order{}, &models.AuditLog{}))
+	require.NoError(t, db.AutoMigrate(&models.Animal{}, &models.Device{}, &models.DataRequest{}, &models.Inference{}, &models.SecurityReport{}, &models.Entitlement{}, &models.Order{}, &models.AuditLog{}, &models.DeviceAccount{}, &models.RefreshToken{}))
 
 	deviceRepo := repo.NewDeviceRepo(db)
 	animalRepo := repo.NewAnimalRepo(db)
