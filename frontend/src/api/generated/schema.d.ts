@@ -2413,6 +2413,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Enroll in liveops instance */
         post: operations["enrollLiveOpsInstance"];
         delete?: never;
         options?: never;
@@ -2429,6 +2430,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Report progress to liveops instance */
         post: operations["progressLiveOpsInstance"];
         delete?: never;
         options?: never;
@@ -2445,6 +2447,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Claim liveops reward once */
         post: operations["claimLiveOpsReward"];
         delete?: never;
         options?: never;
@@ -2461,6 +2464,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Claim cancel compensation */
         post: operations["compensateLiveOpsInstance"];
         delete?: never;
         options?: never;
@@ -2476,6 +2480,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Upsert liveops definition (ops) */
         put: operations["upsertLiveOpsDefinition"];
         post?: never;
         delete?: never;
@@ -2493,6 +2498,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Cancel liveops instance (ops) */
         post: operations["cancelLiveOpsInstance"];
         delete?: never;
         options?: never;
@@ -2509,6 +2515,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Settle liveops instance batch (ops) */
         post: operations["settleLiveOpsInstance"];
         delete?: never;
         options?: never;

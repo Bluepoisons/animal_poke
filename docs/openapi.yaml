@@ -3710,6 +3710,7 @@ paths:
     post:
       operationId: enrollLiveOpsInstance
       tags: [LiveOps]
+      summary: Enroll in liveops instance
       security: [{bearerAuth: []}]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -3720,6 +3721,7 @@ paths:
     post:
       operationId: progressLiveOpsInstance
       tags: [LiveOps]
+      summary: Report progress to liveops instance
       security: [{bearerAuth: []}]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -3738,6 +3740,7 @@ paths:
     post:
       operationId: claimLiveOpsReward
       tags: [LiveOps]
+      summary: Claim liveops reward once
       security: [{bearerAuth: []}]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -3756,6 +3759,7 @@ paths:
     post:
       operationId: compensateLiveOpsInstance
       tags: [LiveOps]
+      summary: Claim cancel compensation
       security: [{bearerAuth: []}]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -3766,6 +3770,7 @@ paths:
     put:
       operationId: upsertLiveOpsDefinition
       tags: [LiveOps]
+      summary: Upsert liveops definition (ops)
       security: []
       parameters:
         - { name: X-AP-Ops-Token, in: header, required: true, schema: { type: string } }
@@ -3784,6 +3789,7 @@ paths:
     post:
       operationId: cancelLiveOpsInstance
       tags: [LiveOps]
+      summary: Cancel liveops instance (ops)
       security: []
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -3796,6 +3802,7 @@ paths:
     post:
       operationId: settleLiveOpsInstance
       tags: [LiveOps]
+      summary: Settle liveops instance batch (ops)
       security: []
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
