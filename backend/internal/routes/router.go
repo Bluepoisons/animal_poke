@@ -412,6 +412,16 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/quests/events", middleware.BodyLimit(middleware.MaxBodyDefault), questH.ApplyEvents)
 				auth.POST("/quests/:quest_id/claim", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Claim)
 				auth.POST("/quests/compensate", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Compensate)
+				// AP-099 研究员成长 / 虚拟伙伴
+				growthRepo := repo.NewGrowthRepo(db)
+				growthH := handlers.NewGrowthHandler(growthRepo)
+				auth.GET("/growth/catalog", growthH.GetCatalog)
+				auth.GET("/growth/researcher", growthH.GetResearcher)
+				auth.POST("/growth/events", middleware.BodyLimit(middleware.MaxBodyDefault), growthH.PostEvent)
+				auth.GET("/growth/events", growthH.ListEvents)
+				auth.GET("/growth/companions", growthH.ListCompanions)
+				auth.GET("/growth/companions/:animal_uuid", growthH.GetCompanion)
+				auth.POST("/growth/reset", middleware.BodyLimit(middleware.MaxBodyDefault), growthH.Reset)
 			} else {
 				auth.POST("/privacy/consent", unavailable("db_unavailable"))
 				auth.POST("/privacy/export", unavailable("db_unavailable"))
@@ -437,6 +447,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/quests/events", unavailable("db_unavailable"))
 				auth.POST("/quests/:quest_id/claim", unavailable("db_unavailable"))
 				auth.POST("/quests/compensate", unavailable("db_unavailable"))
+				auth.GET("/growth/catalog", unavailable("db_unavailable"))
+				auth.GET("/growth/researcher", unavailable("db_unavailable"))
+				auth.POST("/growth/events", unavailable("db_unavailable"))
+				auth.GET("/growth/events", unavailable("db_unavailable"))
+				auth.GET("/growth/companions", unavailable("db_unavailable"))
+				auth.GET("/growth/companions/:animal_uuid", unavailable("db_unavailable"))
+				auth.POST("/growth/reset", unavailable("db_unavailable"))
 			}
 		}
 

@@ -1036,6 +1036,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/growth/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Growth catalog and rules
+         * @description Versioned growth configuration: researcher tracks, allowed events,
+         *     companion memory nodes (>=3 visible), and hard rules
+         *     (no decay, no real-world feeding, no paid power, combat/recognition unchanged).
+         */
+        get: operations["getGrowthCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/growth/researcher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get researcher growth tracks
+         * @description Photography, ecology knowledge and safe observation tracks for the JWT owner
+         *     (account when bound — cross-device; else device guest).
+         */
+        get: operations["getResearcherGrowth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/growth/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List growth events
+         * @description Paginated authoritative growth event ledger (newest first) for cross-device restore.
+         */
+        get: operations["listGrowthEvents"];
+        put?: never;
+        /**
+         * Record growth event
+         * @description Server-authoritative, idempotent on event_id. Unlocks convenience/content only —
+         *     never changes recognition results or combat stats. Rejects paid power, decay and
+         *     real-world feeding kinds.
+         */
+        post: operations["postGrowthEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/growth/companions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List companion profiles */
+        get: operations["listGrowthCompanions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/growth/companions/{animal_uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get companion profile and growth nodes
+         * @description Pure virtual companion profile with decorative/memory nodes.
+         *     Guarantees at least 3 visible growth nodes per collection animal.
+         *     Does not modify combat power.
+         */
+        get: operations["getGrowthCompanion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/growth/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auditable growth reset or config migration
+         * @description Resets researcher tracks and/or companion profiles with a required reason.
+         *     Snapshot is stored for audit; growth event ledger is retained.
+         */
+        post: operations["resetGrowth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/auth/token": {
         parameters: {
             query?: never;
@@ -1204,6 +1333,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ranking/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report ranking score event (AP-114) */
+        post: operations["rankingScore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ranking/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Settle daily city ranking snapshot (AP-114) */
+        post: operations["rankingSettle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ranking/daily": {
         parameters: {
             query?: never;
@@ -1219,6 +1382,23 @@ export interface paths {
         get: operations["rankingDaily"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pvp/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel matchmaking queue (AP-115) */
+        post: operations["pvpCancel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1274,8 +1454,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List friends
-         * @description Requires FEATURE_SOCIAL=true. When disabled returns 501 feature_unavailable.
+         * List friends (cursor pagination)
+         * @description Requires FEATURE_SOCIAL=true. Returns accepted friendships for the caller.
+         *     Blocked peers never appear. When social_enabled=false (e.g. minor defaults), returns empty list.
          */
         get: operations["socialFriends"];
         put?: never;
@@ -1284,6 +1465,263 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending friend requests */
+        get: operations["socialFriendRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send friend request
+         * @description State machine pending→accepted|rejected|cancelled. Cross-invite auto-accepts.
+         *     Block either way forbids the action. Duplicate pending is idempotent.
+         */
+        post: operations["socialFriendRequestCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept friend request (idempotent) */
+        post: operations["socialFriendRequestAccept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject friend request */
+        post: operations["socialFriendRequestReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel outgoing friend request */
+        post: operations["socialFriendRequestCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/friends/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove an accepted friendship */
+        post: operations["socialFriendRemove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Block a user (beats relationships and shares)
+         * @description Idempotent. Removes friendship and cancels pending requests both ways.
+         *     Blocked users cannot search, invite, view shares, or interact.
+         */
+        post: operations["socialBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/unblock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unblock a user */
+        post: operations["socialUnblock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List blocked users */
+        get: operations["socialBlocksList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mute a user */
+        post: operations["socialMute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/unmute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unmute a user */
+        post: operations["socialUnmute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a user (no images / precise location)
+         * @description Rate-limited per reporter. Structured metadata only.
+         */
+        post: operations["socialReportUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search users by display name prefix
+         * @description Excludes self and either-way blocks. Requires social_enabled.
+         */
+        get: operations["socialSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get social settings for caller */
+        get: operations["socialSettingsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update social settings
+         * @description Minors cannot enable social (is_minor forces social_enabled=false).
+         *     Display names are length/control/keyword validated.
+         */
+        patch: operations["socialSettingsPatch"];
         trace?: never;
     };
     "/api/v1/social/share": {
@@ -1296,11 +1734,50 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create share link
-         * @description Requires FEATURE_SOCIAL=true. When disabled or share not ready, returns 501/503 feature_unavailable
-         *     (never pending share_id with 2xx).
+         * Create safe share capability token
+         * @description Requires FEATURE_SOCIAL=true. Returns unguessable share_token (also as share_id).
+         *     Snapshot never includes precise location, device_id, or image payloads.
+         *     ACL: link | friends | public. Expiry + revoke supported.
          */
-        post: operations["socialShare"];
+        post: operations["socialShareCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/share/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve share by capability token
+         * @description Enforces ACL, expiry, revoke, and either-way block. Denied results may be cached briefly.
+         *     Response never includes precise coordinates or device identifiers.
+         */
+        get: operations["socialShareGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/social/share/{token}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a share (owner only, idempotent) */
+        post: operations["socialShareRevoke"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2006,6 +2483,232 @@ export interface components {
             source_id?: string;
             metadata?: string;
         };
+        SocialFriendItem: {
+            user_key?: string;
+            display_name?: string;
+            /** Format: date-time */
+            since?: string;
+        };
+        SocialFriendsResponse: {
+            friends: components["schemas"]["SocialFriendItem"][];
+            next_cursor?: string;
+            social_enabled?: boolean;
+            source: string;
+            request_id?: string;
+        };
+        SocialFriendRequest: {
+            request_id?: string;
+            from_user_key?: string;
+            to_user_key?: string;
+            /** @enum {string} */
+            status?: "pending" | "accepted" | "rejected" | "cancelled";
+            /** Format: date-time */
+            created_at?: string;
+        };
+        SocialFriendRequestsResponse: {
+            requests?: components["schemas"]["SocialFriendRequest"][];
+            direction?: string;
+            next_cursor?: string;
+            request_id?: string;
+        };
+        SocialFriendRequestActionResponse: {
+            request?: components["schemas"]["SocialFriendRequest"];
+            auto_accepted?: boolean;
+            request_id?: string;
+        };
+        SocialTargetUserRequest: {
+            /** @description account_id */
+            target_user_id?: string;
+            user_key?: string;
+        };
+        SocialRequestIDBody: {
+            request_id: string;
+        };
+        SocialSettings: {
+            user_key?: string;
+            display_name?: string;
+            social_enabled?: boolean;
+            is_minor?: boolean;
+            request_id?: string;
+        };
+        /** @description Safe share snapshot — no precise location, device_id, or images. */
+        SocialShareView: {
+            /** @description Capability token (create only) */
+            share_token?: string;
+            /** @description Alias of share_token */
+            share_id?: string;
+            /** Format: uuid */
+            animal_uuid?: string;
+            owner_user_key?: string;
+            /** @enum {string} */
+            acl?: "link" | "friends" | "public";
+            species?: string;
+            breed?: string;
+            rarity?: number;
+            nickname?: string;
+            /** @description Coarse city only */
+            city?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: date-time */
+            created_at?: string;
+            revoked?: boolean;
+            request_id?: string;
+        };
+        GrowthCatalogResponse: {
+            config_version: string;
+            tracks: {
+                /** @enum {string} */
+                id?: "photography" | "ecology" | "safe_observation";
+                title?: string;
+            }[];
+            events?: {
+                kind?: string;
+                track?: string;
+                /** Format: int64 */
+                delta_xp?: number;
+            }[];
+            companion_nodes: {
+                node_id?: string;
+                title?: string;
+                kind?: string;
+                /** Format: int64 */
+                unlock_at_xp?: number;
+            }[];
+            rules: {
+                min_visible_nodes_per_companion?: number;
+                no_decay?: boolean;
+                no_real_world_feeding?: boolean;
+                no_paid_power?: boolean;
+                combat_stats_unchanged?: boolean;
+                recognition_unchanged?: boolean;
+                cross_device_authoritative?: boolean;
+            };
+            level_thresholds?: {
+                [key: string]: unknown;
+            };
+            request_id?: string;
+        };
+        ResearcherTrack: {
+            /** @enum {string} */
+            track?: "photography" | "ecology" | "safe_observation";
+            /** Format: int64 */
+            xp?: number;
+            level?: number;
+            config_version?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        ResearcherGrowthResponse: {
+            owner_key: string;
+            config_version?: string;
+            tracks: components["schemas"]["ResearcherTrack"][];
+            request_id?: string;
+        };
+        GrowthEventRequest: {
+            event_id: string;
+            /** @enum {string} */
+            kind: "photo_capture" | "photo_quality" | "species_first" | "species_research" | "safe_explore" | "distance_respect" | "companion_interact" | "companion_memory" | "companion_decor";
+            /** Format: uuid */
+            animal_uuid?: string;
+            source_type?: string;
+            source_id?: string;
+            metadata?: string;
+            /** Format: int64 */
+            override_delta?: number;
+        };
+        GrowthEvent: {
+            event_id?: string;
+            owner_key?: string;
+            kind?: string;
+            track?: string;
+            animal_uuid?: string;
+            /** Format: int64 */
+            delta_xp?: number;
+            /** Format: int64 */
+            xp_after?: number;
+            level_after?: number;
+            node_id?: string;
+            config_version?: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        GrowthEventApplyResponse: {
+            event?: components["schemas"]["GrowthEvent"];
+            idempotent: boolean;
+            researcher?: components["schemas"]["ResearcherTrack"][];
+            companion?: components["schemas"]["CompanionProfile"];
+            nodes?: components["schemas"]["CompanionMemoryNode"][];
+            unlocked_nodes?: string[];
+            combat_unchanged: boolean;
+            request_id?: string;
+        };
+        GrowthEventListResponse: {
+            events: components["schemas"]["GrowthEvent"][];
+            /** Format: int64 */
+            next_after?: number;
+            request_id?: string;
+        };
+        CompanionProfile: {
+            /** Format: uuid */
+            animal_uuid?: string;
+            owner_key?: string;
+            /** Format: int64 */
+            bond_xp?: number;
+            bond_level?: number;
+            /** @description Decorative stage only — not combat power */
+            decor_stage?: number;
+            title?: string;
+            config_version?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        CompanionMemoryNode: {
+            node_id?: string;
+            title?: string;
+            /** @enum {string} */
+            kind?: "memory" | "decor" | "journal";
+            visible?: boolean;
+            unlocked?: boolean;
+            /** Format: int64 */
+            unlock_at_xp?: number;
+            /** Format: date-time */
+            unlocked_at?: string;
+        };
+        CompanionListResponse: {
+            companions: components["schemas"]["CompanionProfile"][];
+            request_id?: string;
+        };
+        CompanionDetailResponse: {
+            companion: components["schemas"]["CompanionProfile"];
+            nodes: components["schemas"]["CompanionMemoryNode"][];
+            visible_nodes: number;
+            unlocked_nodes?: number;
+            min_visible: number;
+            combat_unchanged: boolean;
+            request_id?: string;
+        };
+        GrowthResetRequest: {
+            /** @enum {string} */
+            scope?: "researcher" | "companion" | "all";
+            /** Format: uuid */
+            animal_uuid?: string;
+            reason: string;
+            to_version?: string;
+        };
+        GrowthResetResponse: {
+            audit: {
+                audit_id?: string;
+                scope?: string;
+                reason?: string;
+                from_version?: string;
+                to_version?: string;
+                snapshot_json?: string;
+                /** Format: date-time */
+                created_at?: string;
+            };
+            request_id?: string;
+        };
     };
     responses: {
         /** @description Bad request */
@@ -2095,6 +2798,16 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["FeatureUnavailableError"];
+            };
+        };
+        /** @description Feature not implemented or not enabled (HTTP 501) */
+        NotImplemented: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
             };
         };
     };
@@ -3887,6 +4600,199 @@ export interface operations {
             };
         };
     };
+    getGrowthCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Growth catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthCatalogResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getResearcherGrowth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Researcher tracks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearcherGrowthResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listGrowthEvents: {
+        parameters: {
+            query?: {
+                after_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthEventListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    postGrowthEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthEventApplyResponse"];
+                };
+            };
+            /** @description Event applied */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthEventApplyResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Forbidden kind (paid power / decay / real feed) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Companion animal not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listGrowthCompanions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Companion summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanionListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getGrowthCompanion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                animal_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Companion profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanionDetailResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resetGrowth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Reset audit recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthResetResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     adminIssueToken: {
         parameters: {
             query?: never;
@@ -4158,6 +5064,61 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    rankingScore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    city?: string;
+                    date?: string;
+                    /** Format: int64 */
+                    delta: number;
+                    display_name?: string;
+                    eligible?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Score accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    rankingSettle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    city: string;
+                    date?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Snapshot settled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     rankingDaily: {
         parameters: {
             query?: {
@@ -4186,6 +5147,24 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    pvpCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     pvpMatch: {
@@ -4224,6 +5203,405 @@ export interface operations {
     };
     socialFriends: {
         parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Friends page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendsResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRequests: {
+        parameters: {
+            query?: {
+                direction?: "incoming" | "outgoing";
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendRequestsResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRequestCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Request created or existing pending returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendRequestActionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description blocked or social_disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description already_friends or friend_limit */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRequestAccept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialRequestIDBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendRequestActionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description blocked or unauthorized */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description request not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRequestReject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialRequestIDBody"];
+            };
+        };
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendRequestActionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRequestCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialRequestIDBody"];
+            };
+        };
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialFriendRequestActionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialFriendRemove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Removed (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Blocked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialUnblock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Unblocked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialBlocksList: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Block list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialMute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Muted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialUnmute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialTargetUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Unmuted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialReportUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    target_user_id?: string;
+                    user_key?: string;
+                    /** @enum {string} */
+                    category: "harassment" | "spam" | "inappropriate" | "other";
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialSearch: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description social_disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialSettingsGet: {
+        parameters: {
             query?: never;
             header?: never;
             path?: never;
@@ -4231,40 +5609,193 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Friends list */
+            /** @description Settings */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        friends?: Record<string, never>[];
-                        source?: string;
-                    };
+                    "application/json": components["schemas"]["SocialSettings"];
                 };
             };
             401: components["responses"]["Unauthorized"];
             501: components["responses"]["FeatureUnavailable"];
         };
     };
-    socialShare: {
+    socialSettingsPatch: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    display_name?: string;
+                    social_enabled?: boolean;
+                    is_minor?: boolean;
                 };
             };
         };
         responses: {
+            /** @description Updated settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             501: components["responses"]["FeatureUnavailable"];
-            503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialShareCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    animal_uuid: string;
+                    /**
+                     * @default link
+                     * @enum {string}
+                     */
+                    acl?: "link" | "friends" | "public";
+                    ttl_hours?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Share created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialShareView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description social_disabled or animal_not_owned */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description animal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialShareGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Share view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialShareView"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description share_forbidden or blocked */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description share_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description share_expired or share_revoked */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    socialShareRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description not owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description share not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            501: components["responses"]["FeatureUnavailable"];
         };
     };
     opsMetricsSummary: {

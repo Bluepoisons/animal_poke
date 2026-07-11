@@ -14,7 +14,8 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0020_quest_system"
+const CurrentVersion = "0021_growth_companion"
+const CurrentVersion = "0021_growth_companion"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -85,6 +86,8 @@ func allMigrations() []migrationSpec {
 		{"0017_admin_rbac", migrate0017},
 		{"0018_social_graph", migrate0018},
 		{"0019_account_security", migrate0019},
+		{"0020_quest_system", migrate0020},
+		{"0021_growth_companion", migrate0021},
 	}
 }
 
@@ -318,13 +321,18 @@ func migrate0018(db *gorm.DB) error {
 
 // migrate0019 账号安全：邮箱验证状态、安全令牌表（AP-079）。
 func migrate0019(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.AccountBinding{},
-		&models.AccountSecurityToken{},
-	)
+	return db.AutoMigrate(&models.AccountBinding{}, &models.AccountSecurityToken{})
 }
 
 // migrate0020 任务定义/进度/领取（AP-096）。
 func migrate0020(db *gorm.DB) error {
 	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
+}
+
+func migrate0020(db *gorm.DB) error {
+	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
+}
+
+func migrate0021(db *gorm.DB) error {
+	return db.AutoMigrate(&models.GrowthEvent{}, &models.CompanionProfile{}, &models.CompanionMemoryNode{}, &models.GrowthResetAudit{})
 }
