@@ -222,6 +222,8 @@ jobs:
             exit 1
           fi
           echo "schema.d.ts matches openapi.yaml"
+      - name: N-1 compatibility gate (AP-089)
+        run: node scripts/n1-contract-gate.mjs
 
   container:
     name: Container
