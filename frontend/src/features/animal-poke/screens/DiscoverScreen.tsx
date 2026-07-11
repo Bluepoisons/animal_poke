@@ -329,6 +329,10 @@ export default function DiscoverScreen({
         <span>{statusText}</span>
       </div>
 
+      <p className="ap-photo-skill-hint" role="note">
+        观察技巧：稳定、完整、光线、无遮挡、构图与安全距离。靠得更近不会提高稀有度。
+      </p>
+
       {showSelect && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
           {flow.detections.map((d) => (
