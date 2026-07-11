@@ -51,6 +51,12 @@ tags:
     description: Privacy-friendly funnel event ingest
   - name: Growth
     description: Researcher growth tracks, virtual companion profiles and authoritative growth events (AP-099)
+  - name: Battle
+    description: Team skills statuses archetypes and authoritative PvE settlement (AP-102)
+  - name: Product
+    description: Product feature endpoints (ranking/pvp placeholders)
+  - name: PvP
+    description: Player versus player matchmaking and settlement
 
 paths:
   /health:
@@ -2701,6 +2707,7 @@ paths:
       summary: Report PvP result (server-authoritative)
       description: |
         Requires FEATURE_PVP=true. Disabled or not-ready returns 501/503 feature_unavailable.
+        When command_log includes players/enemies/commands (AP-102), server re-simulates and rejects winner mismatch.
       operationId: pvpResult
       security:
         - bearerAuth: []
@@ -2718,6 +2725,120 @@ paths:
           $ref: "#/components/responses/FeatureUnavailable"
         "503":
           $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/battle/catalog:
+    get:
+      tags: [Battle]
+      summary: Battle design catalog (skills, roles, statuses, archetypes)
+      description: |
+        AP-102 authoritative design data. Always available when authenticated.
+        Includes ≥12 skills, ≥6 enemy archetypes, recommended teams, upgrade tiers.
+      operationId: battleCatalog
+      security: [{bearerAuth: []}]
+      responses:
+        "200":
+          description: Catalog payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BattleCatalogResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/battle/pve/start:
+    post:
+      tags: [Battle]
+      summary: Start authoritative PvE battle session
+      description: |
+        Server generates battle seed, materializes enemy team from archetype,
+        returns pre-battle threats. Team snapshot is frozen for settlement.
+      operationId: battlePveStart
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BattlePveStartRequest"
+      responses:
+        "200":
+          description: Open session with seed, enemies, threats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BattlePveStartResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/battle/pve/settle:
+    post:
+      tags: [Battle]
+      summary: Settle PvE battle via seed+command log replay
+      description: |
+        Server re-simulates commands against frozen team/enemy snapshots.
+        Client claimed_winner must match server result when provided (tamper reject).
+        Idempotent for completed sessions.
+      operationId: battlePveSettle
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BattlePveSettleRequest"
+      responses:
+        "200":
+          description: Authoritative result + failure factors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BattlePveSettleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: not owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/battle/simulate:
+    post:
+      tags: [Battle]
+      summary: Dry-run deterministic battle simulation
+      description: Stateless replay helper for clients/tools. Same seed+commands → same result.
+      operationId: battleSimulate
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BattleSimulateRequest"
+      responses:
+        "200":
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BattleSimulateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 
   /api/v1/social/friends:
     get:
@@ -5042,3 +5163,144 @@ components:
         a11y_completed: { type: boolean }
         best_dim_score: { type: number }
         completed_at: { type: string, format: date-time }
+
+    BattleFighter:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        species: { type: string }
+        role: { type: string, enum: [tank, dps, support, control] }
+        slot: { type: string, enum: [front, mid, back] }
+        element: { type: string }
+        max_hp: { type: integer }
+        hp: { type: integer }
+        atk: { type: integer }
+        def: { type: integer }
+        spd: { type: integer }
+        crit: { type: integer }
+        eva: { type: integer }
+        energy: { type: integer }
+        skill_ids:
+          type: array
+          items: { type: string }
+        skill_levels:
+          type: object
+          additionalProperties: { type: integer }
+        side: { type: string, enum: [player, enemy] }
+    BattleCommand:
+      type: object
+      properties:
+        actor_id: { type: string }
+        kind: { type: string, enum: [basic, skill, ultimate, pass, strategy] }
+        skill_id: { type: string }
+        target_id: { type: string }
+        strategy: { type: string, enum: [aggressive, balanced, defensive] }
+        round: { type: integer }
+    BattleThreat:
+      type: object
+      properties:
+        code: { type: string }
+        severity: { type: string, enum: [low, medium, high] }
+        text_zh: { type: string }
+        text_en: { type: string }
+        counter: { type: string }
+    BattleFailureFactor:
+      type: object
+      properties:
+        code: { type: string }
+        weight: { type: integer }
+        text_zh: { type: string }
+        text_en: { type: string }
+    BattleResult:
+      type: object
+      properties:
+        winner_side: { type: string, enum: [player, enemy, draw] }
+        rounds: { type: integer }
+        rule_version: { type: string }
+        seed: { type: string }
+        command_hash: { type: string }
+        ended_by: { type: string }
+        failure_factors:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFailureFactor' }
+        metrics: { type: object, additionalProperties: true }
+        events:
+          type: array
+          items: { type: object, additionalProperties: true }
+    BattleCatalogResponse:
+      type: object
+      properties:
+        catalog: { type: object, additionalProperties: true }
+        source: { type: string }
+        request_id: { type: string }
+    BattlePveStartRequest:
+      type: object
+      required: [team]
+      properties:
+        mode: { type: string, enum: [pve, training] }
+        archetype_id: { type: string }
+        team:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/BattleFighter' }
+    BattlePveStartResponse:
+      type: object
+      properties:
+        session_id: { type: string }
+        seed: { type: string }
+        rule_version: { type: string }
+        archetype_id: { type: string }
+        mode: { type: string }
+        status: { type: string }
+        team:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFighter' }
+        enemies:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFighter' }
+        threats:
+          type: array
+          items: { $ref: '#/components/schemas/BattleThreat' }
+        request_id: { type: string }
+    BattlePveSettleRequest:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: { type: string }
+        commands:
+          type: array
+          items: { $ref: '#/components/schemas/BattleCommand' }
+        claimed_winner: { type: string, description: Must match server winner_side when set }
+    BattlePveSettleResponse:
+      type: object
+      properties:
+        session_id: { type: string }
+        status: { type: string }
+        winner_side: { type: string }
+        command_hash: { type: string }
+        result: { $ref: '#/components/schemas/BattleResult' }
+        failure_factors:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFailureFactor' }
+        request_id: { type: string }
+    BattleSimulateRequest:
+      type: object
+      required: [seed, team, enemies]
+      properties:
+        seed: { type: string }
+        team:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFighter' }
+        enemies:
+          type: array
+          items: { $ref: '#/components/schemas/BattleFighter' }
+        commands:
+          type: array
+          items: { $ref: '#/components/schemas/BattleCommand' }
+    BattleSimulateResponse:
+      type: object
+      properties:
+        result: { $ref: '#/components/schemas/BattleResult' }
+        request_id: { type: string }

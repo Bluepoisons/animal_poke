@@ -790,6 +790,33 @@ type QuestProgress struct {
 // TableName 明确表名。
 func (QuestProgress) TableName() string { return "quest_progress" }
 
+// ---------- AP-102 Battle design sessions (authoritative seed + command log) ----------
+
+// BattleSession 服务端权威 PvE/训练对局（AP-102）。
+type BattleSession struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	SessionID    string     `gorm:"uniqueIndex;size:36;not null" json:"session_id"`
+	OwnerKey     string     `gorm:"index;size:80;not null" json:"owner_key"`
+	Mode         string     `gorm:"size:16;not null;default:pve" json:"mode"` // pve|training
+	ArchetypeID  string     `gorm:"size:64;not null" json:"archetype_id"`
+	Seed         string     `gorm:"size:64;not null" json:"seed"`
+	RuleVersion  string     `gorm:"size:32;not null" json:"rule_version"`
+	Status       string     `gorm:"size:16;not null;index" json:"status"` // open|completed|cancelled
+	TeamJSON     string     `gorm:"type:text;not null" json:"team_json"`
+	EnemyJSON    string     `gorm:"type:text;not null" json:"enemy_json"`
+	ThreatsJSON  string     `gorm:"type:text" json:"threats_json,omitempty"`
+	CommandsJSON string     `gorm:"type:text" json:"commands_json,omitempty"`
+	ResultJSON   string     `gorm:"type:text" json:"result_json,omitempty"`
+	WinnerSide   string     `gorm:"size:16" json:"winner_side,omitempty"`
+	CommandHash  string     `gorm:"size:64" json:"command_hash,omitempty"`
+	SettledAt    *time.Time `json:"settled_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (BattleSession) TableName() string { return "battle_sessions" }
+
 // ---------- AP-098 Photography quality skill ----------
 
 // PhotoDeviceCalibration stores per-owner device sensor baseline (AP-098).

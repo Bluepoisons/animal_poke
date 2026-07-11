@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0022_photo_quality"
+const CurrentVersion = "0023_battle_design"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -88,6 +88,7 @@ func allMigrations() []migrationSpec {
 		{"0020_quest_system", migrate0020},
 		{"0021_growth_companion", migrate0021},
 		{"0022_photo_quality", migrate0022},
+		{"0023_battle_design", migrate0023},
 	}
 }
 
@@ -299,47 +300,33 @@ func migrate0014(db *gorm.DB) error {
 	)
 }
 
-// migrate0015 区域日榜分数、结算快照与奖励发放（AP-114）。
+// migrate0015 区域日榜（AP-114）。
 func migrate0015(db *gorm.DB) error {
 	return db.AutoMigrate(&models.RankingDailyScore{}, &models.RankingSnapshot{}, &models.RankingRewardGrant{})
 }
-
-// migrate0016 PvP 匹配队列、对局与段位（AP-115）。
 func migrate0016(db *gorm.DB) error {
 	return db.AutoMigrate(&models.PvPMatch{}, &models.PvPRating{}, &models.PvPQueue{})
 }
-
-// migrate0017 管理端会话与动作审计（AP-085 RBAC）。
 func migrate0017(db *gorm.DB) error {
 	return db.AutoMigrate(&models.AdminSession{}, &models.AdminActionLog{})
 }
-
-// migrate0018 社交图谱（AP-083）。
 func migrate0018(db *gorm.DB) error {
 	return db.AutoMigrate(&models.SocialProfile{}, &models.FriendRequest{}, &models.Friendship{}, &models.SocialBlock{}, &models.SocialMute{}, &models.SocialUserReport{}, &models.SocialShare{})
 }
-
-// migrate0019 账号安全：邮箱验证状态、安全令牌表（AP-079）。
 func migrate0019(db *gorm.DB) error {
 	return db.AutoMigrate(&models.AccountBinding{}, &models.AccountSecurityToken{})
 }
-
-// migrate0020 任务定义/进度/领取（AP-096）。
 func migrate0020(db *gorm.DB) error {
 	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
 }
-
-// migrate0021 研究员成长与虚拟伙伴（AP-099）。
 func migrate0021(db *gorm.DB) error {
 	return db.AutoMigrate(&models.GrowthEvent{}, &models.CompanionProfile{}, &models.CompanionMemoryNode{}, &models.GrowthResetAudit{})
 }
-
-// migrate0022 摄影质量技巧玩法（AP-098）。
 func migrate0022(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.PhotoDeviceCalibration{},
-		&models.PhotoScoreRecord{},
-		&models.PhotoPersonalBest{},
-		&models.PhotoThemeProgress{},
-	)
+	return db.AutoMigrate(&models.PhotoDeviceCalibration{}, &models.PhotoScoreRecord{}, &models.PhotoPersonalBest{}, &models.PhotoThemeProgress{})
+}
+
+// migrate0023 战斗队伍/技能/状态权威结算（AP-102）。
+func migrate0023(db *gorm.DB) error {
+	return db.AutoMigrate(&models.BattleSession{})
 }
