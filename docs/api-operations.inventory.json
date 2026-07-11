@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 153,
+  "count": 161,
   "operations": [
     {
       "method": "DELETE",
@@ -36,6 +36,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/cases",
+      "operationId": "listAdminCases",
+      "key": "GET /api/v1/admin/cases"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/cases/{id}",
+      "operationId": "getAdminCase",
+      "key": "GET /api/v1/admin/cases/{id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/cases/{id}/audits",
+      "operationId": "listAdminCaseAudits",
+      "key": "GET /api/v1/admin/cases/{id}/audits"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/security/reports/{id}",
       "operationId": "adminGetSecurityReport",
       "key": "GET /api/v1/admin/security/reports/{id}"
@@ -57,6 +75,12 @@
       "path": "/api/v1/battle/catalog",
       "operationId": "battleCatalog",
       "key": "GET /api/v1/battle/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cases/{id}",
+      "operationId": "getUserCaseStatus",
+      "key": "GET /api/v1/cases/{id}"
     },
     {
       "method": "GET",
@@ -393,6 +417,30 @@
       "path": "/api/v1/admin/auth/token",
       "operationId": "adminIssueToken",
       "key": "POST /api/v1/admin/auth/token"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cases",
+      "operationId": "createAdminCase",
+      "key": "POST /api/v1/admin/cases"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cases/{id}/assign",
+      "operationId": "assignAdminCase",
+      "key": "POST /api/v1/admin/cases/{id}/assign"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cases/{id}/notes",
+      "operationId": "addAdminCaseNote",
+      "key": "POST /api/v1/admin/cases/{id}/notes"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cases/{id}/transition",
+      "operationId": "transitionAdminCase",
+      "key": "POST /api/v1/admin/cases/{id}/transition"
     },
     {
       "method": "POST",

@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `153` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `161` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -18,10 +18,14 @@
 | API-deleteAnimal | `DELETE` | `/api/v1/sync/animals/{uuid}` | `deleteAnimal` | TestContractMatrix/deleteAnimal/success | TestContractMatrix/deleteAnimal/failure |
 | API-accountDefaults | `GET` | `/api/v1/account/defaults` | `accountDefaults` | TestContractMatrix/accountDefaults/success | TestContractMatrix/accountDefaults/failure |
 | API-listAuditLogs | `GET` | `/api/v1/admin/audit/logs` | `listAuditLogs` | TestContractMatrix/listAuditLogs/success | TestContractMatrix/listAuditLogs/failure |
+| API-listAdminCases | `GET` | `/api/v1/admin/cases` | `listAdminCases` | TestContractMatrix/listAdminCases/success | TestContractMatrix/listAdminCases/failure |
+| API-getAdminCase | `GET` | `/api/v1/admin/cases/{id}` | `getAdminCase` | TestContractMatrix/getAdminCase/success | TestContractMatrix/getAdminCase/failure |
+| API-listAdminCaseAudits | `GET` | `/api/v1/admin/cases/{id}/audits` | `listAdminCaseAudits` | TestContractMatrix/listAdminCaseAudits/success | TestContractMatrix/listAdminCaseAudits/failure |
 | API-adminGetSecurityReport | `GET` | `/api/v1/admin/security/reports/{id}` | `adminGetSecurityReport` | TestContractMatrix/adminGetSecurityReport/success | TestContractMatrix/adminGetSecurityReport/failure |
 | API-authAccount | `GET` | `/api/v1/auth/account` | `authAccount` | TestContractMatrix/authAccount/success | TestContractMatrix/authAccount/failure |
 | API-authListDevices | `GET` | `/api/v1/auth/devices` | `authListDevices` | TestContractMatrix/authListDevices/success | TestContractMatrix/authListDevices/failure |
 | API-battleCatalog | `GET` | `/api/v1/battle/catalog` | `battleCatalog` | TestContractMatrix/battleCatalog/success | TestContractMatrix/battleCatalog/failure |
+| API-getUserCaseStatus | `GET` | `/api/v1/cases/{id}` | `getUserCaseStatus` | TestContractMatrix/getUserCaseStatus/success | TestContractMatrix/getUserCaseStatus/failure |
 | API-getCollectionAnimal | `GET` | `/api/v1/collection/{uuid}` | `getCollectionAnimal` | TestContractMatrix/getCollectionAnimal/success | TestContractMatrix/getCollectionAnimal/failure |
 | API-listEntitlements | `GET` | `/api/v1/commerce/entitlements` | `listEntitlements` | TestContractMatrix/listEntitlements/success | TestContractMatrix/listEntitlements/failure |
 | API-getOrder | `GET` | `/api/v1/commerce/orders/{id}` | `getOrder` | TestContractMatrix/getOrder/success | TestContractMatrix/getOrder/failure |
@@ -78,6 +82,10 @@
 | API-patchAnimal | `PATCH` | `/api/v1/sync/animals/{uuid}` | `patchAnimal` | TestContractMatrix/patchAnimal/success | TestContractMatrix/patchAnimal/failure |
 | API-ackAuditLog | `POST` | `/api/v1/admin/audit/logs/{id}/ack` | `ackAuditLog` | TestContractMatrix/ackAuditLog/success | TestContractMatrix/ackAuditLog/failure |
 | API-adminIssueToken | `POST` | `/api/v1/admin/auth/token` | `adminIssueToken` | TestContractMatrix/adminIssueToken/success | TestContractMatrix/adminIssueToken/failure |
+| API-createAdminCase | `POST` | `/api/v1/admin/cases` | `createAdminCase` | TestContractMatrix/createAdminCase/success | TestContractMatrix/createAdminCase/failure |
+| API-assignAdminCase | `POST` | `/api/v1/admin/cases/{id}/assign` | `assignAdminCase` | TestContractMatrix/assignAdminCase/success | TestContractMatrix/assignAdminCase/failure |
+| API-addAdminCaseNote | `POST` | `/api/v1/admin/cases/{id}/notes` | `addAdminCaseNote` | TestContractMatrix/addAdminCaseNote/success | TestContractMatrix/addAdminCaseNote/failure |
+| API-transitionAdminCase | `POST` | `/api/v1/admin/cases/{id}/transition` | `transitionAdminCase` | TestContractMatrix/transitionAdminCase/success | TestContractMatrix/transitionAdminCase/failure |
 | API-adminRefundOrder | `POST` | `/api/v1/admin/commerce/orders/refund` | `adminRefundOrder` | TestContractMatrix/adminRefundOrder/success | TestContractMatrix/adminRefundOrder/failure |
 | API-webhookRefundOrder | `POST` | `/api/v1/admin/commerce/webhooks/refund` | `webhookRefundOrder` | TestContractMatrix/webhookRefundOrder/success | TestContractMatrix/webhookRefundOrder/failure |
 | API-adminRevokeSession | `POST` | `/api/v1/admin/sessions/revoke` | `adminRevokeSession` | TestContractMatrix/adminRevokeSession/success | TestContractMatrix/adminRevokeSession/failure |
