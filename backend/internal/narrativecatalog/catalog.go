@@ -72,6 +72,9 @@ func SeedNodes() []NodeDef {
 		{NodeID: "ch4_zero_capture", ChapterID: "ch4", Title: "零捕获路线", Body: "这一章你没有新增捕获。旧照片、空白记录和角色态度构成完整篇章。", Kind: "story", Priority: 39},
 		{NodeID: "ch4_ending_materials", ChapterID: "ch4", Title: "为展览准备材料", Body: "你收集到至少三类材料：空白页注释、角色回响、季节对照。终章展览可选它们。", Kind: "ending", Priority: 38},
 		{NodeID: "ch4_pace_echo", ChapterID: "ch4", Title: "跨章回响：节奏", Body: "若你在第一章选择了缓慢观察，角色会记得你的耐心；若选择效率，手账语气更短促。这是延迟后果，不是对错分。", Kind: "story", Priority: 37},
+		{NodeID: "ch4_season_archive", ChapterID: "ch4", Title: "季节档案", Body: "旧照片显示去年此时也有空白。空白有解释：迁徙、施工、或你改了出门时间。", Kind: "story", Priority: 36},
+		{NodeID: "ch4_city_change", ChapterID: "ch4", Title: "城市改造", Body: "地图上的缺口对应新围挡。角色态度随前三章选择变化，但主线仍汇合于此。", Kind: "story", Priority: 35},
+		{NodeID: "ch4_exhibit_three", ChapterID: "ch4", Title: "三类展览素材", Body: "可选材料：1) 空白页注释 2) 角色回响 3) 季节对照。无稀有动物门槛。", Kind: "ending", Priority: 34},
 	}
 }
 
@@ -93,6 +96,9 @@ func SeedChoices() []ChoiceDef {
 		{ChoiceID: "ch3_open_choice", FromNodeID: "ch3_rain_eaves", ToNodeID: "ch3_choice_judge", Label: "面对矛盾证词", Effects: map[string]any{}, SortOrder: 1},
 		{ChoiceID: "ch4_to_zero", FromNodeID: "ch4_map_blank", ToNodeID: "ch4_zero_capture", Label: "记录空白", Effects: map[string]any{"flag:zero_capture_route": true}, SortOrder: 1},
 		{ChoiceID: "ch4_to_end", FromNodeID: "ch4_zero_capture", ToNodeID: "ch4_ending_materials", Label: "整理展览材料", Effects: map[string]any{}, SortOrder: 1},
+		{ChoiceID: "ch4_to_season", FromNodeID: "ch4_ending_materials", ToNodeID: "ch4_season_archive", Label: "打开季节档案", Effects: map[string]any{}, SortOrder: 1},
+		{ChoiceID: "ch4_to_city", FromNodeID: "ch4_season_archive", ToNodeID: "ch4_city_change", Label: "对照城市改造", Effects: map[string]any{}, SortOrder: 1},
+		{ChoiceID: "ch4_to_exhibit", FromNodeID: "ch4_city_change", ToNodeID: "ch4_exhibit_three", Label: "选定展览素材", Effects: map[string]any{"flag:exhibit_ready": true}, SortOrder: 1},
 	}
 }
 
