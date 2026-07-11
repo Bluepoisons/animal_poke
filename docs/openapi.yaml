@@ -211,11 +211,12 @@ paths:
   /api/v1/version:
     get:
       operationId: getClientVersion
-      tags: [System]
+      tags: [Health]
       summary: Client version negotiation (AP-089)
       description: |
         Returns min/current client version metadata and optional deprecation headers.
         Clients SHOULD send `X-Client-Version` on subsequent requests.
+      security: []
       parameters:
         - name: X-Client-Version
           in: header
@@ -239,7 +240,9 @@ paths:
                   current_api_version: { type: string }
                   recommended_client_version: { type: string }
                   deprecated: { type: boolean }
-                  sunset_at: { type: string, format: date-time, nullable: true }
+                  sunset_at:
+                    type: string
+                    format: date-time
                   capabilities:
                     type: object
                     additionalProperties: true

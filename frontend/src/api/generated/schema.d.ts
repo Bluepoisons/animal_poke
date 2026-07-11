@@ -3903,7 +3903,7 @@ export interface operations {
                         recommended_client_version?: string;
                         deprecated?: boolean;
                         /** Format: date-time */
-                        sunset_at?: string | null;
+                        sunset_at?: string;
                         capabilities?: {
                             [key: string]: unknown;
                         };
