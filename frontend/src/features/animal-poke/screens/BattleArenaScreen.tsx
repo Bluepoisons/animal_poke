@@ -6,6 +6,7 @@ import { useBattle } from '../../../battle/useBattle'
 import type { CardEntry, SpeciesType } from '../../../types'
 import type { StrategyType } from '../../../battle/types'
 import { BATTLE_ARCHETYPES, RECOMMENDED_TEAMS } from '../../../battle/designCatalog'
+import { ProgressBar } from '../../../a11y'
 
 const strategies: { id: StrategyType; label: string }[] = [
   { id: 'aggressive', label: '激进' },
@@ -104,16 +105,20 @@ export default function BattleArenaScreen() {
 
       <div className="ap-hp-row">
         <div className="ap-hp">
-          <span>我方 HP</span>
-          <div className="ap-hp__bar">
-            <i style={{ width: `${playerHpPct}%` }} />
-          </div>
+          <ProgressBar
+            value={playerHpPct}
+            label="我方生命值"
+            valueText={`我方生命值 ${playerHpPct}%`}
+            className="ap-progressbar--hp"
+          />
         </div>
         <div className="ap-hp">
-          <span>敌方 HP</span>
-          <div className="ap-hp__bar">
-            <i style={{ width: `${enemyHpPct}%` }} />
-          </div>
+          <ProgressBar
+            value={enemyHpPct}
+            label="敌方生命值"
+            valueText={`敌方生命值 ${enemyHpPct}%`}
+            className="ap-progressbar--hp"
+          />
         </div>
       </div>
 

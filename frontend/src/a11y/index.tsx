@@ -2,7 +2,7 @@
  * Shared accessibility hooks — focus trap, Escape, route announcer, progressbar, live region.
  * AP-071: Accessibility — focus management, dynamic progress, and page-switch semantics.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // ---------- FocusTrap ----------
 
@@ -43,7 +43,10 @@ export function useFocusTrap(opts: FocusTrapOptions): void {
     if (!active || !containerRef.current) return
 
     const el = containerRef.current
-    const focusable = () => Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(f => f.offsetParent !== null)
+    const focusable = () => Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((candidate) => (
+      !candidate.closest('[aria-hidden="true"], [hidden]') &&
+      getComputedStyle(candidate).visibility !== 'hidden'
+    ))
 
     // Move focus into the first focusable child
     const first = focusable()

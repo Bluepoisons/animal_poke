@@ -908,6 +908,24 @@
   font-weight: 600;
 }
 
+.ap-map-target-list {
+  margin-top: 12px;
+  padding: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.94);
+}
+.ap-map-target-list h2 {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.ap-map-target-list ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .ap-capture-hint {
   text-align: center;
   font-size: 13px;
@@ -1454,17 +1472,18 @@
  color: #6a5a4a;
  line-height: 1.35;
 }
-.ap-goals__bar {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(43, 43, 43, 0.08);
-  overflow: hidden;
+.ap-goals__progress {
+  margin: -8px 12px 8px;
 }
-.ap-goals__bar > span {
-  display: block;
-  height: 100%;
+.ap-goals__progress .ap-progressbar__track {
+  height: 6px;
+  background: rgba(43, 43, 43, 0.08);
+}
+.ap-goals__progress .ap-progressbar__fill {
   background: linear-gradient(90deg, #ff9ec6, #6fa3d2);
-  border-radius: 999px;
+}
+.ap-goals__progress .ap-progressbar__label {
+  display: none;
 }
 .ap-goals__free {
   position: absolute;

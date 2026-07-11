@@ -8,7 +8,6 @@ import { AnimalRepository } from '../../../db/repositories/animal-repository'
 import type { AnimalRecord } from '../../../db/types'
 import type { RarityTier, SpeciesType } from '../../../types'
 import AccessibleDialog from '../../../a11y/AccessibleDialog'
-import { useRouteAnnouncer } from '../../../a11y'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
@@ -43,7 +42,6 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<AnimalEntry | null>(null)
 
-  useRouteAnnouncer('图鉴')
 
   useEffect(() => {
     let cancelled = false
@@ -117,7 +115,6 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
           open={!!selected}
           onClose={() => setSelected(null)}
           title="图鉴详情"
-          triggerId={`pokedex-card-${selected.id}`}
         >
           <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
           <p style={{ margin: 0, fontSize: 13 }}>

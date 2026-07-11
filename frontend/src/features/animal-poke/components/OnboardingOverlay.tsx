@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   advanceOnboarding,
   loadOnboarding,
@@ -6,13 +6,22 @@ import {
   stepCopy,
   type OnboardingState,
 } from '../onboarding'
+import { useFocusTrap } from '../../../a11y'
 
 export default function OnboardingOverlay() {
   const [state, setState] = useState<OnboardingState>(() => loadOnboarding())
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap({
+    containerRef: dialogRef,
+    active: state.step !== 'done' && !state.skipped,
+    onEscape: () => setState(skipOnboarding()),
+  })
   if (state.step === 'done' || state.skipped) return null
   const copy = stepCopy(state.step)
   return (
     <div
+      ref={dialogRef}
+      className="ap-trap-container"
       role="dialog"
       aria-modal="true"
       aria-labelledby="onb-title"

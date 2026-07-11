@@ -80,7 +80,7 @@ export default function HuntMapScreen({
         rightTone="blue"
       />
 
-      <div className="ap-map-canvas" aria-label="猎取地图">
+      <div className="ap-map-canvas" role="region" aria-label="猎取地图">
         <div className="ap-road ap-road--blue" />
         <div className="ap-road ap-road--olive" />
 
@@ -165,6 +165,20 @@ export default function HuntMapScreen({
           )}
         </div>
       </div>
+      <section className="ap-map-target-list" aria-label="附近可探索目标">
+        <h2>附近可探索目标</h2>
+        {targets.length === 0 ? (
+          <p>当前没有可探索目标。</p>
+        ) : (
+          <ul>
+            {targets.map((target) => (
+              <li key={target.id}>
+                {target.label}：{speciesNames[target.species as keyof typeof speciesNames]}，距离 {target.distanceMeters} 米，{target.rarity}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

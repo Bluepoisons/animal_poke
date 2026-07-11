@@ -1,6 +1,7 @@
 import type { GoalProgress, ReturnSummary } from '../../../progression/types'
 import type { GoalNavigateTo } from '../../../progression/types'
 import type { ScreenId } from '../data/types'
+import { ProgressBar } from '../../../a11y'
 
 interface DailyGoalsPanelProps {
   goals: GoalProgress[]
@@ -81,7 +82,6 @@ export default function DailyGoalsPanel({
 
       <ol className="ap-goals__list">
         {goals.map((g) => {
-          const pct = Math.round((g.current / Math.max(1, g.target)) * 100)
           return (
             <li key={g.def.id} className={`ap-goals__item ${g.completed ? 'is-done' : ''} ${g.executable ? 'is-exec' : ''}`}>
               <button
@@ -100,11 +100,16 @@ export default function DailyGoalsPanel({
                   </span>
                 </div>
                 <p className="ap-goals__desc">{g.def.description}</p>
-                <div className="ap-goals__bar" aria-hidden="true">
-                  <span style={{ width: `${Math.min(100, pct)}%` }} />
-                </div>
                 {g.def.free && <span className="ap-goals__free">免费</span>}
               </button>
+              <ProgressBar
+                value={g.current}
+                max={g.target}
+                label={`${g.def.title}进度`}
+                valueText={`${g.def.title}：${g.current}/${g.target}`}
+                size="sm"
+                className="ap-goals__progress"
+              />
             </li>
           )
         })}

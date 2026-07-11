@@ -23,11 +23,21 @@ import {
   reduceCaptureFlow,
   type CaptureFlowEvent,
 } from './captureFlow'
-import { RouteAnnouncerElement } from '../../a11y'
+import { RouteAnnouncerElement, useRouteAnnouncer } from '../../a11y'
 import OnboardingOverlay from './components/OnboardingOverlay'
 import { setCaptureActive } from '../../pwa/updateGate'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store', 'settings']
+
+const ROUTE_TITLES: Record<ScreenId, string> = {
+  discover: '发现',
+  map: '猎取地图',
+  capture: '捕获',
+  pokedex: '图鉴',
+  battle: '对战竞技场',
+  store: '商店',
+  settings: '设置',
+}
 
 function parseHashScreen(): ScreenId {
   const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
@@ -57,6 +67,7 @@ const progression = useProgression()
   const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [showAccount, setShowAccount] = useState(false)
+  useRouteAnnouncer(showAccount ? '账户设置' : ROUTE_TITLES[screen])
   const toastTimer = useRef<number | null>(null)
 
   const [flow, dispatchFlow] = useReducer(reduceCaptureFlow, undefined, createInitialCaptureFlow)
@@ -295,6 +306,7 @@ const progression = useProgression()
     }
   }
 
+  return (
     <div className="ap-root">
       <RouteAnnouncerElement />
       <OnboardingOverlay />
@@ -302,9 +314,9 @@ const progression = useProgression()
         跳到主要内容
       </a>
       <PhoneFrame variant={screen}>
-        <div className="ap-main" id="ap-main-content" tabIndex={-1}>
+        <main className="ap-main" id="ap-main-content" tabIndex={-1}>
           {renderScreen()}
-        </div>
+        </main>
         {screen !== 'map' && (
           <BottomTabBar
             active={screen === 'capture' ? 'discover' : screen}
