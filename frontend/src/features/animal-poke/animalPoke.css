@@ -631,6 +631,15 @@
   border: 1.5px solid var(--ink);
 }
 
+.ap-photo-skill-hint {
+  margin: 6px 18px 0;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6a5a4a;
+  text-align: center;
+}
+
 .ap-doodle {
   position: absolute;
   pointer-events: none;

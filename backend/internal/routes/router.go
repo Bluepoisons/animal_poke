@@ -422,6 +422,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/growth/companions", growthH.ListCompanions)
 				auth.GET("/growth/companions/:animal_uuid", growthH.GetCompanion)
 				auth.POST("/growth/reset", middleware.BodyLimit(middleware.MaxBodyDefault), growthH.Reset)
+				// AP-098 摄影质量技巧：校准 / 评分 / 个人最佳 / 每日主题
+				photoH := handlers.NewPhotoHandler(repo.NewPhotoRepo(db), cfg.StatsHMACKey)
+				photoG := auth.Group("/photo")
+				photoG.Use(middleware.RateLimitByDevice(rateLimiter))
+				{
+					photoG.GET("/calibration", photoH.GetCalibration)
+					photoG.POST("/calibrate", middleware.BodyLimit(middleware.MaxBodyDefault), photoH.Calibrate)
+					photoG.POST("/score", middleware.BodyLimit(middleware.MaxBodyDefault), photoH.Score)
+					photoG.GET("/personal-best", photoH.PersonalBest)
+					photoG.GET("/theme/daily", photoH.DailyTheme)
+					photoG.POST("/theme/progress", middleware.BodyLimit(middleware.MaxBodyDefault), photoH.ThemeProgress)
+				}
 			} else {
 				auth.POST("/privacy/consent", unavailable("db_unavailable"))
 				auth.POST("/privacy/export", unavailable("db_unavailable"))
@@ -454,6 +466,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/growth/companions", unavailable("db_unavailable"))
 				auth.GET("/growth/companions/:animal_uuid", unavailable("db_unavailable"))
 				auth.POST("/growth/reset", unavailable("db_unavailable"))
+				auth.GET("/photo/calibration", unavailable("db_unavailable"))
+				auth.POST("/photo/calibrate", unavailable("db_unavailable"))
+				auth.POST("/photo/score", unavailable("db_unavailable"))
+				auth.GET("/photo/personal-best", unavailable("db_unavailable"))
+				auth.GET("/photo/theme/daily", unavailable("db_unavailable"))
+				auth.POST("/photo/theme/progress", unavailable("db_unavailable"))
 			}
 		}
 

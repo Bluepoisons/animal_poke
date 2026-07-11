@@ -531,6 +531,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/photo/calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get device photography calibration
+         * @description Returns per-owner sensor baseline used to normalize stability/lighting scores.
+         *     Uncalibrated devices receive neutral defaults.
+         */
+        get: operations["photoGetCalibration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo/calibrate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit device calibration samples
+         * @description Idle-hold stability RMS samples and optional lighting offsets.
+         *     Server blends into owner baseline (EMA). Bad samples are filtered.
+         */
+        post: operations["photoCalibrate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score observation quality (server-authoritative)
+         * @description Deterministic six-dimension skill score: stability, subject completeness,
+         *     lighting, occlusion, composition, safe distance.
+         *     Results are HMAC-signed. Closer/chase never improves rarity contribution.
+         *     Daily cap and metrics-digest dedupe prevent farming.
+         */
+        post: operations["photoScore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo/personal-best": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get photography personal best scores */
+        get: operations["photoPersonalBest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo/theme/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get daily photography theme with accessibility alternative
+         * @description Every daily challenge includes a non-visual / reduced-motion alternative goal.
+         */
+        get: operations["photoDailyTheme"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo/theme/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark accessibility alternative complete for today's theme */
+        post: operations["photoThemeProgress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/animal": {
         parameters: {
             query?: never;
@@ -2708,6 +2827,111 @@ export interface components {
                 created_at?: string;
             };
             request_id?: string;
+        /** @description Client-reported observation metrics (no raw photo bytes). Server re-scores deterministically. */
+        PhotoMetrics: {
+            stability_rms?: number;
+            subject_fill_ratio?: number;
+            subject_center_offset?: number;
+            lighting_score?: number;
+            occlusion_ratio?: number;
+            subject_completeness?: number;
+            estimated_distance_m?: number;
+            sensor_samples?: number;
+            device_model?: string;
+        };
+        PhotoDimensionScores: {
+            stability?: number;
+            subject_completeness?: number;
+            lighting?: number;
+            /** @description Higher means clearer (less occlusion) */
+            occlusion?: number;
+            composition?: number;
+            /** @description Peaks at respectful mid-range; closer never better */
+            safe_distance?: number;
+        };
+        PhotoScoreResult: {
+            overall?: number;
+            /** @enum {string} */
+            band?: "excellent" | "good" | "fair" | "poor";
+            dimensions?: components["schemas"]["PhotoDimensionScores"];
+            tips?: string[];
+            welfare_flags?: string[];
+            research_bonus?: number;
+            chase_penalty?: boolean;
+            config_version?: string;
+            metrics_digest?: string;
+            /** @description HMAC-SHA256 of score payload */
+            signature?: string;
+            rarity_eligible?: boolean;
+        };
+        PhotoCalibration: {
+            baseline_stability_rms?: number;
+            lighting_offset?: number;
+            sample_count?: number;
+            calibrated?: boolean;
+            config_version?: string;
+        };
+        PhotoCalibrationResponse: {
+            calibration?: components["schemas"]["PhotoCalibration"];
+            device_model?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            config_version?: string;
+            request_id?: string;
+        };
+        PhotoScoreResponse: {
+            score?: components["schemas"]["PhotoScoreResult"];
+            /** @description Factor for rarity mapping; chase/too-close is capped and never boosted */
+            rarity_quality_factor?: number;
+            theme?: components["schemas"]["PhotoDailyTheme"];
+            theme_met?: boolean;
+            persisted?: boolean;
+            score_id?: string;
+            personal_best?: components["schemas"]["PhotoPersonalBest"];
+            config_version?: string;
+            request_id?: string;
+        };
+        PhotoPersonalBest: {
+            owner_key?: string;
+            overall?: number;
+            stability?: number;
+            subject_completeness?: number;
+            lighting?: number;
+            occlusion?: number;
+            composition?: number;
+            safe_distance?: number;
+            best_score_id?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        /** @description Accessibility alternative for the daily photography challenge */
+        PhotoA11yGoal: {
+            goal_id?: string;
+            title?: string;
+            description?: string;
+            /** @enum {string} */
+            mode?: "timer_hold" | "high_contrast_frame" | "voice_guided" | "static_upload";
+        };
+        PhotoDailyTheme: {
+            /** @description YYYY-MM-DD UTC */
+            date?: string;
+            theme_id?: string;
+            title?: string;
+            description?: string;
+            target_dimension?: string;
+            target_score?: number;
+            accessibility_alternative?: components["schemas"]["PhotoA11yGoal"];
+            config_version?: string;
+        };
+        PhotoThemeProgress: {
+            owner_key?: string;
+            day_key?: string;
+            theme_id?: string;
+            completed?: boolean;
+            a11y_completed?: boolean;
+            best_dim_score?: number;
+            /** Format: date-time */
+            completed_at?: string;
         };
     };
     responses: {
@@ -2801,6 +3025,7 @@ export interface components {
             };
         };
         /** @description Feature not implemented or not enabled (HTTP 501) */
+        /** @description Feature not implemented or disabled (HTTP 501) */
         NotImplemented: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestID"];
@@ -2808,6 +3033,7 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+                "application/json": components["schemas"]["FeatureUnavailableError"];
             };
         };
     };
@@ -3711,6 +3937,205 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    photoGetCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current calibration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoCalibrationResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    photoCalibrate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    stability_samples: number[];
+                    lighting_offsets?: number[];
+                    device_model?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated calibration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoCalibrationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    photoScore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    metrics: components["schemas"]["PhotoMetrics"];
+                    theme_id?: string;
+                    a11y_completed?: boolean;
+                    /** @description false = dry-run without consuming daily cap */
+                    persist?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Score result with signature and optional personal best */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoScoreResponse"];
+                };
+            };
+            /** @description Bad sensor input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Duplicate metrics fingerprint today */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Daily score cap reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    photoPersonalBest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal best dimensions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        personal_best?: components["schemas"]["PhotoPersonalBest"];
+                        config_version?: string;
+                        request_id?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    photoDailyTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Theme and progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        theme?: components["schemas"]["PhotoDailyTheme"];
+                        progress?: components["schemas"]["PhotoThemeProgress"];
+                        config_version?: string;
+                        request_id?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    photoThemeProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    theme_id?: string;
+                    a11y_completed?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated theme progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        theme?: components["schemas"]["PhotoDailyTheme"];
+                        progress?: components["schemas"]["PhotoThemeProgress"];
+                        config_version?: string;
+                        request_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     syncAnimal: {
