@@ -40,6 +40,14 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      - name: Narrative QA gate (AP-134)
+        run: go run ./cmd/narrativeqa -report narrative-qa-report.json
+      - name: Upload narrative QA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: narrative-qa-report
+          path: backend/narrative-qa-report.json
+          if-no-files-found: error
       - name: Race
         run: go test -race ./...
       - name: Staticcheck
