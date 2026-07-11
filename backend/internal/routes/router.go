@@ -237,8 +237,41 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
 				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			}
-			auth.GET("/social/friends", product.FriendsList)
-			auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
+			// AP-083 社交：有 DB 时挂载完整图谱；否则保留 product 骨架（flag 关 501 / 无库 503）
+			if db != nil && animalRepo != nil {
+				socialH := handlers.NewSocialHandler(handlers.SocialOptions{
+					Flags:   cfg.FeatureFlags,
+					Social:  repo.NewSocialRepo(db),
+					Animals: animalRepo,
+				})
+				socialG := auth.Group("/social")
+				// 社交写路径限流（防刷好友/举报）
+				socialG.Use(middleware.RateLimitByDevice(rateLimiter))
+				{
+					socialG.GET("/friends", socialH.FriendsList)
+					socialG.GET("/friends/requests", socialH.FriendRequestsList)
+					socialG.POST("/friends/request", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.FriendRequestCreate)
+					socialG.POST("/friends/accept", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.FriendRequestAccept)
+					socialG.POST("/friends/reject", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.FriendRequestReject)
+					socialG.POST("/friends/cancel", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.FriendRequestCancel)
+					socialG.POST("/friends/remove", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.FriendRemove)
+					socialG.POST("/block", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.BlockUser)
+					socialG.POST("/unblock", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.UnblockUser)
+					socialG.GET("/blocks", socialH.ListBlocks)
+					socialG.POST("/mute", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.MuteUser)
+					socialG.POST("/unmute", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.UnmuteUser)
+					socialG.POST("/report", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.ReportUser)
+					socialG.GET("/search", socialH.SearchUsers)
+					socialG.GET("/settings", socialH.GetSettings)
+					socialG.PATCH("/settings", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.PatchSettings)
+					socialG.POST("/share", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.ShareCreate)
+					socialG.GET("/share/:token", socialH.ShareGet)
+					socialG.POST("/share/:token/revoke", middleware.BodyLimit(middleware.MaxBodyDefault), socialH.ShareRevoke)
+				}
+			} else {
+				auth.GET("/social/friends", product.FriendsList)
+				auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
+			}
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 			// AP-059 versioned game config (read for all auth; write/rollback ops-gated)
 			auth.GET("/config/game", product.GameConfigGet)
