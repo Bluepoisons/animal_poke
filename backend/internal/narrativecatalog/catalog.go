@@ -69,6 +69,7 @@ func SeedNodes() []NodeDef {
 		{NodeID: "ch4_map_blank", ChapterID: "ch4", Title: "第四章：地图上的空白", Body: "地图上有一格空白。不是 bug，是城市改造与季节迁徙留下的空位。", Kind: "story", Priority: 40},
 		{NodeID: "ch4_zero_capture", ChapterID: "ch4", Title: "零捕获路线", Body: "这一章你没有新增捕获。旧照片、空白记录和角色态度构成完整篇章。", Kind: "story", Priority: 39},
 		{NodeID: "ch4_ending_materials", ChapterID: "ch4", Title: "为展览准备材料", Body: "你收集到至少三类材料：空白页注释、角色回响、季节对照。终章展览可选它们。", Kind: "ending", Priority: 38},
+		{NodeID: "ch4_pace_echo", ChapterID: "ch4", Title: "跨章回响：节奏", Body: "若你在第一章选择了缓慢观察，角色会记得你的耐心；若选择效率，手账语气更短促。这是延迟后果，不是对错分。", Kind: "story", Priority: 37},
 	}
 }
 

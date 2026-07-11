@@ -443,6 +443,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/narrative/fail-forward", middleware.BodyLimit(middleware.MaxBodyDefault), narrH.FailForward)
 				auth.POST("/narrative/observation", middleware.BodyLimit(middleware.MaxBodyDefault), narrH.ObservationEvent)
 				auth.GET("/narrative/clues", narrH.ListClues)
+				auth.GET("/narrative/ending-summary", narrH.EndingSummary)
 				auth.POST("/narrative/clues", middleware.BodyLimit(middleware.MaxBodyDefault), narrH.UpdateClue)
 				auth.GET("/growth/catalog", growthH.GetCatalog)
 				auth.GET("/growth/researcher", growthH.GetResearcher)

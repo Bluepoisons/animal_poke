@@ -319,6 +319,34 @@ func writeNarrativeErr(c *gin.Context, err error) {
 	}
 }
 
+// EndingSummary GET /narrative/ending-summary — 选择因果摘要（AP-119 foldback）。
+func (h *NarrativeHandler) EndingSummary(c *gin.Context) {
+	ownerKey, _, _, ok := h.owner(c)
+	if !ok {
+		return
+	}
+	rows, err := h.repo.PullProgress(ownerKey)
+	if err != nil {
+		middleware.WriteError(c, http.StatusInternalServerError, "narrative_failed", "summary failed", true, nil)
+		return
+	}
+	items := make([]gin.H, 0, len(rows))
+	for _, p := range rows {
+		items = append(items, gin.H{
+			"chapter_id":         p.ChapterID,
+			"current_node_id":    p.CurrentNodeID,
+			"flags_json":         p.FlagsJSON,
+			"relationships_json": p.RelationshipsJSON,
+			"last_choice_id":     p.LastChoiceID,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"summary":    items,
+		"note":       "foldback: local differences preserved in flags/relationships; mainline shared",
+		"request_id": middleware.GetRequestID(c),
+	})
+}
+
 func clueStatusFromFlags(flagsJSON string) string {
 	if strings.Contains(flagsJSON, "hold") {
 		return "pending"
