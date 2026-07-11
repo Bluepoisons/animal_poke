@@ -88,6 +88,10 @@ export async function loginMockOAuth(
 ): Promise<MockBindResult> {
   assertMockAllowed()
   const deviceId = getOrCreateDeviceId()
+  const installationSecret =
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('ap_installation_secret') || undefined
+      : undefined
   const res = await apiRequest<AccountAuthResponse>({
     method: 'POST',
     path: '/api/v1/auth/login',
@@ -96,6 +100,7 @@ export async function loginMockOAuth(
       provider: 'mock_oauth',
       oauth_subject: subject,
       oauth_token: token,
+      ...(installationSecret ? { installation_secret: installationSecret } : {}),
     }),
     signal,
   })
