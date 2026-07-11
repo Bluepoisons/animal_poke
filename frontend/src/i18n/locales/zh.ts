@@ -231,6 +231,23 @@ export const zh = {
   'discover.enter_capture': '进入捕获',
   'discover.detecting': '识别中…',
   'discover.start': '开始识别',
+  // Shared state components (AP-073)
+  'state.loading': '加载中…',
+  'state.empty': '暂无数据',
+  'state.empty_body': '这里还没有内容，开始探索吧。',
+  'state.no_result': '没有匹配结果',
+  'state.no_result_body': '尝试调整筛选条件或清除过滤器。',
+  'state.error': '加载失败',
+  'state.error_body': '请检查网络后重试。如问题持续，请提供下方请求 ID。',
+  'state.error_retry': '重试',
+  'state.fatal': '发生严重错误',
+  'state.fatal_body': '请关闭应用后重新打开。如问题持续，请提供下方请求 ID 联系支持。',
+  'state.offline': '网络不可用',
+  'state.offline_body': '请检查网络连接后重试。',
+  'state.offline_retry': '重新连接',
+  'state.stale': '数据可能已过期',
+  'state.stale_body': '显示的是最近可用的数据。',
+  'state.stale_refresh': '刷新',
 } as const
 
 export type TranslationKey = keyof typeof zh
