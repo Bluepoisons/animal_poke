@@ -293,6 +293,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/commerce/orders/refund", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.RefundOrder)
 				auth.GET("/commerce/orders/:id", commerce.GetOrder)
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
+
+				// AP-082 钱包 / 库存 / 不可变流水
+				walletRepo := repo.NewWalletRepo(db)
+				walletH := handlers.NewWalletHandler(walletRepo)
+				auth.GET("/wallet", walletH.GetWallet)
+				auth.POST("/wallet/credit", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.Credit)
+				auth.POST("/wallet/debit", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.Debit)
+				auth.GET("/wallet/ledger", walletH.ListLedger)
+				auth.POST("/wallet/reconcile", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.Reconcile)
+				auth.GET("/inventory", walletH.GetInventory)
+				auth.POST("/inventory/grant", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.GrantInventory)
+				auth.POST("/inventory/consume", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.ConsumeInventory)
 			} else {
 				auth.POST("/privacy/consent", unavailable("db_unavailable"))
 				auth.POST("/privacy/export", unavailable("db_unavailable"))
@@ -304,6 +316,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/commerce/orders/refund", unavailable("db_unavailable"))
 				auth.GET("/commerce/orders/:id", unavailable("db_unavailable"))
 				auth.GET("/commerce/entitlements", unavailable("db_unavailable"))
+				auth.GET("/wallet", unavailable("db_unavailable"))
+				auth.POST("/wallet/credit", unavailable("db_unavailable"))
+				auth.POST("/wallet/debit", unavailable("db_unavailable"))
+				auth.GET("/wallet/ledger", unavailable("db_unavailable"))
+				auth.POST("/wallet/reconcile", unavailable("db_unavailable"))
+				auth.GET("/inventory", unavailable("db_unavailable"))
+				auth.POST("/inventory/grant", unavailable("db_unavailable"))
+				auth.POST("/inventory/consume", unavailable("db_unavailable"))
 			}
 		}
 

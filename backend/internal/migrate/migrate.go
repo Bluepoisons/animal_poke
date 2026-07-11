@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0012_collection_item_fields"
+const CurrentVersion = "0013_wallet_inventory_ledger"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -78,6 +78,7 @@ func allMigrations() []migrationSpec {
 		{"0009_check_constraints", migrate0009},
 		{"0011_account_merge_proof", migrate0011},
 		{"0012_collection_item_fields", migrate0012},
+		{"0013_wallet_inventory_ledger", migrate0013},
 	}
 }
 
@@ -242,4 +243,38 @@ func migrate0011(db *gorm.DB) error {
 // migrate0012 收藏项可编辑元数据：nickname / favorite / locked。
 func migrate0012(db *gorm.DB) error {
 	return db.AutoMigrate(&models.Animal{})
+}
+
+// migrate0013 钱包余额快照、不可变流水、道具库存（AP-082）。
+func migrate0013(db *gorm.DB) error {
+	if err := db.AutoMigrate(
+		&models.WalletBalance{},
+		&models.WalletLedgerEntry{},
+		&models.InventoryItem{},
+	); err != nil {
+		return err
+	}
+	// 余额/数量非负约束（MySQL 强制；SQLite 软跳过）。
+	stmts := []string{
+		`ALTER TABLE wallet_balances ADD CONSTRAINT chk_wallet_balance_nonneg CHECK (balance >= 0)`,
+		`ALTER TABLE inventory_items ADD CONSTRAINT chk_inventory_qty_nonneg CHECK (quantity >= 0)`,
+	}
+	for _, s := range stmts {
+		if err := db.Exec(s).Error; err != nil {
+			msg := strings.ToLower(err.Error())
+			if strings.Contains(msg, "duplicate") || strings.Contains(msg, "already exists") {
+				continue
+			}
+			if strings.Contains(msg, "syntax") || strings.Contains(msg, "near") {
+				slog.Warn("skip CHECK constraint on non-MySQL dialect", "err", err)
+				continue
+			}
+			// SQLite may reject ALTER ADD CONSTRAINT differently
+			if strings.Contains(msg, "constraint") && strings.Contains(msg, "exists") {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }

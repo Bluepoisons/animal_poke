@@ -37,6 +37,8 @@ tags:
     description: Client security and trusted time endpoints
   - name: Commerce
     description: Orders and entitlements
+  - name: Economy
+    description: Wallet balances, immutable reward ledger and inventory
   - name: Admin
     description: Admin audit APIs
   - name: Observability
@@ -1257,6 +1259,232 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+
+  /api/v1/wallet:
+    get:
+      tags: [Economy]
+      summary: Get wallet balances
+      description: |
+        Returns gold and stamina balance snapshots for the JWT owner
+        (account when bound, else device guest).
+      operationId: getWallet
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wallet balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/wallet/credit:
+    post:
+      tags: [Economy]
+      summary: Credit wallet
+      description: |
+        Credits gold or stamina. Idempotent on operation_id (global unique).
+        Same reward source can only credit once.
+      operationId: creditWallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletMutateRequest"
+      responses:
+        "201":
+          description: Credited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletMutateResponse"
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletMutateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/wallet/debit:
+    post:
+      tags: [Economy]
+      summary: Debit wallet
+      description: |
+        Debits gold or stamina. Never allows negative balance.
+        Concurrent debits are serialised (SELECT FOR UPDATE).
+        Idempotent on operation_id.
+      operationId: debitWallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletMutateRequest"
+      responses:
+        "200":
+          description: Debited or idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletMutateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Insufficient balance (reason_code insufficient_balance)
+
+  /api/v1/wallet/ledger:
+    get:
+      tags: [Economy]
+      summary: List wallet ledger
+      description: Paginated immutable reward/consume ledger (newest first).
+      operationId: listWalletLedger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: currency
+          in: query
+          schema:
+            type: string
+            enum: [gold, stamina]
+        - name: after_id
+          in: query
+          description: Cursor — return entries with id less than this
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Ledger page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletLedgerResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/wallet/reconcile:
+    post:
+      tags: [Economy]
+      summary: Rebuild balance from ledger
+      description: Recomputes currency balance from immutable ledger and writes snapshot.
+      operationId: reconcileWallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currency]
+              properties:
+                currency:
+                  type: string
+                  enum: [gold, stamina]
+      responses:
+        "200":
+          description: Reconciled balance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [currency, balance]
+                properties:
+                  currency: { type: string }
+                  balance: { type: integer, format: int64 }
+                  request_id: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/inventory:
+    get:
+      tags: [Economy]
+      summary: List inventory
+      operationId: listInventory
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory items with quantity > 0
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/inventory/grant:
+    post:
+      tags: [Economy]
+      summary: Grant inventory item
+      description: Grants items; idempotent on operation_id.
+      operationId: grantInventory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryMutateRequest"
+      responses:
+        "201":
+          description: Granted
+        "200":
+          description: Idempotent replay
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/inventory/consume:
+    post:
+      tags: [Economy]
+      summary: Consume inventory item
+      description: Consumes items; never negative; idempotent on operation_id.
+      operationId: consumeInventory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryMutateRequest"
+      responses:
+        "200":
+          description: Consumed or idempotent replay
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Insufficient item quantity (reason_code insufficient_item)
+
   /api/v1/admin/commerce/orders/refund:
     post:
       tags: [Admin, Commerce]
@@ -2412,3 +2640,111 @@ components:
         dropped: { type: integer }
         schema_version: { type: integer }
         request_id: { type: string }
+    WalletBalance:
+      type: object
+      required: [currency, balance]
+      properties:
+        currency:
+          type: string
+          enum: [gold, stamina]
+        balance:
+          type: integer
+          format: int64
+          minimum: 0
+    WalletResponse:
+      type: object
+      required: [owner_key, balances]
+      properties:
+        owner_key: { type: string }
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletBalance"
+        request_id: { type: string }
+    WalletMutateRequest:
+      type: object
+      required: [currency, amount, operation_id]
+      properties:
+        currency:
+          type: string
+          enum: [gold, stamina]
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+        operation_id:
+          type: string
+          maxLength: 128
+          description: Global unique idempotency key for this ledger entry
+        source_type:
+          type: string
+          description: checkin|task|battle|capture|shop|admin|compensate|reward|system|dispatch|level_up
+        source_id: { type: string }
+        metadata: { type: string }
+    WalletLedgerEntry:
+      type: object
+      properties:
+        entry_id: { type: string }
+        operation_id: { type: string }
+        owner_key: { type: string }
+        device_id: { type: string }
+        account_id: { type: string }
+        kind:
+          type: string
+          enum: [currency, item]
+        currency: { type: string }
+        delta: { type: integer, format: int64 }
+        amount: { type: integer, format: int64 }
+        balance_after: { type: integer, format: int64 }
+        source_type: { type: string }
+        source_id: { type: string }
+        metadata: { type: string }
+        created_at: { type: string, format: date-time }
+    WalletMutateResponse:
+      type: object
+      required: [balance, idempotent]
+      properties:
+        entry:
+          $ref: "#/components/schemas/WalletLedgerEntry"
+        balance: { type: integer, format: int64 }
+        idempotent: { type: boolean }
+        request_id: { type: string }
+    WalletLedgerResponse:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletLedgerEntry"
+        next_after: { type: integer, format: int64 }
+        request_id: { type: string }
+    InventoryItem:
+      type: object
+      properties:
+        item_id: { type: string }
+        quantity: { type: integer, format: int64, minimum: 0 }
+        owner_key: { type: string }
+        device_id: { type: string }
+        account_id: { type: string }
+        updated_at: { type: string, format: date-time }
+    InventoryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryItem"
+        request_id: { type: string }
+    InventoryMutateRequest:
+      type: object
+      required: [item_id, quantity, operation_id]
+      properties:
+        item_id: { type: string }
+        quantity: { type: integer, format: int64, minimum: 1 }
+        operation_id: { type: string, maxLength: 128 }
+        source_type: { type: string }
+        source_id: { type: string }
+        metadata: { type: string }
+
