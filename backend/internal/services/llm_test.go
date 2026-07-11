@@ -95,7 +95,8 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	assert.NotNil(t, result.Factors)
 	assert.Equal(t, StatsConfigVersion, result.ConfigVersion)
 	// 完整渲染后不应残留模板
-	assert.Contains(t, requestBody.Messages[0].Content, "completeness=8")
+	assert.Contains(t, requestBody.Messages[0].Content, "FICTIONAL")
+	assert.Contains(t, requestBody.Messages[0].Content, "cat")
 	assert.Contains(t, requestBody.Messages[0].Content, "Do NOT invent")
 }
 

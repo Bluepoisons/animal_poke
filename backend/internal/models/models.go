@@ -1059,3 +1059,138 @@ type GrowthResetAudit struct {
 }
 
 func (GrowthResetAudit) TableName() string { return "growth_reset_audits" }
+
+// ---------- AP-132 Narrative state schema ----------
+
+// NarrativeNode 剧情节点（数据驱动，authored canon）。
+type NarrativeNode struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	NodeID         string    `gorm:"uniqueIndex;size:64;not null" json:"node_id"`
+	ChapterID      string    `gorm:"index;size:32;not null" json:"chapter_id"`
+	Title          string    `gorm:"size:128;not null" json:"title"`
+	Body           string    `gorm:"type:text;not null" json:"body"`
+	Kind           string    `gorm:"size:32;not null;default:story" json:"kind"` // story|choice|fragment|fail_forward|ending
+	ContentVersion string    `gorm:"size:32;not null;default:v1" json:"content_version"`
+	Priority       int       `gorm:"not null;default:0" json:"priority"`
+	Active         bool      `gorm:"not null;default:true" json:"active"`
+	Withdrawn      bool      `gorm:"not null;default:false" json:"withdrawn"`
+	SafeFallback   string    `gorm:"size:64" json:"safe_fallback,omitempty"` // 撤回后安全节点
+	TagsJSON       string    `gorm:"type:text" json:"tags_json,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (NarrativeNode) TableName() string { return "narrative_nodes" }
+
+// NarrativeChoice 节点上的选择边。
+type NarrativeChoice struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ChoiceID       string    `gorm:"uniqueIndex;size:64;not null" json:"choice_id"`
+	FromNodeID     string    `gorm:"index;size:64;not null" json:"from_node_id"`
+	ToNodeID       string    `gorm:"index;size:64;not null" json:"to_node_id"`
+	Label          string    `gorm:"size:128;not null" json:"label"`
+	Prompt         string    `gorm:"type:text" json:"prompt,omitempty"`
+	ConditionsJSON string    `gorm:"type:text" json:"conditions_json,omitempty"`
+	EffectsJSON    string    `gorm:"type:text" json:"effects_json,omitempty"`
+	SortOrder      int       `gorm:"not null;default:0" json:"sort_order"`
+	Active         bool      `gorm:"not null;default:true" json:"active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (NarrativeChoice) TableName() string { return "narrative_choices" }
+
+// NarrativeProgress 玩家章节检查点与当前节点。
+type NarrativeProgress struct {
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey          string    `gorm:"uniqueIndex:idx_narr_prog,priority:1;size:80;not null" json:"owner_key"`
+	ChapterID         string    `gorm:"uniqueIndex:idx_narr_prog,priority:2;size:32;not null" json:"chapter_id"`
+	DeviceID          string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID         string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	CurrentNodeID     string    `gorm:"size:64;not null" json:"current_node_id"`
+	CheckpointNode    string    `gorm:"size:64" json:"checkpoint_node,omitempty"`
+	ContentVersion    string    `gorm:"size:32;not null;default:v1" json:"content_version"`
+	FlagsJSON         string    `gorm:"type:text" json:"flags_json,omitempty"` // ending/relationship flags
+	RelationshipsJSON string    `gorm:"type:text" json:"relationships_json,omitempty"`
+	ServerVersion     int64     `gorm:"not null;default:1" json:"server_version"`
+	LastChoiceID      string    `gorm:"size:64" json:"last_choice_id,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+func (NarrativeProgress) TableName() string { return "narrative_progress" }
+
+// NarrativeSeenState 已读节点/片段（去重与回顾）。
+type NarrativeSeenState struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey  string    `gorm:"uniqueIndex:idx_narr_seen,priority:1;size:80;not null" json:"owner_key"`
+	NodeID    string    `gorm:"uniqueIndex:idx_narr_seen,priority:2;size:64;not null" json:"node_id"`
+	DeviceID  string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	FirstSeen time.Time `gorm:"not null" json:"first_seen"`
+	LastSeen  time.Time `gorm:"not null" json:"last_seen"`
+	Summary   string    `gorm:"type:text" json:"summary,omitempty"` // 撤回后可读摘要
+}
+
+func (NarrativeSeenState) TableName() string { return "narrative_seen_states" }
+
+// NarrativeChoiceLog 选择提交幂等日志。
+type NarrativeChoiceLog struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	OperationID string    `gorm:"uniqueIndex;size:128;not null" json:"operation_id"`
+	OwnerKey    string    `gorm:"index;size:80;not null" json:"owner_key"`
+	DeviceID    string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID   string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	ChoiceID    string    `gorm:"index;size:64;not null" json:"choice_id"`
+	FromNodeID  string    `gorm:"size:64;not null" json:"from_node_id"`
+	ToNodeID    string    `gorm:"size:64;not null" json:"to_node_id"`
+	EffectsJSON string    `gorm:"type:text" json:"effects_json,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (NarrativeChoiceLog) TableName() string { return "narrative_choice_logs" }
+
+// StoryFragment 观察触发的故事碎片（AP-118）。
+type StoryFragment struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	FragmentID     string    `gorm:"uniqueIndex;size:64;not null" json:"fragment_id"`
+	Title          string    `gorm:"size:128;not null" json:"title"`
+	Body           string    `gorm:"type:text;not null" json:"body"`
+	Priority       int       `gorm:"not null;default:0" json:"priority"`
+	TriggersJSON   string    `gorm:"type:text" json:"triggers_json,omitempty"`
+	MutexGroup     string    `gorm:"size:64" json:"mutex_group,omitempty"`
+	CooldownHours  int       `gorm:"not null;default:0" json:"cooldown_hours"`
+	FallbackID     string    `gorm:"size:64" json:"fallback_id,omitempty"`
+	ContentVersion string    `gorm:"size:32;not null;default:v1" json:"content_version"`
+	Active         bool      `gorm:"not null;default:true" json:"active"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (StoryFragment) TableName() string { return "story_fragments" }
+
+// StoryFragmentUnlock 碎片解锁记录（幂等）。
+type StoryFragmentUnlock struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey    string    `gorm:"uniqueIndex:idx_frag_unlock,priority:1;size:80;not null" json:"owner_key"`
+	FragmentID  string    `gorm:"uniqueIndex:idx_frag_unlock,priority:2;size:64;not null" json:"fragment_id"`
+	OperationID string    `gorm:"uniqueIndex;size:128;not null" json:"operation_id"`
+	DeviceID    string    `gorm:"index;size:64;not null" json:"device_id"`
+	Reason      string    `gorm:"size:256" json:"reason,omitempty"`
+	UnlockedAt  time.Time `json:"unlocked_at"`
+}
+
+func (StoryFragmentUnlock) TableName() string { return "story_fragment_unlocks" }
+
+// ClueState 线索状态（AP-127 不可靠叙述）。
+type ClueState struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey  string    `gorm:"uniqueIndex:idx_clue,priority:1;size:80;not null" json:"owner_key"`
+	ClueID    string    `gorm:"uniqueIndex:idx_clue,priority:2;size:64;not null" json:"clue_id"`
+	Status    string    `gorm:"size:16;not null;default:unknown" json:"status"` // unknown|pending|confirmed|disputed
+	Source    string    `gorm:"size:64" json:"source,omitempty"`                // observation|npc|model|archive
+	Evidence  string    `gorm:"type:text" json:"evidence,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (ClueState) TableName() string { return "clue_states" }

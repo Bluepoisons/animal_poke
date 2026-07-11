@@ -2300,6 +2300,90 @@ paths:
           description: Permission denied
         "404":
           description: Not found
+  /api/v1/narrative/catalog:
+    get:
+      tags: [Narrative]
+      summary: Narrative content catalog version (AP-132)
+      operationId: narrativeCatalog
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Catalog meta}
+  /api/v1/narrative/nodes/{node_id}:
+    get:
+      tags: [Narrative]
+      summary: Get narrative node and choices
+      operationId: narrativeGetNode
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Node payload}
+  /api/v1/narrative/progress:
+    get:
+      tags: [Narrative]
+      summary: Get or create chapter progress
+      operationId: narrativeProgress
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: chapter
+          in: query
+          schema: {type: string}
+      responses:
+        "200": {description: Progress}
+  /api/v1/narrative/choices:
+    post:
+      tags: [Narrative]
+      summary: Submit narrative choice (idempotent)
+      operationId: narrativeSubmitChoice
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id, choice_id, operation_id]
+              properties:
+                chapter_id: {type: string}
+                choice_id: {type: string}
+                operation_id: {type: string}
+      responses:
+        "200": {description: Idempotent replay}
+        "201": {description: Applied}
+  /api/v1/narrative/fail-forward:
+    post:
+      tags: [Narrative]
+      summary: Fail-forward narrative on miss/empty (AP-120)
+      operationId: narrativeFailForward
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Fail-forward node}
+  /api/v1/narrative/observation:
+    post:
+      tags: [Narrative]
+      summary: Observation event unlocks story fragments (AP-118)
+      operationId: narrativeObservation
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Unlocked fragments}
+  /api/v1/narrative/clues:
+    get:
+      tags: [Narrative]
+      summary: List clue states (AP-127)
+      operationId: narrativeListClues
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Clues}
+    post:
+      tags: [Narrative]
+      summary: Update clue status
+      operationId: narrativeUpdateClue
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Updated}
   /api/v1/quests:
     get:
       tags: [Quest]
