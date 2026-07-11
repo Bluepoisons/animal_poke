@@ -226,8 +226,15 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			} else {
 				auth.GET("/ranking/daily", product.RankingDaily)
 			}
-			auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
-			auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
+			if db != nil {
+				pvpH := handlers.NewPvPHandler(db, deviceRepo, cfg.FeatureFlags.PvP)
+				auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Match)
+				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Result)
+				auth.POST("/pvp/cancel", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Cancel)
+			} else {
+				auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
+				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
+			}
 			auth.GET("/social/friends", product.FriendsList)
 			auth.POST("/social/share", middleware.BodyLimit(middleware.MaxBodyDefault), product.ShareCreate)
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
