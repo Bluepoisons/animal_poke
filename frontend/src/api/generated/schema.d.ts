@@ -436,6 +436,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/animals/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get single collection animal detail
+         * @description Returns one owned animal by uuid. Soft-deleted animals return a minimal
+         *     tombstone (`uuid`, `deleted_at`, `server_version`). Unauthorized access
+         *     returns 404 (no existence leak).
+         */
+        get: operations["getAnimalDetail"];
+        put?: never;
+        post?: never;
+        /**
+         * Soft-delete animal (tombstone)
+         * @description Soft-deletes one animal and bumps server_version for pull.
+         *     Response is a minimal tombstone only — never full content.
+         *     Requires If-Match or query server_version. Locked animals return 409.
+         *     Double delete returns 409 already_deleted with current tombstone.
+         */
+        delete: operations["deleteAnimal"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch collection animal (nickname/favorite/locked)
+         * @description Partial update of client-editable collection metadata.
+         *     Optimistic lock via `If-Match` header (preferred) or body `server_version`.
+         *     On version conflict returns 409 with `current` representation for merge.
+         */
+        patch: operations["patchAnimal"];
+        trace?: never;
+    };
+    "/api/v1/collection/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get collection animal (alias of /sync/animals/{uuid}) */
+        get: operations["getCollectionAnimal"];
+        put?: never;
+        post?: never;
+        /** Soft-delete collection animal (alias) */
+        delete: operations["deleteCollectionAnimal"];
+        options?: never;
+        head?: never;
+        /** Patch collection animal (alias) */
+        patch: operations["patchCollectionAnimal"];
+        trace?: never;
+    };
     "/api/v1/privacy/consent": {
         parameters: {
             query?: never;
@@ -487,9 +541,11 @@ export interface paths {
         put?: never;
         /**
          * Request data deletion
-         * @description Transactional delete: soft-delete animals (tombstone + server_version bump),
+         * @description scope=device (default) deletes this device only.
+         *     scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
+         *     Transactional delete: soft-delete animals (tombstone + server_version bump),
          *     remove inferences and security reports, clear historical export payloads,
-         *     deactivate entitlements, revoke consent, bump token_version.
+         *     deactivate entitlements, revoke consent, bump token_version, revoke refresh families (AP-078).
          *     Orders are retained for legal/financial audit (not hard-deleted).
          *     Precise location fields are cleared; expired precise coords cleaned via maintenance hook.
          */
@@ -667,6 +723,167 @@ export interface paths {
         get: operations["listEntitlements"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get wallet balances
+         * @description Returns gold and stamina balance snapshots for the JWT owner
+         *     (account when bound, else device guest).
+         */
+        get: operations["getWallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/credit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Credit wallet
+         * @description Credits gold or stamina. Idempotent on operation_id (global unique).
+         *     Same reward source can only credit once.
+         */
+        post: operations["creditWallet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/debit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Debit wallet
+         * @description Debits gold or stamina. Never allows negative balance.
+         *     Concurrent debits are serialised (SELECT FOR UPDATE).
+         *     Idempotent on operation_id.
+         */
+        post: operations["debitWallet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List wallet ledger
+         * @description Paginated immutable reward/consume ledger (newest first).
+         */
+        get: operations["listWalletLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild balance from ledger
+         * @description Recomputes currency balance from immutable ledger and writes snapshot.
+         */
+        post: operations["reconcileWallet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List inventory */
+        get: operations["listInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant inventory item
+         * @description Grants items; idempotent on operation_id.
+         */
+        post: operations["grantInventory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/consume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consume inventory item
+         * @description Consumes items; never negative; idempotent on operation_id.
+         */
+        post: operations["consumeInventory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1085,6 +1302,17 @@ export interface components {
             account_id?: string;
             guest?: boolean;
         };
+        PrivacyDeleteRequest: {
+            /**
+             * @default device
+             * @enum {string}
+             */
+            scope: "device" | "account";
+            /** @description Required when scope=account (email password re-auth) */
+            reauth_password?: string;
+            /** @description Must be DELETE when scope=account */
+            confirm?: string;
+        };
         AuthBindRequest: {
             /**
              * @description Public production providers. Development may also accept mock_oauth when AUTH_MOCK_OAUTH_ENABLED (returns 404 provider_unavailable otherwise).
@@ -1118,15 +1346,12 @@ export interface components {
             installation_secret?: string;
             /** @description One-time migration ticket alternative to installation_secret; replay is rejected */
             migration_ticket?: string;
-<<<<<<< Updated upstream
-=======
         };
         AuthRefreshRequest: {
             /** @description Opaque refresh token returned once from bind/login/refresh */
             refresh_token: string;
             /** @description Optional binding check; mismatch revokes the family */
             device_id?: string;
->>>>>>> Stashed changes
         };
         AuthAccountResponse: {
             token: string;
@@ -1292,6 +1517,73 @@ export interface components {
             generated_at: string;
             inference_request_id?: string;
             keep_precise_location?: boolean;
+            /** @description Client-editable display nickname */
+            nickname?: string;
+            /** @description Favorited flag */
+            favorite?: boolean;
+            /** @description Collection lock; blocks delete when true */
+            locked?: boolean;
+        };
+        /**
+         * @description Full detail for an active animal, or a minimal tombstone when deleted.
+         *     Tombstone fields only: uuid, deleted_at, server_version.
+         */
+        CollectionAnimalDetail: {
+            /** Format: uuid */
+            uuid?: string;
+            device_id?: string;
+            account_id?: string;
+            species?: string;
+            breed?: string;
+            rarity?: number;
+            hp?: number;
+            atk?: number;
+            def?: number;
+            spd?: number;
+            class?: string;
+            element?: string;
+            city?: string;
+            geohash?: string;
+            latitude?: number;
+            longitude?: number;
+            /** Format: date-time */
+            generated_at?: string;
+            inference_request_id?: string;
+            nickname?: string;
+            favorite?: boolean;
+            locked?: boolean;
+            /** Format: int64 */
+            server_version?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            deleted_at?: string;
+        };
+        /** @description Partial update; at least one of nickname/favorite/locked required. */
+        CollectionAnimalPatch: {
+            nickname?: string;
+            favorite?: boolean;
+            locked?: boolean;
+            /**
+             * Format: int64
+             * @description Expected version when If-Match header is absent
+             */
+            server_version?: number;
+        };
+        CollectionTombstone: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: date-time */
+            deleted_at?: string;
+            /** Format: int64 */
+            server_version: number;
+        };
+        CollectionVersionConflict: {
+            error: string;
+            /** @enum {string} */
+            reason_code: "version_conflict" | "already_deleted" | "animal_locked";
+            /** @description Current server representation for client merge */
+            current?: components["schemas"]["CollectionAnimalDetail"] | components["schemas"]["CollectionTombstone"];
         };
         SyncAnimalResponse: {
             /** @example synced */
@@ -1354,6 +1646,86 @@ export interface components {
             dropped: number;
             schema_version: number;
             request_id?: string;
+        };
+        WalletBalance: {
+            /** @enum {string} */
+            currency: "gold" | "stamina";
+            /** Format: int64 */
+            balance: number;
+        };
+        WalletResponse: {
+            owner_key: string;
+            balances: components["schemas"]["WalletBalance"][];
+            request_id?: string;
+        };
+        WalletMutateRequest: {
+            /** @enum {string} */
+            currency: "gold" | "stamina";
+            /** Format: int64 */
+            amount: number;
+            /** @description Global unique idempotency key for this ledger entry */
+            operation_id: string;
+            /** @description checkin|task|battle|capture|shop|admin|compensate|reward|system|dispatch|level_up */
+            source_type?: string;
+            source_id?: string;
+            metadata?: string;
+        };
+        WalletLedgerEntry: {
+            entry_id?: string;
+            operation_id?: string;
+            owner_key?: string;
+            device_id?: string;
+            account_id?: string;
+            /** @enum {string} */
+            kind?: "currency" | "item";
+            currency?: string;
+            /** Format: int64 */
+            delta?: number;
+            /** Format: int64 */
+            amount?: number;
+            /** Format: int64 */
+            balance_after?: number;
+            source_type?: string;
+            source_id?: string;
+            metadata?: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        WalletMutateResponse: {
+            entry?: components["schemas"]["WalletLedgerEntry"];
+            /** Format: int64 */
+            balance: number;
+            idempotent: boolean;
+            request_id?: string;
+        };
+        WalletLedgerResponse: {
+            entries: components["schemas"]["WalletLedgerEntry"][];
+            /** Format: int64 */
+            next_after?: number;
+            request_id?: string;
+        };
+        InventoryItem: {
+            item_id?: string;
+            /** Format: int64 */
+            quantity?: number;
+            owner_key?: string;
+            device_id?: string;
+            account_id?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        InventoryListResponse: {
+            items: components["schemas"]["InventoryItem"][];
+            request_id?: string;
+        };
+        InventoryMutateRequest: {
+            item_id: string;
+            /** Format: int64 */
+            quantity: number;
+            operation_id: string;
+            source_type?: string;
+            source_id?: string;
+            metadata?: string;
         };
     };
     responses: {
@@ -1718,11 +2090,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< Updated upstream
-                    "application/json": components["schemas"]["ErrorResponse"];
-=======
                     "application/json": components["schemas"]["Error"];
->>>>>>> Stashed changes
                 };
             };
             /** @description Migration ticket replay or device bound to another account */
@@ -1731,11 +2099,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< Updated upstream
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-=======
                     "application/json": components["schemas"]["Error"];
                 };
             };
@@ -1793,7 +2156,6 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
->>>>>>> Stashed changes
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -2193,6 +2555,231 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getAnimalDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Animal detail or tombstone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAnimalDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteAnimal: {
+        parameters: {
+            query?: {
+                server_version?: number;
+            };
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tombstone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionTombstone"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Version conflict / already deleted / locked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionVersionConflict"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    patchAnimal: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Expected server_version (quoted ETag supported) */
+                "If-Match"?: string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAnimalPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated animal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAnimalDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Version conflict / already deleted / locked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionVersionConflict"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCollectionAnimal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Animal detail or tombstone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAnimalDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found or not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteCollectionAnimal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tombstone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionTombstone"];
+                };
+            };
+            /** @description Version conflict / already deleted / locked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionVersionConflict"];
+                };
+            };
+        };
+    };
+    patchCollectionAnimal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionAnimalPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated animal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAnimalDetail"];
+                };
+            };
+            /** @description Version conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionVersionConflict"];
+                };
+            };
+        };
+    };
     putConsent: {
         parameters: {
             query?: never;
@@ -2533,6 +3120,239 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wallet balances */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    creditWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletMutateRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletMutateResponse"];
+                };
+            };
+            /** @description Credited */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletMutateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    debitWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletMutateRequest"];
+            };
+        };
+        responses: {
+            /** @description Debited or idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletMutateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient balance (reason_code insufficient_balance) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listWalletLedger: {
+        parameters: {
+            query?: {
+                currency?: "gold" | "stamina";
+                /** @description Cursor — return entries with id less than this */
+                after_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ledger page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletLedgerResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    reconcileWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    currency: "gold" | "stamina";
+                };
+            };
+        };
+        responses: {
+            /** @description Reconciled balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        currency: string;
+                        /** Format: int64 */
+                        balance: number;
+                        request_id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inventory items with quantity > 0 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    grantInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryMutateRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Granted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    consumeInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryMutateRequest"];
+            };
+        };
+        responses: {
+            /** @description Consumed or idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient item quantity (reason_code insufficient_item) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     adminRefundOrder: {

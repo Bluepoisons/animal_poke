@@ -1049,10 +1049,9 @@ paths:
       description: |
         scope=device (default) deletes this device only.
         scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
-      description: |
         Transactional delete: soft-delete animals (tombstone + server_version bump),
         remove inferences and security reports, clear historical export payloads,
-        deactivate entitlements, revoke consent, bump token_version.
+        deactivate entitlements, revoke consent, bump token_version, revoke refresh families (AP-078).
         Orders are retained for legal/financial audit (not hard-deleted).
         Precise location fields are cleared; expired precise coords cleaned via maintenance hook.
       operationId: deleteData
