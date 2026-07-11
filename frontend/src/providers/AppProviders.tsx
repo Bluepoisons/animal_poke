@@ -57,6 +57,8 @@ function ReadOnlyShell() {
         只读模式：未授权照片/定位，无法使用发现与捕获。可浏览本地图鉴或管理隐私。
       </div>
       <div
+        role="tablist"
+        aria-label="只读模式"
         style={{
           maxWidth: 420,
           margin: '0 auto 12px',
@@ -64,10 +66,10 @@ function ReadOnlyShell() {
           gap: 8,
         }}
       >
-        <button type="button" data-testid="readonly-tab-pokedex" onClick={() => setTab('pokedex')}>
+        <button type="button" role="tab" aria-selected={tab === 'pokedex'} data-testid="readonly-tab-pokedex" onClick={() => setTab('pokedex')}>
           图鉴
         </button>
-        <button type="button" data-testid="readonly-tab-privacy" onClick={() => setTab('privacy')}>
+        <button type="button" role="tab" aria-selected={tab === 'privacy'} data-testid="readonly-tab-privacy" onClick={() => setTab('privacy')}>
           隐私中心
         </button>
       </div>

@@ -23,8 +23,7 @@ import {
   reduceCaptureFlow,
   type CaptureFlowEvent,
 } from './captureFlow'
-
-import './animalPoke.css'
+import { RouteAnnouncerElement } from '../../a11y'
 import OnboardingOverlay from './components/OnboardingOverlay'
 import { setCaptureActive } from '../../pwa/updateGate'
 
@@ -296,8 +295,8 @@ const progression = useProgression()
     }
   }
 
-  return (
     <div className="ap-root">
+      <RouteAnnouncerElement />
       <OnboardingOverlay />
       <a className="ap-skip-link" href="#ap-main-content">
         跳到主要内容

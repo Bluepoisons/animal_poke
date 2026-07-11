@@ -1,23 +1,71 @@
-:focus-visible {
-  outline: 3px solid #E67300;
+/* AP-071: Accessibility component styles — progressbar, focus trap. */
+
+.ap-progressbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.ap-progressbar__track {
+  height: var(--ap-bar-h, 8px);
+  border-radius: 4px;
+  background: rgba(139, 69, 19, 0.12);
+  overflow: hidden;
+}
+.ap-progressbar__fill {
+  height: 100%;
+  width: var(--ap-progress-pct, 0%);
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2E7D32, #66BB6A);
+  transition: width 0.35s ease;
+}
+.ap-progressbar--animated .ap-progressbar__fill {
+  background: linear-gradient(90deg, #2E7D32, #66BB6A, #A5D6A7, #66BB6A);
+  background-size: 200% 100%;
+  animation: ap-progress-shimmer 2s linear infinite;
+}
+@keyframes ap-progress-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: 0 0; }
+}
+.ap-progressbar--sm .ap-progressbar__track { height: 4px; }
+.ap-progressbar__label {
+  font-size: 12px;
+  color: #5D4037;
+  text-align: right;
+}
+
+.ap-progressbar--energy .ap-progressbar__fill {
+  background: linear-gradient(90deg, #E65100, #FFB74D);
+}
+.ap-progressbar--hp .ap-progressbar__fill {
+  background: linear-gradient(90deg, #C62828, #EF5350);
+}
+
+/* Focus trap — visible focus ring for keyboard nav */
+.ap-trap-container:focus-visible,
+.ap-trap-container *:focus-visible {
+  outline: 2px solid #2E7D32;
   outline-offset: 2px;
 }
-.ap-skip-link {
-  position: absolute;
-  left: -999px;
-  top: 0;
-  background: #FF8C42;
-  color: #fff;
-  padding: 8px 12px;
-  z-index: 10000;
+
+/* Backdrop for dialogs/drawers */
+.ap-dialog-backdrop[data-trap-backdrop] {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.ap-skip-link:focus {
-  left: 8px;
-  top: 8px;
-}
-@media (pointer: coarse) {
-  button, [role="button"], .ap-map-chip, .ap-check-card {
-    min-height: 44px;
-    min-width: 44px;
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .ap-progressbar--animated .ap-progressbar__fill {
+    animation: none;
+  }
+  .ap-progressbar__fill {
+    transition: none;
   }
 }

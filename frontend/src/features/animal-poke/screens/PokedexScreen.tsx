@@ -1,5 +1,5 @@
 import { useVirtualList, pickThumbnailSrc } from '../../../performance'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PokedexFilter, AnimalEntry, Rarity, Species } from '../data/types'
 import PageTitle from '../components/PageTitle'
 import RarityCard from '../components/RarityCard'
@@ -7,6 +7,8 @@ import { filterAnimals } from '../data/animals'
 import { AnimalRepository } from '../../../db/repositories/animal-repository'
 import type { AnimalRecord } from '../../../db/types'
 import type { RarityTier, SpeciesType } from '../../../types'
+import AccessibleDialog from '../../../a11y/AccessibleDialog'
+import { useRouteAnnouncer } from '../../../a11y'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
@@ -40,6 +42,8 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [entries, setEntries] = useState<AnimalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<AnimalEntry | null>(null)
+
+  useRouteAnnouncer('图鉴')
 
   useEffect(() => {
     let cancelled = false
@@ -109,47 +113,26 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
       </div>
 
       {selected && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="图鉴详情"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(74,44,26,0.35)',
-            display: 'grid',
-            placeItems: 'center',
-            zIndex: 50,
-            padding: 16,
-          }}
-          onClick={() => setSelected(null)}
+        <AccessibleDialog
+          open={!!selected}
+          onClose={() => setSelected(null)}
+          title="图鉴详情"
+          triggerId={`pokedex-card-${selected.id}`}
         >
-          <div
-            style={{
-              background: '#FFFDF8',
-              borderRadius: 16,
-              padding: 16,
-              maxWidth: 320,
-              width: '100%',
-              border: '2px solid #2B2B2B',
-            }}
-            onClick={(e) => e.stopPropagation()}
+          <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
+          <p style={{ margin: 0, fontSize: 13 }}>
+            {selected.species} · {selected.rarity}
+            {selected.region ? ` · ${selected.region}` : ''}
+          </p>
+          <button
+            type="button"
+            className="ap-map-chip"
+            style={{ marginTop: 12 }}
+            onClick={() => setSelected(null)}
           >
-            <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
-            <p style={{ margin: 0, fontSize: 13 }}>
-              {selected.species} · {selected.rarity}
-              {selected.region ? ` · ${selected.region}` : ''}
-            </p>
-            <button
-              type="button"
-              className="ap-map-chip"
-              style={{ marginTop: 12 }}
-              onClick={() => setSelected(null)}
-            >
-              关闭
-            </button>
-          </div>
-        </div>
+            关闭
+          </button>
+        </AccessibleDialog>
       )}
     </div>
   )
