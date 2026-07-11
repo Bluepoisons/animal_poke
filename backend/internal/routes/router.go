@@ -218,7 +218,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				Flags:    cfg.FeatureFlags,
 				OpsToken: cfg.OpsToken,
 			})
-			auth.GET("/ranking/daily", product.RankingDaily)
+			if db != nil {
+				rankH := handlers.NewRankingHandler(db, deviceRepo, cfg.FeatureFlags.Ranking)
+				auth.GET("/ranking/daily", rankH.Daily)
+				auth.POST("/ranking/score", middleware.BodyLimit(middleware.MaxBodyDefault), rankH.ReportScore)
+				auth.POST("/ranking/settle", middleware.BodyLimit(middleware.MaxBodyDefault), rankH.Settle)
+			} else {
+				auth.GET("/ranking/daily", product.RankingDaily)
+			}
 			auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
 			auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			auth.GET("/social/friends", product.FriendsList)

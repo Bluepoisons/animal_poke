@@ -417,3 +417,47 @@ type InventoryItem struct {
 
 // TableName 明确表名。
 func (InventoryItem) TableName() string { return "inventory_items" }
+
+// RankingDailyScore 日榜累计分（AP-114）。
+type RankingDailyScore struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Date      string    `gorm:"uniqueIndex:idx_rank_score,priority:1;size:10;not null" json:"date"` // YYYY-MM-DD UTC
+	City      string    `gorm:"uniqueIndex:idx_rank_score,priority:2;size:64;not null" json:"city"`
+	OwnerType string    `gorm:"uniqueIndex:idx_rank_score,priority:3;size:16;not null" json:"owner_type"`
+	OwnerID   string    `gorm:"uniqueIndex:idx_rank_score,priority:4;size:64;not null" json:"owner_id"`
+	Score     int64     `gorm:"not null;default:0;index" json:"score"`
+	Eligible  bool      `gorm:"not null;default:true" json:"eligible"`
+	Display   string    `gorm:"size:64" json:"display_name"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (RankingDailyScore) TableName() string { return "ranking_daily_scores" }
+
+// RankingSnapshot 日结算快照（不可变）。
+type RankingSnapshot struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	SnapshotID  string    `gorm:"uniqueIndex;size:36;not null" json:"snapshot_id"`
+	Date        string    `gorm:"uniqueIndex:idx_rank_snap,priority:1;size:10;not null" json:"date"`
+	City        string    `gorm:"uniqueIndex:idx_rank_snap,priority:2;size:64;not null" json:"city"`
+	EntriesJSON string    `gorm:"type:longtext;not null" json:"entries_json"`
+	SettledAt   time.Time `gorm:"not null" json:"settled_at"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (RankingSnapshot) TableName() string { return "ranking_snapshots" }
+
+// RankingRewardGrant 结算奖励发放记录（幂等）。
+type RankingRewardGrant struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	SnapshotID  string    `gorm:"uniqueIndex:idx_rank_reward,priority:1;size:36;not null" json:"snapshot_id"`
+	OwnerType   string    `gorm:"uniqueIndex:idx_rank_reward,priority:2;size:16;not null" json:"owner_type"`
+	OwnerID     string    `gorm:"uniqueIndex:idx_rank_reward,priority:3;size:64;not null" json:"owner_id"`
+	Rank        int       `gorm:"not null" json:"rank"`
+	Gold        int64     `gorm:"not null" json:"gold"`
+	OperationID string    `gorm:"size:128;not null" json:"operation_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (RankingRewardGrant) TableName() string { return "ranking_reward_grants" }
+

@@ -1644,6 +1644,49 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/ranking/score:
+    post:
+      tags: [Ranking]
+      summary: Report ranking score event (AP-114)
+      operationId: rankingScore
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta]
+              properties:
+                city: {type: string}
+                date: {type: string}
+                delta: {type: integer, format: int64}
+                display_name: {type: string}
+                eligible: {type: boolean}
+      responses:
+        "200":
+          description: Score accepted
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /api/v1/ranking/settle:
+    post:
+      tags: [Ranking]
+      summary: Settle daily city ranking snapshot (AP-114)
+      operationId: rankingSettle
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [city]
+              properties:
+                city: {type: string}
+                date: {type: string}
+      responses:
+        "200":
+          description: Snapshot settled
   /api/v1/ranking/daily:
     get:
       tags: [Product]
