@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0017_admin_rbac"
+const CurrentVersion = "0018_social_graph"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -83,6 +83,7 @@ func allMigrations() []migrationSpec {
 		{"0015_ranking_settlement", migrate0015},
 		{"0016_pvp_matchmaking", migrate0016},
 		{"0017_admin_rbac", migrate0017},
+		{"0018_social_graph", migrate0018},
 	}
 }
 
@@ -307,4 +308,8 @@ func migrate0016(db *gorm.DB) error {
 // migrate0017 管理端会话与动作审计（AP-085 RBAC）。
 func migrate0017(db *gorm.DB) error {
 	return db.AutoMigrate(&models.AdminSession{}, &models.AdminActionLog{})
+}
+
+func migrate0018(db *gorm.DB) error {
+	return db.AutoMigrate(&models.SocialProfile{}, &models.FriendRequest{}, &models.Friendship{}, &models.SocialBlock{}, &models.SocialMute{}, &models.SocialUserReport{}, &models.SocialShare{})
 }

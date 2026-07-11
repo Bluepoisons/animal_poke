@@ -145,7 +145,9 @@ func TestMinorAccountDefaults_Strict(t *testing.T) {
 	assert.Equal(t, 8, loose.PlayHoursStart)
 	assert.Equal(t, 22, loose.PlayHoursEnd)
 	assert.Equal(t, "city", loose.LocationScope)
-	assert.True(t, loose.SocialEnabled)
+	// AP-083：未成年人默认关闭社交
+	assert.False(t, loose.SocialEnabled)
+	assert.False(t, loose.FriendsDefault)
 
 	strict := MinorAccountDefaults(true)
 	assert.True(t, strict.Strict)

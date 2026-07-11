@@ -501,6 +501,129 @@ type PvPQueue struct {
 }
 
 func (PvPQueue) TableName() string { return "pvp_queue" }
+// ---------- AP-083 Social: friends / block / mute / report / share ----------
+
+// Social 关系与请求状态常量。
+const (
+	FriendRequestPending   = "pending"
+	FriendRequestAccepted  = "accepted"
+	FriendRequestRejected  = "rejected"
+	FriendRequestCancelled = "cancelled"
+
+	FriendshipActive  = "active"
+	FriendshipRemoved = "removed"
+
+	ShareACLLink    = "link"    // 持有 capability token 即可（仍受 block 约束）
+	ShareACLFriends = "friends" // 仅双向好友
+	ShareACLPublic  = "public"  // 任意已鉴权用户（仍受 block 约束）
+
+	MaxFriendsPerUser = 200
+)
+
+// SocialProfile 用户社交偏好与可搜索资料。
+// UserKey = "acc:<account_id>" 或 "dev:<device_id>"。
+type SocialProfile struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	UserKey       string    `gorm:"uniqueIndex;size:68;not null" json:"user_key"`
+	DisplayName   string    `gorm:"index;size:64;not null" json:"display_name"`
+	SocialEnabled bool      `gorm:"not null;default:true" json:"social_enabled"`
+	IsMinor       bool      `gorm:"not null;default:false" json:"is_minor"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (SocialProfile) TableName() string { return "social_profiles" }
+
+// FriendRequest 好友请求状态机：pending → accepted|rejected|cancelled。
+// PairKey 为规范化双方键（min|max），用于交叉邀请合并与唯一约束。
+type FriendRequest struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	RequestID   string     `gorm:"uniqueIndex;size:36;not null" json:"request_id"`
+	FromUserKey string     `gorm:"index:idx_fr_from_status,priority:1;size:68;not null" json:"from_user_key"`
+	ToUserKey   string     `gorm:"index:idx_fr_to_status,priority:1;size:68;not null" json:"to_user_key"`
+	PairKey     string     `gorm:"index;size:140;not null" json:"pair_key"`
+	Status      string     `gorm:"index:idx_fr_from_status,priority:2;index:idx_fr_to_status,priority:2;size:16;not null" json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
+}
+
+// TableName 明确表名。
+func (FriendRequest) TableName() string { return "friend_requests" }
+
+// Friendship 已接受的好友边（无向，UserLow/UserHigh 规范化）。
+type Friendship struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserLow   string     `gorm:"uniqueIndex:idx_friendship_pair,priority:1;size:68;not null" json:"user_low"`
+	UserHigh  string     `gorm:"uniqueIndex:idx_friendship_pair,priority:2;size:68;not null" json:"user_high"`
+	Status    string     `gorm:"size:16;not null;default:active;index" json:"status"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
+}
+
+// TableName 明确表名。
+func (Friendship) TableName() string { return "friendships" }
+
+// SocialBlock 屏蔽关系：Blocker 屏蔽 Blocked；屏蔽优先于任何关系与分享。
+type SocialBlock struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	BlockerUserKey string   `gorm:"uniqueIndex:idx_social_block,priority:1;size:68;not null" json:"blocker_user_key"`
+	BlockedUserKey string   `gorm:"uniqueIndex:idx_social_block,priority:2;index;size:68;not null" json:"blocked_user_key"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (SocialBlock) TableName() string { return "social_blocks" }
+
+// SocialMute 静音：不打断关系，仅抑制通知/动态（本阶段仅持久化状态）。
+type SocialMute struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	MuterUserKey string    `gorm:"uniqueIndex:idx_social_mute,priority:1;size:68;not null" json:"muter_user_key"`
+	MutedUserKey string    `gorm:"uniqueIndex:idx_social_mute,priority:2;index;size:68;not null" json:"muted_user_key"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (SocialMute) TableName() string { return "social_mutes" }
+
+// SocialUserReport 用户间举报（不含图片/精确坐标）。
+type SocialUserReport struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	ReportID        string    `gorm:"uniqueIndex;size:36;not null" json:"report_id"`
+	ReporterUserKey string    `gorm:"index:idx_social_report_reporter_time,priority:1;size:68;not null" json:"reporter_user_key"`
+	TargetUserKey   string    `gorm:"index;size:68;not null" json:"target_user_key"`
+	Category        string    `gorm:"size:32;not null" json:"category"` // harassment|spam|inappropriate|other
+	Note            string    `gorm:"type:text" json:"note,omitempty"`
+	Status          string    `gorm:"size:16;not null;default:open" json:"status"` // open|reviewing|closed
+	CreatedAt       time.Time `gorm:"index:idx_social_report_reporter_time,priority:2" json:"created_at"`
+}
+
+// TableName 明确表名。
+func (SocialUserReport) TableName() string { return "social_user_reports" }
+
+// SocialShare 安全分享：不可猜 capability token + ACL + 过期 + 撤销。
+// 快照仅含粗粒度字段，禁止精确坐标、设备信息、未授权图片。
+type SocialShare struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	ShareToken   string     `gorm:"uniqueIndex;size:64;not null" json:"-"` // capability token（响应一次性返回）
+	OwnerUserKey string     `gorm:"index;size:68;not null" json:"owner_user_key"`
+	AnimalUUID   string     `gorm:"index;size:36;not null" json:"animal_uuid"`
+	ACL          string     `gorm:"size:16;not null;default:link" json:"acl"` // link|friends|public
+	Species      string     `gorm:"size:32" json:"species"`
+	Breed        string     `gorm:"size:64" json:"breed"`
+	Rarity       int        `json:"rarity"`
+	Nickname     string     `gorm:"size:64" json:"nickname"`
+	City         string     `gorm:"size:64" json:"city"` // 仅粗粒度城市
+	ExpiresAt    time.Time  `gorm:"index;not null" json:"expires_at"`
+	RevokedAt    *time.Time `gorm:"index" json:"revoked_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (SocialShare) TableName() string { return "social_shares" }
 
 // ---------- AP-085 Admin RBAC ----------
 

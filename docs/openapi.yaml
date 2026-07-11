@@ -1910,26 +1910,429 @@ paths:
   /api/v1/social/friends:
     get:
       tags: [Product]
-      summary: List friends
+      summary: List friends (cursor pagination)
       description: |
-        Requires FEATURE_SOCIAL=true. When disabled returns 501 feature_unavailable.
+        Requires FEATURE_SOCIAL=true. Returns accepted friendships for the caller.
+        Blocked peers never appear. When social_enabled=false (e.g. minor defaults), returns empty list.
       operationId: socialFriends
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Friends page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/requests:
+    get:
+      tags: [Product]
+      summary: List pending friend requests
+      operationId: socialFriendRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema: { type: string, enum: [incoming, outgoing], default: incoming }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Pending requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendRequestsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/request:
+    post:
+      tags: [Product]
+      summary: Send friend request
+      description: |
+        State machine pending→accepted|rejected|cancelled. Cross-invite auto-accepts.
+        Block either way forbids the action. Duplicate pending is idempotent.
+      operationId: socialFriendRequestCreate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Request created or existing pending returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendRequestActionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: blocked or social_disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: already_friends or friend_limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/accept:
+    post:
+      tags: [Product]
+      summary: Accept friend request (idempotent)
+      operationId: socialFriendRequestAccept
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialRequestIDBody"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendRequestActionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: blocked or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/reject:
+    post:
+      tags: [Product]
+      summary: Reject friend request
+      operationId: socialFriendRequestReject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialRequestIDBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendRequestActionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/cancel:
+    post:
+      tags: [Product]
+      summary: Cancel outgoing friend request
+      operationId: socialFriendRequestCancel
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialRequestIDBody"
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialFriendRequestActionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/friends/remove:
+    post:
+      tags: [Product]
+      summary: Remove an accepted friendship
+      operationId: socialFriendRemove
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Removed (idempotent)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/block:
+    post:
+      tags: [Product]
+      summary: Block a user (beats relationships and shares)
+      description: |
+        Idempotent. Removes friendship and cancels pending requests both ways.
+        Blocked users cannot search, invite, view shares, or interact.
+      operationId: socialBlock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Blocked
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/unblock:
+    post:
+      tags: [Product]
+      summary: Unblock a user
+      operationId: socialUnblock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Unblocked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/blocks:
+    get:
+      tags: [Product]
+      summary: List blocked users
+      operationId: socialBlocksList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Block list
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/mute:
+    post:
+      tags: [Product]
+      summary: Mute a user
+      operationId: socialMute
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Muted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/unmute:
+    post:
+      tags: [Product]
+      summary: Unmute a user
+      operationId: socialUnmute
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SocialTargetUserRequest"
+      responses:
+        "200":
+          description: Unmuted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/report:
+    post:
+      tags: [Product]
+      summary: Report a user (no images / precise location)
+      description: Rate-limited per reporter. Structured metadata only.
+      operationId: socialReportUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category]
+              properties:
+                target_user_id: { type: string }
+                user_key: { type: string }
+                category:
+                  type: string
+                  enum: [harassment, spam, inappropriate, other]
+                note: { type: string, maxLength: 500 }
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/search:
+    get:
+      tags: [Product]
+      summary: Search users by display name prefix
+      description: Excludes self and either-way blocks. Requires social_enabled.
+      operationId: socialSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 32 }
+      responses:
+        "200":
+          description: Matches
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: social_disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/settings:
+    get:
+      tags: [Product]
+      summary: Get social settings for caller
+      operationId: socialSettingsGet
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Friends list
+          description: Settings
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  friends:
-                    type: array
-                    items:
-                      type: object
-                  source:
-                    type: string
+                $ref: "#/components/schemas/SocialSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+    patch:
+      tags: [Product]
+      summary: Update social settings
+      description: |
+        Minors cannot enable social (is_minor forces social_enabled=false).
+        Display names are length/control/keyword validated.
+      operationId: socialSettingsPatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, maxLength: 32 }
+                social_enabled: { type: boolean }
+                is_minor: { type: boolean }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "501":
@@ -1938,26 +2341,132 @@ paths:
   /api/v1/social/share:
     post:
       tags: [Product]
-      summary: Create share link
+      summary: Create safe share capability token
       description: |
-        Requires FEATURE_SOCIAL=true. When disabled or share not ready, returns 501/503 feature_unavailable
-        (never pending share_id with 2xx).
-      operationId: socialShare
+        Requires FEATURE_SOCIAL=true. Returns unguessable share_token (also as share_id).
+        Snapshot never includes precise location, device_id, or image payloads.
+        ACL: link | friends | public. Expiry + revoke supported.
+      operationId: socialShareCreate
       security:
         - bearerAuth: []
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
-              additionalProperties: true
+              required: [animal_uuid]
+              properties:
+                animal_uuid: { type: string, format: uuid }
+                acl:
+                  type: string
+                  enum: [link, friends, public]
+                  default: link
+                ttl_hours:
+                  type: integer
+                  minimum: 1
+                  maximum: 720
       responses:
+        "201":
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialShareView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: social_disabled or animal_not_owned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: animal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "501":
           $ref: "#/components/responses/FeatureUnavailable"
-        "503":
+
+  /api/v1/social/share/{token}:
+    get:
+      tags: [Product]
+      summary: Resolve share by capability token
+      description: |
+        Enforces ACL, expiry, revoke, and either-way block. Denied results may be cached briefly.
+        Response never includes precise coordinates or device identifiers.
+      operationId: socialShareGet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 16 }
+      responses:
+        "200":
+          description: Share view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialShareView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: share_forbidden or blocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: share_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: share_expired or share_revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          $ref: "#/components/responses/FeatureUnavailable"
+
+  /api/v1/social/share/{token}/revoke:
+    post:
+      tags: [Product]
+      summary: Revoke a share (owner only, idempotent)
+      operationId: socialShareRevoke
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: not owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: share not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
           $ref: "#/components/responses/FeatureUnavailable"
 
   /api/v1/ops/metrics-summary:
@@ -3048,3 +3557,87 @@ components:
         source_id: { type: string }
         metadata: { type: string }
 
+
+    SocialFriendItem:
+      type: object
+      properties:
+        user_key: { type: string }
+        display_name: { type: string }
+        since: { type: string, format: date-time }
+    SocialFriendsResponse:
+      type: object
+      required: [friends, source]
+      properties:
+        friends:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialFriendItem"
+        next_cursor: { type: string }
+        social_enabled: { type: boolean }
+        source: { type: string }
+        request_id: { type: string }
+    SocialFriendRequest:
+      type: object
+      properties:
+        request_id: { type: string }
+        from_user_key: { type: string }
+        to_user_key: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, rejected, cancelled]
+        created_at: { type: string, format: date-time }
+    SocialFriendRequestsResponse:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialFriendRequest"
+        direction: { type: string }
+        next_cursor: { type: string }
+        request_id: { type: string }
+    SocialFriendRequestActionResponse:
+      type: object
+      properties:
+        request:
+          $ref: "#/components/schemas/SocialFriendRequest"
+        auto_accepted: { type: boolean }
+        request_id: { type: string }
+    SocialTargetUserRequest:
+      type: object
+      properties:
+        target_user_id: { type: string, description: account_id, device_id, or user_key }
+        user_key: { type: string }
+    SocialRequestIDBody:
+      type: object
+      required: [request_id]
+      properties:
+        request_id: { type: string }
+    SocialSettings:
+      type: object
+      properties:
+        user_key: { type: string }
+        display_name: { type: string }
+        social_enabled: { type: boolean }
+        is_minor: { type: boolean }
+        request_id: { type: string }
+    SocialShareView:
+      type: object
+      description: Safe share snapshot — no precise location, device_id, or images.
+      properties:
+        share_token: { type: string, description: Capability token (create only) }
+        share_id: { type: string, description: Alias of share_token }
+        animal_uuid: { type: string, format: uuid }
+        owner_user_key: { type: string }
+        acl:
+          type: string
+          enum: [link, friends, public]
+        species: { type: string }
+        breed: { type: string }
+        rarity: { type: integer }
+        nickname: { type: string }
+        city: { type: string, description: Coarse city only }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        revoked: { type: boolean }
+        request_id: { type: string }

@@ -45,7 +45,7 @@ func DefaultAccountDefaults() AccountDefaults {
 }
 
 // MinorAccountDefaults returns defaults for minor accounts.
-// strict=true (config STRICT_MINOR_DEFAULTS) further disables social and location.
+// AP-083：未成年人默认关闭社交；strict=true 时进一步收紧位置。
 func MinorAccountDefaults(strict bool) AccountDefaults {
 	d := AccountDefaults{
 		Audience:               "minor",
@@ -56,7 +56,7 @@ func MinorAccountDefaults(strict bool) AccountDefaults {
 		LocationScope:          "city",
 		PreciseLocationDefault: false,
 		ShareLocationDefault:   false,
-		SocialEnabled:          true,
+		SocialEnabled:          false,
 		FriendsDefault:         false,
 		PublicProfileDefault:   false,
 		ShareCaptureDefault:    false,
@@ -65,10 +65,6 @@ func MinorAccountDefaults(strict bool) AccountDefaults {
 		d.LocationScope = "none"
 		d.PreciseLocationDefault = false
 		d.ShareLocationDefault = false
-		d.SocialEnabled = false
-		d.FriendsDefault = false
-		d.PublicProfileDefault = false
-		d.ShareCaptureDefault = false
 	}
 	return d
 }
