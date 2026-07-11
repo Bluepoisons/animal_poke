@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "authored-narrative-catalog",
+      "paths": ["backend/internal/narrativecatalog"],
+      "owner": "Narrative Content",
+      "review": {
+        "welfare": { "status": "pending", "reviewed_by": null, "reviewed_at": null },
+        "privacy": { "status": "pending", "reviewed_by": null, "reviewed_at": null }
+      }
+    },
+    {
+      "id": "llm-narrative-prompts",
+      "paths": ["backend/internal/ai/prompts"],
+      "owner": "AI Safety",
+      "review": {
+        "welfare": { "status": "pending", "reviewed_by": null, "reviewed_at": null },
+        "privacy": { "status": "pending", "reviewed_by": null, "reviewed_at": null }
+      }
+    },
+    {
+      "id": "generated-narrative-policy",
+      "paths": ["backend/internal/narrativepolicy", "backend/internal/services/ai.go"],
+      "lint_paths": [],
+      "owner": "AI Safety",
+      "review": {
+        "welfare": { "status": "pending", "reviewed_by": null, "reviewed_at": null },
+        "privacy": { "status": "pending", "reviewed_by": null, "reviewed_at": null }
+      }
+    },
+    {
+      "id": "narrative-presentation",
+      "paths": ["frontend/src/narrative", "frontend/src/features/animal-poke/screens/CaptureScreen.tsx"],
+      "owner": "Player Experience",
+      "review": {
+        "welfare": { "status": "pending", "reviewed_by": null, "reviewed_at": null },
+        "privacy": { "status": "pending", "reviewed_by": null, "reviewed_at": null }
+      }
+    }
+  ]
+}

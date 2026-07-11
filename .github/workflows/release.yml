@@ -277,6 +277,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
+      - name: Set up Node for release gates
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Narrative ethics release gate (AP-130)
+        run: node scripts/narrative-ethics-gate.mjs --require-approved
       - name: Install kustomize
         run: |
           set -euo pipefail
