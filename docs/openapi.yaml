@@ -39,6 +39,8 @@ tags:
     description: Orders and entitlements
   - name: Economy
     description: Wallet balances, immutable reward ledger and inventory
+  - name: Quest
+    description: Data-driven quests, trusted progress events and idempotent reward claims
   - name: Admin
     description: Admin audit APIs
   - name: Observability
@@ -1896,6 +1898,175 @@ paths:
           description: Permission denied
         "404":
           description: Not found
+  /api/v1/quests:
+    get:
+      tags: [Quest]
+      summary: List quests with progress
+      description: |
+        Returns enabled quests for the JWT owner with current period progress.
+        Use `free=true` to list only zero-stamina executable quests.
+        Progress is never advanced by page opens — only trusted business events.
+      operationId: listQuests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: free
+          in: query
+          description: When true/1, only free (zero-stamina) quests
+          schema:
+            type: string
+            enum: ["1", "true", "0", "false"]
+      responses:
+        "200":
+          description: Quest list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/quests/catalog:
+    get:
+      tags: [Quest]
+      summary: Quest definition catalog
+      description: Versioned data-driven quest definitions (config rollback friendly).
+      operationId: getQuestCatalog
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestCatalogResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/quests/events:
+    post:
+      tags: [Quest]
+      summary: Apply trusted quest progress event
+      description: |
+        Applies a trusted business event to advance quest progress.
+        Forbidden client-fakeable types: open_pokedex, safe_explore, page_view, open_map.
+        Idempotent on event_id (global unique).
+      operationId: applyQuestEvent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestEventRequest"
+      responses:
+        "201":
+          description: Event applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestEventResponse"
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestEventResponse"
+        "400":
+          description: Forbidden or untrusted event (reason_code quest_event_forbidden|quest_event_untrusted)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/quests/compensate:
+    post:
+      tags: [Quest]
+      summary: Expire and compensate unclaimed quests
+      description: |
+        Marks active expired progress as expired; for completed-but-expired unclaimed
+        quests, grants half gold via wallet ledger (source_type=compensate) once.
+      operationId: compensateQuests
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Compensation summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestCompensateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/quests/{quest_id}:
+    get:
+      tags: [Quest]
+      summary: Get one quest with progress
+      operationId: getQuest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: quest_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quest detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quest]
+                properties:
+                  quest:
+                    $ref: "#/components/schemas/QuestView"
+                  request_id: { type: string }
+        "404":
+          description: Not found (reason_code quest_not_found)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/quests/{quest_id}/claim:
+    post:
+      tags: [Quest]
+      summary: Claim quest reward (idempotent)
+      description: |
+        Claims rewards for a completed quest period. Credits wallet ledger once via
+        stable operation_id. Concurrent claims return one create + idempotent replays.
+      operationId: claimQuest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: quest_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestClaimResponse"
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestClaimResponse"
+        "409":
+          description: Not claimable or expired (reason_code quest_not_claimable|quest_expired)
+        "404":
+          description: Quest not found
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 
   /api/v1/admin/commerce/orders/refund:
     post:
@@ -3962,3 +4133,163 @@ components:
         created_at: { type: string, format: date-time }
         revoked: { type: boolean }
         request_id: { type: string }
+    QuestObjective:
+      type: object
+      required: [id, event, target]
+      properties:
+        id: { type: string }
+        event:
+          type: string
+          description: Trusted event only (capture_success, species_new, battle_complete, dispatch_complete, visit_city, season_checkin, research_note, collection_count)
+        target: { type: integer, format: int64, minimum: 1 }
+        filter:
+          type: object
+          additionalProperties: { type: string }
+    QuestReward:
+      type: object
+      properties:
+        gold: { type: integer, format: int64, minimum: 0 }
+        stamina: { type: integer, format: int64, minimum: 0 }
+        items:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+    QuestDefinition:
+      type: object
+      properties:
+        quest_id: { type: string }
+        type:
+          type: string
+          enum: [main, research, daily, weekly, city, event]
+        title: { type: string }
+        description: { type: string }
+        objectives_json: { type: string }
+        rewards_json: { type: string }
+        prerequisites_json: { type: string }
+        reset_policy:
+          type: string
+          enum: [none, daily, weekly]
+        free: { type: boolean }
+        enabled: { type: boolean }
+        config_version: { type: string }
+        min_level: { type: integer }
+        sort_order: { type: integer }
+        duration_hours: { type: integer }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+    QuestProgress:
+      type: object
+      properties:
+        quest_id: { type: string }
+        period_key: { type: string }
+        progress_json: { type: string }
+        status:
+          type: string
+          enum: [active, completed, claimed, expired, compensated]
+        config_version: { type: string }
+        completed_at: { type: string, format: date-time }
+        claimed_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+    QuestView:
+      type: object
+      required: [definition, objectives, rewards, counters, claimable, free]
+      properties:
+        definition:
+          $ref: "#/components/schemas/QuestDefinition"
+        progress:
+          $ref: "#/components/schemas/QuestProgress"
+        objectives:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestObjective"
+        rewards:
+          $ref: "#/components/schemas/QuestReward"
+        prerequisites:
+          type: array
+          items: { type: string }
+        counters:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+        claimable: { type: boolean }
+        free: { type: boolean }
+    QuestListResponse:
+      type: object
+      required: [quests]
+      properties:
+        quests:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestView"
+        config_version: { type: string }
+        request_id: { type: string }
+    QuestCatalogResponse:
+      type: object
+      required: [definitions, count]
+      properties:
+        definitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestDefinition"
+        config_version: { type: string }
+        count: { type: integer }
+        request_id: { type: string }
+    QuestEventRequest:
+      type: object
+      required: [event_id, event_type]
+      properties:
+        event_id:
+          type: string
+          maxLength: 128
+          description: Global unique idempotency key for this event
+        event_type:
+          type: string
+          description: Trusted business event type
+        delta:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000
+          default: 1
+        payload:
+          type: string
+          description: Optional JSON string (e.g. city/species filters)
+    QuestEventResponse:
+      type: object
+      required: [idempotent, event_type]
+      properties:
+        idempotent: { type: boolean }
+        event_type: { type: string }
+        updated_quest_ids:
+          type: array
+          items: { type: string }
+        request_id: { type: string }
+    QuestClaim:
+      type: object
+      properties:
+        claim_id: { type: string }
+        operation_id: { type: string }
+        quest_id: { type: string }
+        period_key: { type: string }
+        status: { type: string }
+        gold_granted: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+    QuestClaimResponse:
+      type: object
+      required: [claim, idempotent, gold]
+      properties:
+        claim:
+          $ref: "#/components/schemas/QuestClaim"
+        idempotent: { type: boolean }
+        gold: { type: integer, format: int64 }
+        stamina: { type: integer, format: int64 }
+        balances:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+        request_id: { type: string }
+    QuestCompensateResponse:
+      type: object
+      required: [compensated, expired]
+      properties:
+        compensated: { type: integer }
+        expired: { type: integer }
+        request_id: { type: string }
+
