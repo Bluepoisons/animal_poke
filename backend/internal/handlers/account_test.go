@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +30,7 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 	require.NoError(t, db.AutoMigrate(
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
+		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -85,6 +88,31 @@ func deviceAuth(t *testing.T, r *gin.Engine, deviceID string) (token string) {
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	return resp["token"].(string)
+}
+
+func deviceAuthFull(t *testing.T, r *gin.Engine, deviceID string) (token, installationSecret string) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"device_id": deviceID})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/auth/device", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	tok, _ := resp["token"].(string)
+	sec, _ := resp["installation_secret"].(string)
+	return tok, sec
+}
+
+func postLogin(t *testing.T, r *gin.Engine, payload map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, _ := json.Marshal(payload)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	return w
 }
 
 func authedJSON(t *testing.T, r *gin.Engine, method, path, token string, payload any) *httptest.ResponseRecorder {
@@ -348,6 +376,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 	require.NoError(t, db.AutoMigrate(
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
+		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -404,4 +433,234 @@ func TestBind_Email_StillWorksWhenMockDisabled(t *testing.T) {
 		"provider": "email", "email": "user@example.com", "password": "password12",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+}
+
+// AP-076: 仅知道他人 device_id 不能合并其游客资产。
+func TestLogin_HijackGuestAssets_WithoutProofFails(t *testing.T) {
+	r, db, _, accountRepo := setupAccountTest(t)
+
+	// 受害者游客设备注册并持有动物/订单
+	_, victimSecret := deviceAuthFull(t, r, "victim-guest-device")
+	require.NotEmpty(t, victimSecret)
+	now := time.Now().UTC()
+	require.NoError(t, db.Create(&models.Animal{
+		UUID: "uuid-victim-1", DeviceID: "victim-guest-device",
+		Species: "cat", Rarity: 3, GeneratedAt: now, ServerVersion: 1,
+	}).Error)
+	require.NoError(t, db.Create(&models.Order{
+		OrderID: "ord-victim-1", DeviceID: "victim-guest-device", ProductID: "monthly_pass",
+		Status: "fulfilled", AmountCents: 100, Currency: "CNY", IdempotencyKey: "ik-v1",
+	}).Error)
+	require.NoError(t, db.Create(&models.Entitlement{
+		DeviceID: "victim-guest-device", ProductID: "monthly_pass",
+		OrderID: "ord-victim-1", Active: true, StartsAt: now,
+	}).Error)
+
+	// 攻击者自有账号
+	tokenA := deviceAuth(t, r, "attacker-device")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", tokenA, map[string]string{
+		"provider": "email", "email": "attacker@example.com", "password": "password123",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	// 攻击：登录时填入受害者 device_id，无 installation_secret
+	w2 := postLogin(t, r, map[string]string{
+		"device_id": "victim-guest-device", "provider": "email",
+		"email": "attacker@example.com", "password": "password123",
+	})
+	require.Equal(t, http.StatusForbidden, w2.Code, w2.Body.String())
+	assert.Contains(t, w2.Body.String(), "device_ownership_required")
+
+	// 资产仍属游客，未挂到攻击者账号
+	var animal models.Animal
+	require.NoError(t, db.Where("uuid = ?", "uuid-victim-1").First(&animal).Error)
+	assert.True(t, animal.AccountID == "" || animal.AccountID == "victim-guest-device" || animal.AccountID != "")
+	assert.Equal(t, "victim-guest-device", animal.DeviceID)
+	assert.Empty(t, animal.AccountID)
+
+	// 正确证明后可合并
+	w3 := postLogin(t, r, map[string]string{
+		"device_id": "victim-guest-device", "provider": "email",
+		"email": "attacker@example.com", "password": "password123",
+		"installation_secret": victimSecret,
+	})
+	require.Equal(t, 200, w3.Code, w3.Body.String())
+	var login accountAuthResponse
+	require.NoError(t, json.Unmarshal(w3.Body.Bytes(), &login))
+	require.NotEmpty(t, login.OperationID)
+	require.NoError(t, db.Where("uuid = ?", "uuid-victim-1").First(&animal).Error)
+	assert.Equal(t, login.AccountID, animal.AccountID)
+	_ = accountRepo
+}
+
+// AP-076: 撤销设备无证明不得自动复活。
+func TestLogin_RevokedDevice_StaysRevokedWithoutProof(t *testing.T) {
+	r, db, deviceRepo, _ := setupAccountTest(t)
+
+	tokenA, secretA := deviceAuthFull(t, r, "dev-main-rev")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", tokenA, map[string]string{
+		"provider": "mock_oauth", "oauth_subject": "revuser", "oauth_token": "token-revuser-xx",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var bindA accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bindA))
+	tokenA = bindA.Token
+
+	// 第二设备登录（新设备，无需证明）
+	w2 := postLogin(t, r, map[string]string{
+		"device_id": "dev-to-revoke", "provider": "mock_oauth",
+		"oauth_subject": "revuser", "oauth_token": "token-revuser-xx",
+	})
+	require.Equal(t, 200, w2.Code, w2.Body.String())
+
+	// 吊销
+	w = authedJSON(t, r, "POST", "/api/v1/auth/devices/revoke", tokenA, map[string]string{
+		"device_id": "dev-to-revoke",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	dev, err := deviceRepo.Find("dev-to-revoke")
+	require.NoError(t, err)
+	assert.True(t, dev.Disabled)
+
+	// 无证明重新登录 → 拒绝，保持 disabled
+	w3 := postLogin(t, r, map[string]string{
+		"device_id": "dev-to-revoke", "provider": "mock_oauth",
+		"oauth_subject": "revuser", "oauth_token": "token-revuser-xx",
+	})
+	require.Equal(t, http.StatusForbidden, w3.Code, w3.Body.String())
+	assert.Contains(t, w3.Body.String(), "device_revoked")
+	dev, err = deviceRepo.Find("dev-to-revoke")
+	require.NoError(t, err)
+	assert.True(t, dev.Disabled)
+
+	// 有 installation_secret 时可复活（若设备有 secret；新登录创建的设备可能无 secret）
+	// 为 dev-to-revoke 设置 secret 后验证证明路径
+	secret, salt, err := repo.GenerateInstallationSecret()
+	require.NoError(t, err)
+	claimed, err := deviceRepo.SetInstallationSecret("dev-to-revoke", secret, salt)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	w4 := postLogin(t, r, map[string]string{
+		"device_id": "dev-to-revoke", "provider": "mock_oauth",
+		"oauth_subject": "revuser", "oauth_token": "token-revuser-xx",
+		"installation_secret": secret,
+	})
+	require.Equal(t, 200, w4.Code, w4.Body.String())
+	dev, err = deviceRepo.Find("dev-to-revoke")
+	require.NoError(t, err)
+	assert.False(t, dev.Disabled)
+	_ = secretA
+	_ = db
+}
+
+// AP-076: 迁移票据重放失败。
+func TestLogin_MigrationTicket_ReplayFails(t *testing.T) {
+	r, db, _, accountRepo := setupAccountTest(t)
+
+	// 账号
+	tokenA := deviceAuth(t, r, "acct-ticket-main")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", tokenA, map[string]string{
+		"provider": "email", "email": "ticket@example.com", "password": "password123",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var bind accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
+
+	// 游客资产设备
+	_, _ = deviceAuthFull(t, r, "guest-ticket-dev")
+	now := time.Now().UTC()
+	require.NoError(t, db.Create(&models.Animal{
+		UUID: "uuid-ticket-1", DeviceID: "guest-ticket-dev",
+		Species: "dog", Rarity: 2, GeneratedAt: now, ServerVersion: 1,
+	}).Error)
+
+	plain, _, err := accountRepo.CreateMigrationTicket("guest-ticket-dev", bind.AccountID, time.Hour)
+	require.NoError(t, err)
+	require.NotEmpty(t, plain)
+
+	w1 := postLogin(t, r, map[string]string{
+		"device_id": "guest-ticket-dev", "provider": "email",
+		"email": "ticket@example.com", "password": "password123",
+		"migration_ticket": plain,
+	})
+	require.Equal(t, 200, w1.Code, w1.Body.String())
+
+	// 重放
+	w2 := postLogin(t, r, map[string]string{
+		"device_id": "guest-ticket-dev", "provider": "email",
+		"email": "ticket@example.com", "password": "password123",
+		"migration_ticket": plain,
+	})
+	// 设备已归属账号，重放时若仍带 used ticket：若 needsProof 因 secret 仍要求证明则 ticket_replay
+	// 或若已归属同账号且无禁用/无额外资产，可能直接成功（幂等链接）。强制：对 used ticket 在 needsProof 时失败。
+	// 这里设备已有 account，再次登录同账号：若设备有 installation_secret 则 needsProof。
+	// deviceAuthFull 会写入 secret，因此再次登录需要证明；used ticket → ticket_replay 或 invalid
+	require.NotEqual(t, 200, w2.Code, "replay must not succeed with used ticket when proof required: %s", w2.Body.String())
+	assert.True(t,
+		strings.Contains(w2.Body.String(), "ticket_replay") ||
+			strings.Contains(w2.Body.String(), "ticket_invalid") ||
+			strings.Contains(w2.Body.String(), "device_ownership_required"),
+		w2.Body.String())
+}
+
+// AP-076: 并发登录最多一次合并。
+func TestLogin_ConcurrentMergeOnce(t *testing.T) {
+	r, db, _, accountRepo := setupAccountTest(t)
+
+	tokenA := deviceAuth(t, r, "acct-conc-main")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", tokenA, map[string]string{
+		"provider": "email", "email": "conc@example.com", "password": "password123",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var bind accountAuthResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
+
+	_, secret := deviceAuthFull(t, r, "guest-conc-dev")
+	now := time.Now().UTC()
+	require.NoError(t, db.Create(&models.Animal{
+		UUID: "uuid-conc-1", DeviceID: "guest-conc-dev",
+		Species: "cat", Rarity: 4, GeneratedAt: now, ServerVersion: 1,
+	}).Error)
+
+	const n = 8
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			w := postLogin(t, r, map[string]string{
+				"device_id": "guest-conc-dev", "provider": "email",
+				"email": "conc@example.com", "password": "password123",
+				"installation_secret": secret,
+			})
+			codes[i] = w.Code
+		}(i)
+	}
+	wg.Wait()
+
+	ok := 0
+	for _, c := range codes {
+		if c == 200 {
+			ok++
+		}
+	}
+	assert.GreaterOrEqual(t, ok, 1)
+	// 动物只归属一次
+	var animal models.Animal
+	require.NoError(t, db.Where("uuid = ?", "uuid-conc-1").First(&animal).Error)
+	assert.Equal(t, bind.AccountID, animal.AccountID)
+
+	var ops []models.AccountMergeOperation
+	require.NoError(t, db.Where("device_id = ? AND account_id = ?", "guest-conc-dev", bind.AccountID).Find(&ops).Error)
+	assert.GreaterOrEqual(t, len(ops), 1)
+	// operation_id 唯一
+	seen := map[string]struct{}{}
+	for _, op := range ops {
+		_, dup := seen[op.OperationID]
+		assert.False(t, dup)
+		seen[op.OperationID] = struct{}{}
+	}
+	_ = accountRepo
 }

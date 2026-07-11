@@ -115,6 +115,8 @@ export async function loginEmail(
   signal?: AbortSignal,
 ): Promise<BindResult> {
   const deviceId = getOrCreateDeviceId()
+  // AP-076: 若本地持有 installation_secret，登录时一并提交以证明设备所有权（认领游客资产/复活设备）
+  const installationSecret = storage().getItem('ap_installation_secret') || undefined
   const res = await apiRequest<AccountAuthResponse>({
     method: 'POST',
     path: '/api/v1/auth/login',
@@ -123,6 +125,7 @@ export async function loginEmail(
       provider: 'email',
       email,
       password,
+      ...(installationSecret ? { installation_secret: installationSecret } : {}),
     }),
     signal,
   })

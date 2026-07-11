@@ -52,12 +52,14 @@ type bindRequest struct {
 }
 
 type loginRequest struct {
-	DeviceID     string `json:"device_id" binding:"required"`
-	Provider     string `json:"provider" binding:"required"`
-	Email        string `json:"email"`
-	Password     string `json:"password"`
-	OAuthSubject string `json:"oauth_subject"`
-	OAuthToken   string `json:"oauth_token"`
+	DeviceID           string `json:"device_id" binding:"required"`
+	Provider           string `json:"provider" binding:"required"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	OAuthSubject       string `json:"oauth_subject"`
+	OAuthToken         string `json:"oauth_token"`
+	InstallationSecret string `json:"installation_secret"` // 认领已有设备/游客资产时的持有证明
+	MigrationTicket    string `json:"migration_ticket"`    // 一次性迁移票据（与 secret 二选一）
 }
 
 type accountAuthResponse struct {
@@ -68,6 +70,7 @@ type accountAuthResponse struct {
 	RefreshToken string           `json:"refresh_token,omitempty"` // 仅返回一次；服务端只存哈希
 	Merge        *repo.MergeStats `json:"merge,omitempty"`
 	Guest        bool             `json:"guest"`
+	OperationID  string           `json:"operation_id,omitempty"` // 合并/链接操作唯一 ID（AP-076）
 }
 
 type revokeDeviceRequest struct {
@@ -207,16 +210,18 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 	})
 }
 
-// Login POST /auth/login — 清除本地后用 email/mock OAuth 恢复，合并新游客设备。
+// Login POST /auth/login — 清除本地后用 email/mock OAuth 恢复。
+// AP-076：认领已有游客资产或复活已撤销设备必须提供 installation_secret 或 migration_ticket；
+// 仅知道 device_id 不能合并他人动物/订单/权益；新设备登录无需伪造旧 device_id。
 func (h *AccountHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device_id and provider required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "device_id and provider required", "reason_code": "bad_request"})
 		return
 	}
 	if !deviceIDPattern.MatchString(req.DeviceID) {
 		if _, err := uuid.Parse(req.DeviceID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device_id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device_id", "reason_code": "invalid_device_id"})
 			return
 		}
 	}
@@ -245,38 +250,62 @@ func (h *AccountHandler) Login(c *gin.Context) {
 	}
 	acc, err := h.accountRepo.EnsureAccountActive(binding.AccountID)
 	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "account disabled"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "account disabled", "reason_code": "account_disabled"})
 		return
 	}
 
-	dev, err := h.deviceRepo.FindOrCreate(req.DeviceID)
+	// 合并/链接/refresh 单事务；持有证明失败时不自动 Enable 已撤销设备
+	result, err := h.accountRepo.LoginLinkAndMerge(req.DeviceID, acc.AccountID, repo.LoginMergeProof{
+		InstallationSecret: req.InstallationSecret,
+		MigrationTicket:    req.MigrationTicket,
+	}, h.refreshTTL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "device registration failed"})
-		return
-	}
-	if dev.Disabled {
-		// 若此前被 revoke，login 可重新启用（同账号）
-		_ = h.deviceRepo.Enable(req.DeviceID)
-		dev.Disabled = false
-	}
-
-	// 合并当前设备游客资产（若尚未归属该账号）
-	var mergeStats *repo.MergeStats
-	if dev.AccountID != acc.AccountID {
-		mergeStats, err = h.accountRepo.MergeGuestIntoAccount(req.DeviceID, acc.AccountID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "merge failed"})
+		switch err {
+		case repo.ErrDeviceOwnership, repo.ErrInvalidMergeProof:
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":       "device ownership proof required",
+				"reason_code": "device_ownership_required",
+			})
+			return
+		case repo.ErrDeviceDisabled:
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":       "device revoked; provide installation_secret or migration_ticket to re-enable",
+				"reason_code": "device_revoked",
+			})
+			return
+		case repo.ErrTicketReplay:
+			c.JSON(http.StatusConflict, gin.H{
+				"error":       "migration ticket already used",
+				"reason_code": "ticket_replay",
+			})
+			return
+		case repo.ErrTicketExpired, repo.ErrTicketNotFound:
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":       "invalid or expired migration ticket",
+				"reason_code": "ticket_invalid",
+			})
+			return
+		case repo.ErrAlreadyBound:
+			c.JSON(http.StatusConflict, gin.H{
+				"error":       "device bound to another account",
+				"reason_code": "device_bound",
+			})
+			return
+		default:
+			slog.Error("login link/merge failed", "err", err, "device_id", req.DeviceID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed", "reason_code": "login_failed"})
 			return
 		}
 	}
 
-	_, refresh, err := h.accountRepo.LinkDevice(req.DeviceID, acc.AccountID, "", h.refreshTTL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "link device failed"})
-		return
+	dev := result.Device
+	if dev == nil {
+		dev, err = h.deviceRepo.Find(req.DeviceID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "device lookup failed"})
+			return
+		}
 	}
-	// 重新读取 token version
-	dev, _ = h.deviceRepo.Find(req.DeviceID)
 	token, exp, err := h.issueToken(req.DeviceID, acc.AccountID, dev.TokenVersion)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
@@ -287,9 +316,10 @@ func (h *AccountHandler) Login(c *gin.Context) {
 		ExpiresAt:    exp.Format(time.RFC3339),
 		TokenType:    "Bearer",
 		AccountID:    acc.AccountID,
-		RefreshToken: refresh,
-		Merge:        mergeStats,
+		RefreshToken: result.Refresh,
+		Merge:        result.Merge,
 		Guest:        false,
+		OperationID:  result.OperationID,
 	})
 }
 

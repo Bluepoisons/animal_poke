@@ -261,6 +261,11 @@ paths:
     post:
       tags: [Auth]
       summary: Login to recover after clearing local data (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
+      description: |
+        Recovers an account onto the provided `device_id`.
+        **New device** (unknown device_id): links without ownership proof and does not claim another device's assets.
+        **Claim existing guest assets** or **re-enable a revoked device**: requires `installation_secret` or a one-time `migration_ticket`.
+        Knowing only another user's `device_id` is insufficient to merge their animals/orders/entitlements (AP-076).
       operationId: authLogin
       security: []
       requestBody:
@@ -271,7 +276,7 @@ paths:
               $ref: "#/components/schemas/AuthLoginRequest"
       responses:
         "200":
-          description: Logged in; guest assets on device_id merged into account
+          description: Logged in; guest assets on device_id merged only when ownership proof is valid
           content:
             application/json:
               schema:
@@ -280,6 +285,18 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Device ownership proof required or device remains revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Migration ticket replay or device bound to another account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -1706,6 +1723,7 @@ components:
       properties:
         device_id:
           type: string
+          description: Device to link. New devices need no proof; claiming existing guest assets requires proof.
         provider:
           type: string
           enum: [email]
@@ -1720,6 +1738,12 @@ components:
         oauth_token:
           type: string
           description: Development-only mock provider field
+        installation_secret:
+          type: string
+          description: Device ownership proof required when merging guest assets or re-enabling a revoked device
+        migration_ticket:
+          type: string
+          description: One-time migration ticket alternative to installation_secret; replay is rejected
     AuthAccountResponse:
       type: object
       required: [token, expires_at, token_type]
@@ -1750,6 +1774,14 @@ components:
               type: integer
             orders_moved:
               type: integer
+            operation_id:
+              type: string
+            proof_type:
+              type: string
+              description: none | installation_secret | migration_ticket
+        operation_id:
+          type: string
+          description: Unique login link/merge operation id for audit (AP-076)
     AuthAccountInfo:
       type: object
       properties:

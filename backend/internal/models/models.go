@@ -286,3 +286,38 @@ type DeviceAccount struct {
 
 // TableName 明确表名。
 func (DeviceAccount) TableName() string { return "device_accounts" }
+
+// DeviceMigrationTicket 一次性设备资产迁移票据（AP-076）。
+// 明文仅签发时返回；库中仅存 peppered/sha256 哈希，防止仅凭 device_id 认领游客资产。
+type DeviceMigrationTicket struct {
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	TicketID       string     `gorm:"uniqueIndex;size:36;not null" json:"ticket_id"`
+	TicketHash     string     `gorm:"uniqueIndex;size:128;not null" json:"-"`
+	SourceDeviceID string     `gorm:"index;size:64;not null" json:"source_device_id"`
+	AccountID      string     `gorm:"index;size:36" json:"account_id,omitempty"` // 可选：限制仅指定账号可消费
+	ExpiresAt      time.Time  `gorm:"not null;index" json:"expires_at"`
+	UsedAt         *time.Time `json:"used_at,omitempty"`
+	OperationID    string     `gorm:"index;size:36" json:"operation_id,omitempty"` // 消费时写入
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (DeviceMigrationTicket) TableName() string { return "device_migration_tickets" }
+
+// AccountMergeOperation 登录合并/链接操作审计（唯一 operation_id）。
+type AccountMergeOperation struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OperationID    string    `gorm:"uniqueIndex;size:36;not null" json:"operation_id"`
+	AccountID      string    `gorm:"index;size:36;not null" json:"account_id"`
+	DeviceID       string    `gorm:"index;size:64;not null" json:"device_id"`
+	ActorAccountID string    `gorm:"size:36;not null" json:"actor_account_id"` // 真实审计 actor
+	ProofType      string    `gorm:"size:32;not null" json:"proof_type"`       // none|installation_secret|migration_ticket
+	Merged         bool      `gorm:"not null;default:false" json:"merged"`
+	AnimalsMoved   int       `json:"animals_moved"`
+	EntitlementsMv int       `json:"entitlements_moved"`
+	OrdersMoved    int       `json:"orders_moved"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (AccountMergeOperation) TableName() string { return "account_merge_operations" }

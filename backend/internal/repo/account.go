@@ -43,6 +43,12 @@ var (
 	ErrDeviceRevoked     = errors.New("device revoked")
 	ErrAlreadyBound      = errors.New("device already bound to another account")
 	ErrBindingConflict   = errors.New("binding already linked to another account")
+	ErrDeviceOwnership   = errors.New("device ownership proof required")
+	ErrInvalidMergeProof = errors.New("invalid device ownership proof")
+	ErrDeviceDisabled    = errors.New("device revoked or disabled")
+	ErrTicketReplay      = errors.New("migration ticket already used")
+	ErrTicketExpired     = errors.New("migration ticket expired")
+	ErrTicketNotFound    = errors.New("migration ticket not found")
 )
 
 // HashCredential 对密码/token 做不可逆哈希（bcrypt 用于 password 类；token 用 sha256+pepper）。
@@ -255,11 +261,13 @@ func (r *AccountRepo) FindActiveDeviceAccount(deviceID string) (*models.DeviceAc
 // MergeGuestIntoAccount 游客合并：动物/权益/订单归属账号，权益不重复发放。
 // 返回合并统计。
 type MergeStats struct {
-	AnimalsMoved       int `json:"animals_moved"`
-	AnimalsSkipped     int `json:"animals_skipped"`
-	EntitlementsMoved  int `json:"entitlements_moved"`
-	EntitlementsMerged int `json:"entitlements_merged"`
-	OrdersMoved        int `json:"orders_moved"`
+	AnimalsMoved       int    `json:"animals_moved"`
+	AnimalsSkipped     int    `json:"animals_skipped"`
+	EntitlementsMoved  int    `json:"entitlements_moved"`
+	EntitlementsMerged int    `json:"entitlements_merged"`
+	OrdersMoved        int    `json:"orders_moved"`
+	OperationID        string `json:"operation_id,omitempty"`
+	ProofType          string `json:"proof_type,omitempty"`
 }
 
 // MergeGuestIntoAccount 将 guestDevice 上的资产合并到 accountID。
@@ -391,4 +399,462 @@ func FormatDeviceLabel(deviceID string) string {
 		return deviceID
 	}
 	return fmt.Sprintf("%s…%s", deviceID[:4], deviceID[len(deviceID)-4:])
+}
+
+// LoginMergeProof 登录合并持有证明。
+type LoginMergeProof struct {
+	InstallationSecret string
+	MigrationTicket    string
+}
+
+// LoginMergeResult 登录合并事务结果。
+type LoginMergeResult struct {
+	Device      *models.Device
+	Merge       *MergeStats
+	Refresh     string
+	OperationID string
+	ProofType   string
+	Created     bool // 本请求新建设备
+}
+
+// DeviceHasGuestAssets 设备是否仍有可合并游客资产（动物/权益/订单）。
+func (r *AccountRepo) DeviceHasGuestAssets(deviceID string) (bool, error) {
+	var n int64
+	if err := r.db.Model(&models.Animal{}).
+		Where("device_id = ? AND deleted_at IS NULL AND (account_id = '' OR account_id IS NULL)", deviceID).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+	if err := r.db.Model(&models.Entitlement{}).
+		Where("device_id = ? AND active = ? AND (account_id = '' OR account_id IS NULL)", deviceID, true).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+	if err := r.db.Model(&models.Order{}).
+		Where("device_id = ? AND (account_id = '' OR account_id IS NULL)", deviceID).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// CreateMigrationTicket 签发一次性迁移票据（明文仅返回一次）。
+// accountID 非空时限制仅该账号可消费。
+func (r *AccountRepo) CreateMigrationTicket(sourceDeviceID, accountID string, ttl time.Duration) (plain string, ticket *models.DeviceMigrationTicket, err error) {
+	if sourceDeviceID == "" {
+		return "", nil, errors.New("source device required")
+	}
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	raw := uuid.NewString() + uuid.NewString()
+	plain = raw
+	now := time.Now().UTC()
+	ticket = &models.DeviceMigrationTicket{
+		TicketID:       uuid.NewString(),
+		TicketHash:     r.HashToken(plain),
+		SourceDeviceID: sourceDeviceID,
+		AccountID:      accountID,
+		ExpiresAt:      now.Add(ttl),
+		CreatedAt:      now,
+	}
+	if err := r.db.Create(ticket).Error; err != nil {
+		return "", nil, err
+	}
+	return plain, ticket, nil
+}
+
+// consumeMigrationTicketTx 在事务内原子消费票据（防重放）。
+func (r *AccountRepo) consumeMigrationTicketTx(tx *gorm.DB, plain, sourceDeviceID, accountID, operationID string) error {
+	if plain == "" {
+		return ErrTicketNotFound
+	}
+	hash := r.HashToken(plain)
+	var t models.DeviceMigrationTicket
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("ticket_hash = ?", hash).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrTicketNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if t.UsedAt != nil {
+		return ErrTicketReplay
+	}
+	now := time.Now().UTC()
+	if now.After(t.ExpiresAt) {
+		return ErrTicketExpired
+	}
+	if t.SourceDeviceID != sourceDeviceID {
+		return ErrInvalidMergeProof
+	}
+	if t.AccountID != "" && t.AccountID != accountID {
+		return ErrInvalidMergeProof
+	}
+	res := tx.Model(&models.DeviceMigrationTicket{}).
+		Where("id = ? AND used_at IS NULL", t.ID).
+		Updates(map[string]interface{}{
+			"used_at":      now,
+			"operation_id": operationID,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrTicketReplay
+	}
+	return nil
+}
+
+// mergeGuestIntoAccountTx 事务内合并（与 MergeGuestIntoAccount 语义一致）。
+func (r *AccountRepo) mergeGuestIntoAccountTx(tx *gorm.DB, guestDeviceID, accountID string) (*MergeStats, error) {
+	stats := &MergeStats{}
+	var guestAnimals []models.Animal
+	if err := tx.Where("device_id = ? AND deleted_at IS NULL", guestDeviceID).Find(&guestAnimals).Error; err != nil {
+		return nil, err
+	}
+	for _, a := range guestAnimals {
+		if a.AccountID == accountID {
+			stats.AnimalsSkipped++
+			continue
+		}
+		res := tx.Model(&models.Animal{}).Where("id = ?", a.ID).
+			Updates(map[string]interface{}{
+				"account_id":     accountID,
+				"server_version": time.Now().UTC().UnixNano(),
+			})
+		if res.Error != nil {
+			return nil, res.Error
+		}
+		stats.AnimalsMoved++
+	}
+
+	var guestEnts []models.Entitlement
+	if err := tx.Where("device_id = ?", guestDeviceID).Find(&guestEnts).Error; err != nil {
+		return nil, err
+	}
+	for _, ge := range guestEnts {
+		var accountEnts []models.Entitlement
+		if err := tx.Where("account_id = ? AND product_id = ? AND active = ?", accountID, ge.ProductID, true).
+			Find(&accountEnts).Error; err != nil {
+			return nil, err
+		}
+		var peers []models.Entitlement
+		for _, ae := range accountEnts {
+			if ae.ID != ge.ID {
+				peers = append(peers, ae)
+			}
+		}
+		if len(peers) == 0 {
+			if err := tx.Model(&models.Entitlement{}).Where("id = ?", ge.ID).
+				Update("account_id", accountID).Error; err != nil {
+				return nil, err
+			}
+			stats.EntitlementsMoved++
+			continue
+		}
+		target := peers[0]
+		updates := map[string]interface{}{"active": true}
+		if ge.ExpiresAt != nil {
+			if target.ExpiresAt == nil || ge.ExpiresAt.After(*target.ExpiresAt) {
+				updates["expires_at"] = ge.ExpiresAt
+			}
+		}
+		if err := tx.Model(&models.Entitlement{}).Where("id = ?", target.ID).Updates(updates).Error; err != nil {
+			return nil, err
+		}
+		if err := tx.Model(&models.Entitlement{}).Where("id = ?", ge.ID).
+			Updates(map[string]interface{}{"active": false, "account_id": accountID}).Error; err != nil {
+			return nil, err
+		}
+		stats.EntitlementsMerged++
+	}
+
+	res := tx.Model(&models.Order{}).Where("device_id = ? AND (account_id = '' OR account_id IS NULL)", guestDeviceID).
+		Update("account_id", accountID)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	stats.OrdersMoved = int(res.RowsAffected)
+	return stats, nil
+}
+
+// linkDeviceTx 事务内链接设备（不自动启用已禁用 Device.Disabled——由调用方显式 Enable）。
+func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlain string, refreshTTL time.Duration) (*models.DeviceAccount, string, error) {
+	now := time.Now().UTC()
+	var refresh string
+	if refreshPlain != "" {
+		refresh = refreshPlain
+	} else {
+		refresh = uuid.NewString() + uuid.NewString()
+	}
+	refreshHash := r.HashToken(refresh)
+	var exp *time.Time
+	if refreshTTL > 0 {
+		e := now.Add(refreshTTL)
+		exp = &e
+	}
+
+	var da models.DeviceAccount
+	err := tx.Where("device_id = ?", deviceID).First(&da).Error
+	if err == nil {
+		if da.AccountID != accountID && da.Status == "active" {
+			return nil, "", ErrAlreadyBound
+		}
+		da.AccountID = accountID
+		da.Status = "active"
+		da.RefreshTokenHash = refreshHash
+		da.RefreshExpiresAt = exp
+		da.LinkedAt = now
+		da.LastSeenAt = &now
+		da.RevokedAt = nil
+		if err := tx.Save(&da).Error; err != nil {
+			return nil, "", err
+		}
+	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		da = models.DeviceAccount{
+			DeviceID:         deviceID,
+			AccountID:        accountID,
+			Status:           "active",
+			RefreshTokenHash: refreshHash,
+			RefreshExpiresAt: exp,
+			LinkedAt:         now,
+			LastSeenAt:       &now,
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "device_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"account_id", "status", "refresh_token_hash", "refresh_expires_at", "linked_at", "last_seen_at", "revoked_at", "updated_at"}),
+		}).Create(&da).Error; err != nil {
+			return nil, "", err
+		}
+	} else {
+		return nil, "", err
+	}
+
+	if err := tx.Model(&models.Device{}).Where("device_id = ?", deviceID).
+		Update("account_id", accountID).Error; err != nil {
+		return nil, "", err
+	}
+	return &da, refresh, nil
+}
+
+// LoginLinkAndMerge 登录：校验持有证明、合并游客资产、链接设备、写审计，单事务。
+// 规则：
+//   - 新设备（不存在）：创建并链接，无需证明；不合并他人资产。
+//   - 已有设备且需合并游客资产 / 设备 disabled：必须 installation_secret 或 migration_ticket。
+//   - 已撤销/disabled 无证明：拒绝自动 Enable。
+//   - 仅知道 device_id 不能合并他人动物/订单/权益。
+func (r *AccountRepo) LoginLinkAndMerge(deviceID, accountID string, proof LoginMergeProof, refreshTTL time.Duration) (*LoginMergeResult, error) {
+	if deviceID == "" || accountID == "" {
+		return nil, errors.New("device_id and account_id required")
+	}
+	operationID := uuid.NewString()
+	result := &LoginMergeResult{OperationID: operationID}
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		ar := r.WithTx(tx)
+		dr := NewDeviceRepo(tx)
+
+		// 锁定设备行（若存在）
+		var dev models.Device
+		findErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("device_id = ?", deviceID).First(&dev).Error
+		created := false
+		if errors.Is(findErr, gorm.ErrRecordNotFound) {
+			// 新设备：安全路径，不认领任何既有游客资产
+			dev = models.Device{DeviceID: deviceID, TokenVersion: 1}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "device_id"}},
+				DoNothing: true,
+			}).Create(&dev).Error; err != nil {
+				return err
+			}
+			if dev.ID == 0 {
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("device_id = ?", deviceID).First(&dev).Error; err != nil {
+					return err
+				}
+			} else {
+				created = true
+			}
+			result.Created = created
+		} else if findErr != nil {
+			return findErr
+		}
+
+		// 已绑定其他账号
+		if dev.AccountID != "" && dev.AccountID != accountID {
+			return ErrAlreadyBound
+		}
+
+		hasAssets := false
+		if !created {
+			var n int64
+			if err := tx.Model(&models.Animal{}).
+				Where("device_id = ? AND deleted_at IS NULL AND (account_id = '' OR account_id IS NULL OR account_id != ?)", deviceID, accountID).
+				Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				hasAssets = true
+			}
+			if !hasAssets {
+				if err := tx.Model(&models.Entitlement{}).
+					Where("device_id = ? AND active = ? AND (account_id = '' OR account_id IS NULL OR account_id != ?)", deviceID, true, accountID).
+					Count(&n).Error; err != nil {
+					return err
+				}
+				if n > 0 {
+					hasAssets = true
+				}
+			}
+			if !hasAssets {
+				if err := tx.Model(&models.Order{}).
+					Where("device_id = ? AND (account_id = '' OR account_id IS NULL)", deviceID).
+					Count(&n).Error; err != nil {
+					return err
+				}
+				if n > 0 {
+					hasAssets = true
+				}
+			}
+		}
+
+		needsMerge := !created && dev.AccountID != accountID && hasAssets
+		needsEnable := dev.Disabled
+		// 已有 installation secret 的设备：合并或启用都需要证明
+		// 无 secret 但有资产：也需要票据证明（无法用 secret）
+		needsProof := needsMerge || needsEnable
+		// 设备已存在且非本账号归属（含空 account 的游客）时，只要不是“本账号已绑定且无资产无禁用”，合并链接前对“有 secret 的设备”也要求证明
+		if !created && dev.AccountID != accountID && dev.InstallationSecretHash != "" {
+			needsProof = true
+		}
+
+		proofType := "none"
+		proved := false
+		if proof.InstallationSecret != "" {
+			ok, vErr := dr.VerifyInstallationSecret(deviceID, proof.InstallationSecret)
+			if vErr != nil {
+				return vErr
+			}
+			if ok {
+				proved = true
+				proofType = "installation_secret"
+			} else if proof.MigrationTicket == "" {
+				return ErrInvalidMergeProof
+			}
+		}
+		if !proved && proof.MigrationTicket != "" {
+			if err := ar.consumeMigrationTicketTx(tx, proof.MigrationTicket, deviceID, accountID, operationID); err != nil {
+				return err
+			}
+			proved = true
+			proofType = "migration_ticket"
+		}
+
+		if needsProof && !proved {
+			if needsEnable {
+				return ErrDeviceDisabled
+			}
+			return ErrDeviceOwnership
+		}
+
+		// 无证明且设备 disabled：绝不自动 Enable
+		if needsEnable {
+			if !proved {
+				return ErrDeviceDisabled
+			}
+			if err := tx.Model(&models.Device{}).Where("device_id = ?", deviceID).
+				Update("disabled", false).Error; err != nil {
+				return err
+			}
+			dev.Disabled = false
+		}
+
+		var mergeStats *MergeStats
+		if needsMerge || (!created && dev.AccountID != accountID) {
+			// 仅在有证明或新设备无资产时允许合并；新设备 created 路径跳过
+			if !created {
+				if hasAssets && !proved {
+					return ErrDeviceOwnership
+				}
+				// 无资产时也可链接；有资产必须 proved（上面已保证）
+				ms, err := ar.mergeGuestIntoAccountTx(tx, deviceID, accountID)
+				if err != nil {
+					return err
+				}
+				mergeStats = ms
+			}
+		}
+
+		_, refresh, err := ar.linkDeviceTx(tx, deviceID, accountID, "", refreshTTL)
+		if err != nil {
+			return err
+		}
+		result.Refresh = refresh
+
+		if mergeStats == nil {
+			mergeStats = &MergeStats{}
+		}
+		mergeStats.OperationID = operationID
+		mergeStats.ProofType = proofType
+		result.Merge = mergeStats
+		result.ProofType = proofType
+
+		// 写唯一 operation + 审计
+		animals := 0
+		ents := 0
+		orders := 0
+		merged := false
+		if mergeStats != nil {
+			animals = mergeStats.AnimalsMoved
+			ents = mergeStats.EntitlementsMoved + mergeStats.EntitlementsMerged
+			orders = mergeStats.OrdersMoved
+			merged = animals+ents+orders > 0
+		}
+		op := &models.AccountMergeOperation{
+			OperationID:    operationID,
+			AccountID:      accountID,
+			DeviceID:       deviceID,
+			ActorAccountID: accountID,
+			ProofType:      proofType,
+			Merged:         merged,
+			AnimalsMoved:   animals,
+			EntitlementsMv: ents,
+			OrdersMoved:    orders,
+		}
+		if err := tx.Create(op).Error; err != nil {
+			return err
+		}
+		meta := fmt.Sprintf(`{"operation_id":%q,"account_id":%q,"device_id":%q,"actor":%q,"proof_type":%q,"animals_moved":%d,"entitlements":%d,"orders_moved":%d}`,
+			operationID, accountID, deviceID, accountID, proofType, animals, ents, orders)
+		if err := tx.Create(&models.AuditLog{
+			DeviceID:  deviceID,
+			Type:      "auth",
+			Message:   "account_login_merge",
+			Metadata:  meta,
+			RiskScore: 0,
+			Status:    "closed",
+		}).Error; err != nil {
+			return err
+		}
+
+		// 重新读取设备
+		if err := tx.Where("device_id = ?", deviceID).First(&dev).Error; err != nil {
+			return err
+		}
+		result.Device = &dev
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
