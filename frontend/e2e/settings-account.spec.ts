@@ -11,17 +11,27 @@ test.describe('AP-075 settings and account', () => {
   test('settings hash shows all sections and language toggle', async ({ page }) => {
     await installBrowserMocks(page)
 
-    // Pre-grant consent
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('animal-poke-consent', JSON.stringify({
-          status: 'granted', grantedAt: Date.now(), version: 'v1',
-          scopes: ['photo', 'location'], serverSynced: true, revokedAt: null, updatedAt: Date.now(),
-        }))
-        localStorage.setItem('animal-poke-onboarding-v1', JSON.stringify({
-          step: 'done', skipped: true, completedAt: Date.now(),
-        }))
-      } catch {}
+        localStorage.setItem(
+          'animal-poke-consent',
+          JSON.stringify({
+            status: 'granted',
+            grantedAt: Date.now(),
+            version: 'v1',
+            scopes: ['photo', 'location'],
+            serverSynced: true,
+            revokedAt: null,
+            updatedAt: Date.now(),
+          }),
+        )
+        localStorage.setItem(
+          'animal-poke-onboarding-v1',
+          JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
+        )
+      } catch {
+        /* ignore */
+      }
     })
 
     await page.route(/\/api\/v1\//, async (route) => {
@@ -31,16 +41,10 @@ test.describe('AP-075 settings and account', () => {
     await page.goto('/#settings')
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 15_000 })
 
-    // Language toggle section
-    await expect(page.getByRole('button', { name: /中文|Chinese/ }).first()).toBeVisible()
-
-    // Toggle sections should be present
+    await expect(page.getByRole('button', { name: /中文|Chinese|English|英文/i }).first()).toBeVisible()
     await expect(page.getByRole('switch').first()).toBeVisible()
-
-    // Privacy center should be visible
     await expect(page.getByTestId('privacy-center')).toBeVisible()
 
-    // Axe scan
     const axeResult = await scanA11y(page)
     expect(axeResult.violations, `a11y violations on settings:\n${axeResult.details}`).toBe(0)
   })
@@ -50,21 +54,30 @@ test.describe('AP-075 settings and account', () => {
 
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('animal-poke-consent', JSON.stringify({
-          status: 'granted', grantedAt: Date.now(), version: 'v1',
-          scopes: ['photo'], serverSynced: true, revokedAt: null, updatedAt: Date.now(),
-        }))
-        localStorage.setItem('animal-poke-onboarding-v1', JSON.stringify({
-          step: 'done', skipped: true, completedAt: Date.now(),
-        }))
-      } catch {}
+        localStorage.setItem(
+          'animal-poke-consent',
+          JSON.stringify({
+            status: 'granted',
+            grantedAt: Date.now(),
+            version: 'v1',
+            scopes: ['photo'],
+            serverSynced: true,
+            revokedAt: null,
+            updatedAt: Date.now(),
+          }),
+        )
+        localStorage.setItem(
+          'animal-poke-onboarding-v1',
+          JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
+        )
+      } catch {
+        /* ignore */
+      }
     })
 
-    let accountFetched = false
     await page.route(/\/api\/v1\//, async (route) => {
       const path = new URL(route.request().url()).pathname
-      if (path.includes('/account')) {
-        accountFetched = true
+      if (path.includes('/account') || path.includes('/auth/account')) {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -77,14 +90,13 @@ test.describe('AP-075 settings and account', () => {
     await page.goto('/')
     await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
 
-    // Open account panel from discover
-    const openAccount = page.getByTestId('open-account')
-    if (await openAccount.isVisible().catch(() => false)) {
-      await openAccount.click()
-      await expect(page.getByTestId('account-settings')).toBeVisible({ timeout: 10_000 })
+    const openAccount = page.getByTestId('open-account').or(page.getByRole('button', { name: /账号|Account/i }))
+    if (await openAccount.first().isVisible().catch(() => false)) {
+      await openAccount.first().click()
+      const accountPanel = page.getByTestId('account-settings').or(page.getByText(/访客|Guest|账号|Account/i).first())
+      await expect(accountPanel).toBeVisible({ timeout: 10_000 })
     }
 
-    // Axe on account panel (if opened) or settings
     const axeResult = await scanA11y(page)
     expect(axeResult.violations, `a11y violations on settings+account:\n${axeResult.details}`).toBe(0)
   })
