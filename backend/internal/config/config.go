@@ -118,6 +118,11 @@ type Config struct {
 	Server                ServerTimeouts
 	// Upstream HTTP budgets / circuit breaker settings.
 	Upstream UpstreamConfig
+	// minClientVersion is the minimum client version allowed; empty = no minimum.
+	// Set via MIN_CLIENT_VERSION env var.
+	minClientVersion string
+	// deprecatedOps is the deprecation registry.
+	deprecatedOps map[string]DeprecatedOperation
 }
 
 // FeatureFlags Ranking / PvP / Social / Ops 产品能力开关（AP-042）。
@@ -313,6 +318,9 @@ func Load() *Config {
 		},
 		Upstream: loadUpstreamConfig(),
 	}
+
+	// AP-089: minimum client version gate (empty = no minimum).
+	cfg.minClientVersion = getEnv("MIN_CLIENT_VERSION", "")
 
 	// 按用途拆分密钥（AP-087）。production 禁止跨用途 fallback；非 production 使用独立默认值。
 	isProd := cfg.IsProduction()

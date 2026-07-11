@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `130` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `131` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -58,6 +58,7 @@
 | API-pullAnimals | `GET` | `/api/v1/sync/animals` | `pullAnimals` | TestContractMatrix/pullAnimals/success | TestContractMatrix/pullAnimals/failure |
 | API-getAnimalDetail | `GET` | `/api/v1/sync/animals/{uuid}` | `getAnimalDetail` | TestContractMatrix/getAnimalDetail/success | TestContractMatrix/getAnimalDetail/failure |
 | API-getTime | `GET` | `/api/v1/time` | `getTime` | TestContractMatrix/getTime/success | TestContractMatrix/getTime/failure |
+| API-getClientVersion | `GET` | `/api/v1/version` | `getClientVersion` | TestContractMatrix/getClientVersion/success | TestContractMatrix/getClientVersion/failure |
 | API-getWallet | `GET` | `/api/v1/wallet` | `getWallet` | TestContractMatrix/getWallet/success | TestContractMatrix/getWallet/failure |
 | API-listWalletLedger | `GET` | `/api/v1/wallet/ledger` | `listWalletLedger` | TestContractMatrix/listWalletLedger/success | TestContractMatrix/listWalletLedger/failure |
 | API-getWeatherWeek | `GET` | `/api/v1/weather/week` | `getWeatherWeek` | TestContractMatrix/getWeatherWeek/success | TestContractMatrix/getWeatherWeek/failure |

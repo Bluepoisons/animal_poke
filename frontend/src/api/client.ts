@@ -4,6 +4,8 @@
 
 export type { paths, components, operations } from './generated/schema'
 
+declare const __APP_VERSION__: string
+
 import { getApiBaseUrl as getConfigBase } from '../config/publicConfig'
 import { fetchWithRetry, FetchTimeoutError } from '../services/fetchWithRetry'
 
@@ -69,6 +71,7 @@ export async function apiRequest<T = unknown>(opts: RequestOptions): Promise<T> 
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'X-Request-ID': requestId,
+    'X-Client-Version': (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0') as string,
     ...opts.headers,
   }
   if (opts.token) {

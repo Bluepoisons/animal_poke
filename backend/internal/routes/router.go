@@ -64,6 +64,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	// 全局 body 硬上限（可选兜底，略大于最大图片上传）。
 	r.Use(middleware.GlobalBodyLimit(middleware.MaxBodyGlobal))
 	r.MaxMultipartMemory = cfg.MaxImageBytes
+	// AP-089: version negotiation and deprecation signalling.
+	r.Use(middleware.Version(cfg.VersionConfig()))
 
 	// Liveness / Readiness
 	r.GET("/health", handlers.Health())
@@ -132,6 +134,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		api.GET("/ping", func(c *gin.Context) {
 			c.JSON(200, gin.H{"msg": "pong", "db": db != nil, "app_env": cfg.AppEnv, "request_id": middleware.GetRequestID(c)})
 		})
+		// AP-089: client version negotiation endpoint
+		api.GET("/version", handlers.Version(cfg))
 
 		// 可信时间（公开，带签名）
 		timeHandler := handlers.NewTimeHandler(cfg.TimeSigningKey)
