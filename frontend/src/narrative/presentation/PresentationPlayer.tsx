@@ -192,7 +192,7 @@ export function PresentationPlayer({
       )}
 
       <footer className="ap-narrative-player__controls">
-        <button type="button" data-testid="btn-pause" onClick={() => setSnap(rt.pause() || rt.snapshot())}>
+        <button type="button" data-testid="btn-pause" onClick={() => { rt.pause(); setSnap(rt.snapshot()) }}>
           暂停
         </button>
         <button type="button" data-testid="btn-resume" onClick={() => setSnap(rt.resume())}>

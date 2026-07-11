@@ -48,14 +48,15 @@ describe('PresentationRuntime AP-122', () => {
     let saved: PresentationCheckpoint | null = null
     const rt1 = new PresentationRuntime(seq(), {
       save: (cp) => {
-        saved = cp
+        saved = structuredClone(cp)
       },
       load: () => saved,
     })
     rt1.start(false)
     while (rt1.current()?.id !== 's5') rt1.skip()
     rt1.choose('c_water')
-    expect(saved?.choices?.['s5']).toBe('c_water')
+    expect(saved).not.toBeNull()
+    expect(saved!.choices?.['s5']).toBe('c_water')
 
     const rt2 = new PresentationRuntime(seq(), {
       save: (cp) => {
