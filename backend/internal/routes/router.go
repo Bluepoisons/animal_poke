@@ -87,6 +87,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	geoService := services.NewGeoServiceWithProvider(thirdParty, mockAllowed, geoProvider)
 	weatherService := services.NewWeatherServiceWithProvider(thirdParty, mockAllowed, weatherProvider)
 	aiService := services.NewAIServiceWithProviders(thirdParty, mockAllowed, visionProvider, llmProvider)
+	aiService = aiService.WithStatsSecrets(cfg.StatsHMACKey, cfg.StatsHMACKeyPrevious)
 
 	var deviceRepo *repo.DeviceRepo
 	var animalRepo *repo.AnimalRepo
@@ -100,7 +101,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		auditRepo = repo.NewAuditLogRepo(db)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(db)
-		accountRepo = repo.NewAccountRepo(db, cfg.JWTSecret)
+		accountRepo = repo.NewAccountRepoWithPeppers(db, cfg.AccountTokenPepper, cfg.AccountTokenPepperPrevious)
 	}
 
 	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
@@ -131,7 +132,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		})
 
 		// 可信时间（公开，带签名）
-		timeHandler := handlers.NewTimeHandler(cfg.JWTSecret)
+		timeHandler := handlers.NewTimeHandler(cfg.TimeSigningKey)
 		api.GET("/time", timeHandler.GetTime)
 
 		// 设备鉴权：始终注册；无 DB 时 503
