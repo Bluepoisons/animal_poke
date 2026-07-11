@@ -121,6 +121,7 @@ export default function HuntMapScreen({
         <div
           className="ap-pin ap-pin--user"
           style={{ left: '50%', top: '50%', zIndex: 2 }}
+          role="img"
           aria-label={t('map.you')}
         />
         <div

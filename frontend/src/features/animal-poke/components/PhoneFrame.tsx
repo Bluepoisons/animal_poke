@@ -9,8 +9,8 @@ interface PhoneFrameProps {
 export default function PhoneFrame({ variant, children }: PhoneFrameProps) {
   const { t } = useI18n()
   return (
-    <section className={`ap-phone ap-phone--${variant}`} aria-label={t('phone.label')}>
+    <div className={`ap-phone ap-phone--${variant}`} data-phone-frame={variant} aria-label={t('phone.label')}>
       {children}
-    </section>
+    </div>
   )
 }

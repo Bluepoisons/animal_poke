@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * AP-014 / AP-040 E2E — production entry via Vite + page.route API mocks.
+ * AP-014 / AP-040 / AP-075 E2E — production entry via Vite + page.route API mocks.
  * Matrix: Chromium (CI hard gate) + WebKit (desktop Safari proxy).
  * Mobile projects available via PLAYWRIGHT_MOBILE=1.
  *
@@ -10,6 +10,7 @@ import { defineConfig, devices } from '@playwright/test'
  */
 const usePreview = process.env.E2E_USE_PREVIEW === '1'
 const enableMobile = process.env.PLAYWRIGHT_MOBILE === '1'
+const ci = !!process.env.CI
 
 const projects: { name: string; use: (typeof devices)[string] }[] = [
   {
@@ -42,16 +43,18 @@ if (enableMobile) {
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: ci,
+  retries: ci ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? [['github'], ['list']] : 'list',
+  reporter: ci
+    ? [['github'], ['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]]
+    : 'list',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   use: {
     baseURL: 'http://127.0.0.1:4173',
-    trace: 'on-first-retry',
-    video: 'off',
+    trace: ci ? 'on-first-retry' : 'retain-on-failure',
+    video: ci ? 'retain-on-failure' : 'off',
     screenshot: 'only-on-failure',
     locale: 'zh-CN',
     launchOptions: {
@@ -67,7 +70,7 @@ export default defineConfig({
       ? 'npx vite build --outDir dist-e2e --emptyOutDir false && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 4173 --strictPort'
       : 'npx vite --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !ci,
     timeout: 180_000,
     env: {
       ...process.env,
@@ -75,4 +78,7 @@ export default defineConfig({
       VITE_VISION_MOCK: '0',
     },
   },
+  // AP-075: snapshot base directory for visual regression
+  snapshotDir: './e2e/__screenshots__',
+  snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{arg}{ext}',
 })

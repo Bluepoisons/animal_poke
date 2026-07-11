@@ -73,7 +73,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   }
 
   return (
-    <div className="ap-screen">
+    <div className="ap-screen" data-testid="pokedex-screen">
       <PageTitle
         title={t('collection.title')}
         subtitle={t('pokedex.subtitle')}

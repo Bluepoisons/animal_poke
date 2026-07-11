@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium webkit",
+    "test:e2e:bootstrap": "node ./scripts/e2e-bootstrap.mjs",
     "openapi:gen": "openapi-typescript ../docs/openapi.yaml -o src/api/generated/schema.d.ts",
     "preinstall": "node ./scripts/check-node.mjs",
     "scan:secrets": "node ./scripts/scan-bundle-secrets.mjs",
@@ -33,6 +34,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
