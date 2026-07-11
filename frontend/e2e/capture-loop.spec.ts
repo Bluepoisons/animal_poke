@@ -152,13 +152,10 @@ test.describe('AP-014 production capture hard gate', () => {
     expect(beforeReload.pending).toBe(0)
 
     await page.reload()
-    // After i18n (AP-069) default locale is zh; pokedex subtitle is no longer "POKEDEX".
+    // After i18n (AP-069) default locale is zh; multiple nodes may contain 图鉴
+    // (route announcer + tab + subtitle). Use .first() to avoid strict-mode multi-match.
     await expect(
-      page
-        .getByText('DISCOVER MODE')
-        .or(page.getByText(/POKEDEX/i))
-        .or(page.getByText(/图鉴/))
-        .or(page.getByRole('button', { name: /发现|Discover/i })),
+      page.getByRole('button', { name: /图鉴|POKEDEX|Collection/i }).or(page.getByText('DISCOVER MODE')).first(),
     ).toBeVisible({
       timeout: 20_000,
     })
