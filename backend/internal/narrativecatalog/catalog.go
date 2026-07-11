@@ -64,6 +64,8 @@ func SeedNodes() []NodeDef {
 		{NodeID: "ch3_choice_judge", ChapterID: "ch3", Title: "如何处理矛盾证词", Body: "你要现在下结论，还是保留判断、等待更多证据？", Kind: "choice", Priority: 59},
 		{NodeID: "ch3_hold_judgment", ChapterID: "ch3", Title: "保留判断", Body: "你把线索标为 pending。手账页脚写：未知比错误更诚实。", Kind: "story", Priority: 58},
 		{NodeID: "ch3_quick_judge", ChapterID: "ch3", Title: "暂定结论", Body: "你写下暂定结论，并标注来源为「推测」。后续章节会回响这个决定。", Kind: "story", Priority: 58},
+		{NodeID: "ch3_evidence_view", ChapterID: "ch3", Title: "证据来源视图", Body: "线索状态：unknown / pending / confirmed / disputed。NPC 证词、模型推测与玩家观察分栏显示，互不覆盖。", Kind: "story", Priority: 57},
+		{NodeID: "ch3_npc_testimony", ChapterID: "ch3", Title: "林阿姨的说法", Body: "「那不是猫，是风吹的布。」她很肯定。模型输出仍写着 cat（低置信，已标推测）。", Kind: "story", Priority: 56},
 
 		// chapter 4 absence
 		{NodeID: "ch4_map_blank", ChapterID: "ch4", Title: "第四章：地图上的空白", Body: "地图上有一格空白。不是 bug，是城市改造与季节迁徙留下的空位。", Kind: "story", Priority: 40},
@@ -82,6 +84,8 @@ func SeedChoices() []ChoiceDef {
 		{ChoiceID: "ch1_c_slow", FromNodeID: "ch1_choice_pace", ToNodeID: "ch1_after_slow", Label: "再观察一会儿", Effects: map[string]any{"flag:pace": "slow", "rel:patience": 1}, SortOrder: 2},
 		{ChoiceID: "ch3_hold", FromNodeID: "ch3_choice_judge", ToNodeID: "ch3_hold_judgment", Label: "保留判断", Effects: map[string]any{"flag:judgment": "hold", "clue:rain_shadow": "pending"}, SortOrder: 1},
 		{ChoiceID: "ch3_decide", FromNodeID: "ch3_choice_judge", ToNodeID: "ch3_quick_judge", Label: "作暂定结论", Effects: map[string]any{"flag:judgment": "tentative", "clue:rain_shadow": "disputed"}, SortOrder: 2},
+		{ChoiceID: "ch3_to_evidence", FromNodeID: "ch3_hold_judgment", ToNodeID: "ch3_evidence_view", Label: "查看证据来源", Effects: map[string]any{"flag:opened_evidence": true}, SortOrder: 1},
+		{ChoiceID: "ch3_to_npc", FromNodeID: "ch3_evidence_view", ToNodeID: "ch3_npc_testimony", Label: "对照邻居证词", Effects: map[string]any{}, SortOrder: 1},
 		// auto edges as single-option choices for linear beats
 		{ChoiceID: "ch1_intro_next", FromNodeID: "ch1_intro", ToNodeID: "ch1_choice_pace", Label: "继续", Effects: map[string]any{}, SortOrder: 1},
 		{ChoiceID: "ch1_quick_next", FromNodeID: "ch1_after_quick", ToNodeID: "ch1_checkpoint", Label: "合上这一页", Effects: map[string]any{}, SortOrder: 1},
