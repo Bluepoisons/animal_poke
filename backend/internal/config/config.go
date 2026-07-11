@@ -32,8 +32,11 @@ type Config struct {
 	JWTAudience       string
 	JWTAccessTTL      time.Duration
 	AIMockEnabled     bool
-	RedisURL          string
-	AdminAPIKey       string
+	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
+	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
+	AuthMockOAuthEnabled bool
+	RedisURL             string
+	AdminAPIKey          string
 	// OpsToken 运维内部接口 X-AP-Ops-Token 校验值（可与 AdminAPIKey 相同，但独立配置）。
 	OpsToken string
 	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
@@ -276,6 +279,13 @@ func Load() *Config {
 		cfg.AIMockEnabled = getEnvBool("AI_MOCK_ENABLED", false)
 	}
 
+	// mock_oauth：production 强制关闭；非 production 默认开启，可用 AUTH_MOCK_OAUTH_ENABLED 覆盖（AP-063）。
+	if cfg.IsProduction() {
+		cfg.AuthMockOAuthEnabled = false
+	} else {
+		cfg.AuthMockOAuthEnabled = getEnvBool("AUTH_MOCK_OAUTH_ENABLED", true)
+	}
+
 	// 商业化：production 默认关闭；非 production 默认开启。COMMERCE_ENABLED 可覆盖。
 	commerceDefault := !cfg.IsProduction()
 	cfg.CommerceEnabled = getEnvBool("COMMERCE_ENABLED", commerceDefault)
@@ -386,6 +396,9 @@ func (c *Config) Validate() error {
 		}
 		if c.AIMockEnabled {
 			errs = append(errs, "production forbids AI_MOCK_ENABLED=true")
+		}
+		if c.AuthMockOAuthEnabled {
+			errs = append(errs, "production forbids AUTH_MOCK_OAUTH_ENABLED=true")
 		}
 		if !c.ThirdParty.VisionConfigured() {
 			errs = append(errs, "production requires VISION_ENDPOINT/KEY/MODEL")

@@ -1034,19 +1034,19 @@ export interface components {
         };
         AuthBindRequest: {
             /** @enum {string} */
-            provider: "email" | "mock_oauth";
+            provider: "email";
             /** Format: email */
             email?: string;
             password?: string;
             oauth_subject?: string;
-            /** @description Mock OAuth secret; server stores only a hash */
+            /** @description Development-only mock provider field; server stores only a hash */
             oauth_token?: string;
             display_name?: string;
         };
         AuthLoginRequest: {
             device_id: string;
             /** @enum {string} */
-            provider: "email" | "mock_oauth";
+            provider: "email";
             email?: string;
             password?: string;
             oauth_subject?: string;

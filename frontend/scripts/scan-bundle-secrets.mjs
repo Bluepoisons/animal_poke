@@ -22,6 +22,15 @@ const SUSPICIOUS_VALUE_RES = [
   /VITE_[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|API_KEY|MAP_KEY)[A-Z0-9_]*\s*[:=]\s*['"`][^'"`\s]{12,}['"`]/i,
 ]
 
+
+// AP-063: production bundle must not ship mock oauth UI strings / prefilled dev credentials.
+const PROD_FORBIDDEN_LITERALS = [
+  'mock_oauth',
+  'Mock OAuth',
+  'dev-user',
+  'dev-secret-token',
+]
+
 const TEXT_EXTS = new Set(['.js', '.css', '.html', '.map', '.json', '.txt', '.svg'])
 
 function walk(dir, out = []) {
@@ -46,6 +55,13 @@ for (const file of files) {
   }
   for (const re of SUSPICIOUS_VALUE_RES) {
     if (re.test(text)) hits.push({ file, kind: 'value', re: String(re) })
+  }
+  // AP-063: forbid mock/dev auth literals in production runtime assets (skip source maps)
+  const ext = extname(file)
+  if (ext !== '.map') {
+    for (const lit of PROD_FORBIDDEN_LITERALS) {
+      if (text.includes(lit)) hits.push({ file, kind: 'prod-auth-literal', re: lit })
+    }
   }
 }
 

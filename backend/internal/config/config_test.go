@@ -493,3 +493,22 @@ func TestLoad_OpsTokenFallsBackToAdmin(t *testing.T) {
 	cfg = Load()
 	assert.Equal(t, "ops-specific", cfg.OpsToken)
 }
+
+func TestAuthMockOAuth_ProductionForcedOff(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MOCK_OAUTH_ENABLED", "true")
+	cfg := Load()
+	assert.False(t, cfg.AuthMockOAuthEnabled)
+}
+
+func TestAuthMockOAuth_DevDefaultOn(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("APP_ENV", "development")
+	cfg := Load()
+	assert.True(t, cfg.AuthMockOAuthEnabled)
+
+	t.Setenv("AUTH_MOCK_OAUTH_ENABLED", "false")
+	cfg = Load()
+	assert.False(t, cfg.AuthMockOAuthEnabled)
+}

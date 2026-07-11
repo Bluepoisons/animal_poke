@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import PageTitle from '../components/PageTitle'
 import {
   bindEmail,
-  bindMockOAuth,
   fetchAccount,
   listDevices,
   loginEmail,
-  loginMockOAuth,
   logoutAccount,
   revokeDevice,
   type AccountInfo,
@@ -18,12 +16,13 @@ interface AccountSettingsPanelProps {
   onClose: () => void
 }
 
+/**
+ * 生产账号页（AP-063）：仅邮箱绑定/登录，无 Mock OAuth、无预填开发凭证。
+ * Mock 仅在 unit/e2e fixture 中通过 accountAuth 显式 API 使用。
+ */
 export default function AccountSettingsPanel({ onToast, onClose }: AccountSettingsPanelProps) {
   const [info, setInfo] = useState<AccountInfo | null>(null)
   const [devices, setDevices] = useState<DeviceInfo[]>([])
-  const [mode, setMode] = useState<'mock' | 'email'>('mock')
-  const [subject, setSubject] = useState('dev-user')
-  const [oauthToken, setOauthToken] = useState('dev-secret-token')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -85,76 +84,42 @@ export default function AccountSettingsPanel({ onToast, onClose }: AccountSettin
 
       <section className="ap-account-card">
         <h3>{info?.guest !== false ? '绑定账号' : '登录其他设备凭证'}</h3>
-        <div className="ap-account-tabs">
-          <button type="button" className={mode === 'mock' ? 'is-active' : ''} onClick={() => setMode('mock')}>
-            Mock OAuth
-          </button>
-          <button type="button" className={mode === 'email' ? 'is-active' : ''} onClick={() => setMode('email')}>
-            邮箱
-          </button>
-        </div>
-        {mode === 'mock' ? (
-          <>
-            <label>
-              Subject
-              <input value={subject} onChange={(e) => setSubject(e.target.value)} autoComplete="username" />
-            </label>
-            <label>
-              Token（仅哈希入库）
-              <input
-                value={oauthToken}
-                onChange={(e) => setOauthToken(e.target.value)}
-                type="password"
-                autoComplete="current-password"
-              />
-            </label>
-            <button
-              type="button"
-              className="ap-action-button"
-              disabled={busy}
-              onClick={() =>
-                run(
-                  () =>
-                    info?.guest !== false
-                      ? bindMockOAuth(subject, oauthToken)
-                      : loginMockOAuth(subject, oauthToken),
-                  info?.guest !== false ? '绑定成功' : '登录成功',
-                )
-              }
-            >
-              {info?.guest !== false ? '绑定 Mock OAuth' : '用 Mock 重新登录'}
-            </button>
-          </>
-        ) : (
-          <>
-            <label>
-              邮箱
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" />
-            </label>
-            <label>
-              密码（≥8）
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type="password"
-                autoComplete="current-password"
-              />
-            </label>
-            <button
-              type="button"
-              className="ap-action-button"
-              disabled={busy}
-              onClick={() =>
-                run(
-                  () => (info?.guest !== false ? bindEmail(email, password) : loginEmail(email, password)),
-                  info?.guest !== false ? '邮箱绑定成功' : '邮箱登录成功',
-                )
-              }
-            >
-              {info?.guest !== false ? '绑定邮箱' : '邮箱重新登录'}
-            </button>
-          </>
-        )}
+        <label>
+          邮箱
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            data-testid="account-email"
+          />
+        </label>
+        <label>
+          密码（≥8）
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            autoComplete="current-password"
+            placeholder="密码"
+            data-testid="account-password"
+          />
+        </label>
+        <button
+          type="button"
+          className="ap-action-button"
+          disabled={busy}
+          data-testid="account-email-submit"
+          onClick={() =>
+            run(
+              () => (info?.guest !== false ? bindEmail(email, password) : loginEmail(email, password)),
+              info?.guest !== false ? '邮箱绑定成功' : '邮箱登录成功',
+            )
+          }
+        >
+          {info?.guest !== false ? '绑定邮箱' : '邮箱重新登录'}
+        </button>
       </section>
 
       {info?.guest === false && (

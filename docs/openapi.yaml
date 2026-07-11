@@ -228,7 +228,7 @@ paths:
   /api/v1/auth/bind:
     post:
       tags: [Auth]
-      summary: Bind current device to email or mock OAuth account
+      summary: Bind current device to an account (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
       description: |
         Guest remains default. Binding creates or attaches an account, merges guest
         animals/entitlements without double-granting rewards. Credentials are stored hashed.
@@ -260,7 +260,7 @@ paths:
   /api/v1/auth/login:
     post:
       tags: [Auth]
-      summary: Login with email/mock OAuth to recover after clearing local data
+      summary: Login to recover after clearing local data (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
       operationId: authLogin
       security: []
       requestBody:
@@ -1684,7 +1684,8 @@ components:
       properties:
         provider:
           type: string
-          enum: [email, mock_oauth]
+          enum: [email]
+          description: Public production providers. Development may also accept mock_oauth when AUTH_MOCK_OAUTH_ENABLED (returns 404 provider_unavailable otherwise).
         email:
           type: string
           format: email
@@ -1693,9 +1694,10 @@ components:
           minLength: 8
         oauth_subject:
           type: string
+          description: Development-only mock provider field (not a production provider)
         oauth_token:
           type: string
-          description: Mock OAuth secret; server stores only a hash
+          description: Development-only mock provider field; server stores only a hash
         display_name:
           type: string
     AuthLoginRequest:
@@ -1706,15 +1708,18 @@ components:
           type: string
         provider:
           type: string
-          enum: [email, mock_oauth]
+          enum: [email]
+          description: Public production providers. Development may also accept mock_oauth when AUTH_MOCK_OAUTH_ENABLED.
         email:
           type: string
         password:
           type: string
         oauth_subject:
           type: string
+          description: Development-only mock provider field
         oauth_token:
           type: string
+          description: Development-only mock provider field
     AuthAccountResponse:
       type: object
       required: [token, expires_at, token_type]
