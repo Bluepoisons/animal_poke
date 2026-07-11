@@ -65,7 +65,13 @@ type Config struct {
 	JWTRefreshAbsoluteTTL time.Duration
 	// JWTRefreshIdleTTL refresh 空闲过期（自上次成功使用起算）。
 	JWTRefreshIdleTTL time.Duration
-	AIMockEnabled     bool
+	// EmailVerifyTTL 邮箱验证令牌有效期（AP-079）。
+	EmailVerifyTTL time.Duration
+	// PasswordResetTTL 找回密码令牌有效期（AP-079）。
+	PasswordResetTTL time.Duration
+	// ReauthTTL 敏感操作 re-auth 令牌有效期（AP-079）。
+	ReauthTTL     time.Duration
+	AIMockEnabled bool
 	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
 	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
 	AuthMockOAuthEnabled bool
@@ -281,6 +287,9 @@ func Load() *Config {
 		JWTAccessTTL:          getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
 		JWTRefreshAbsoluteTTL: getEnvDuration("JWT_REFRESH_ABSOLUTE_TTL", 30*24*time.Hour),
 		JWTRefreshIdleTTL:     getEnvDuration("JWT_REFRESH_IDLE_TTL", 7*24*time.Hour),
+		EmailVerifyTTL:        getEnvDuration("EMAIL_VERIFY_TTL", 24*time.Hour),
+		PasswordResetTTL:      getEnvDuration("PASSWORD_RESET_TTL", time.Hour),
+		ReauthTTL:             getEnvDuration("REAUTH_TTL", 5*time.Minute),
 		AIMockEnabled:         getEnvBool("AI_MOCK_ENABLED", true),
 		RedisURL:              getEnv("REDIS_URL", ""),
 		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),

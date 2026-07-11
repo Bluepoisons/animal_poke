@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/middleware"
+	"animalpoke/backend/internal/models"
 	"animalpoke/backend/internal/repo"
+	"animalpoke/backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -27,6 +29,11 @@ type AccountHandler struct {
 	issuer             string
 	audience           string
 	allowMockOAuth     bool // 仅 development/test 可开启；production 必须 false（AP-063）
+	mailer             services.SecurityMailer
+	emailVerifyTTL     time.Duration
+	passwordResetTTL   time.Duration
+	reauthTTL          time.Duration
+	exposeDebugTokens  bool // 非 production：响应附带 debug_security_token 便于联调/测试
 }
 
 // NewAccountHandler 构造。allowMockOAuth 控制 mock_oauth provider；production 必须传 false。
@@ -41,6 +48,11 @@ func NewAccountHandler(deviceRepo *repo.DeviceRepo, accountRepo *repo.AccountRep
 		issuer:             issuer,
 		audience:           audience,
 		allowMockOAuth:     allowMockOAuth,
+		mailer:             services.LogSecurityMailer{},
+		emailVerifyTTL:     repo.DefaultEmailVerifyTTL,
+		passwordResetTTL:   repo.DefaultPasswordResetTTL,
+		reauthTTL:          repo.DefaultReauthTTL,
+		exposeDebugTokens:  true, // 测试默认开启；router 在 production 关闭
 	}
 }
 
@@ -52,6 +64,23 @@ func (h *AccountHandler) SetRefreshPolicy(absolute, idle time.Duration) {
 	if idle > 0 {
 		h.refreshIdleTTL = idle
 	}
+}
+
+// SetSecurityOptions 配置邮件验证 TTL / 调试令牌暴露 / 邮件发送器（AP-079）。
+func (h *AccountHandler) SetSecurityOptions(mailer services.SecurityMailer, emailVerifyTTL, passwordResetTTL, reauthTTL time.Duration, exposeDebug bool) {
+	if mailer != nil {
+		h.mailer = mailer
+	}
+	if emailVerifyTTL > 0 {
+		h.emailVerifyTTL = emailVerifyTTL
+	}
+	if passwordResetTTL > 0 {
+		h.passwordResetTTL = passwordResetTTL
+	}
+	if reauthTTL > 0 {
+		h.reauthTTL = reauthTTL
+	}
+	h.exposeDebugTokens = exposeDebug
 }
 
 func (h *AccountHandler) refreshPolicy() repo.RefreshPolicy {
@@ -79,14 +108,17 @@ type loginRequest struct {
 }
 
 type accountAuthResponse struct {
-	Token        string           `json:"token"`
-	ExpiresAt    string           `json:"expires_at"`
-	TokenType    string           `json:"token_type"`
-	AccountID    string           `json:"account_id,omitempty"`
-	RefreshToken string           `json:"refresh_token,omitempty"` // 仅返回一次；服务端只存哈希
-	Merge        *repo.MergeStats `json:"merge,omitempty"`
-	Guest        bool             `json:"guest"`
-	OperationID  string           `json:"operation_id,omitempty"` // 合并/链接操作唯一 ID（AP-076）
+	Token                 string           `json:"token"`
+	ExpiresAt             string           `json:"expires_at"`
+	TokenType             string           `json:"token_type"`
+	AccountID             string           `json:"account_id,omitempty"`
+	RefreshToken          string           `json:"refresh_token,omitempty"` // 仅返回一次；服务端只存哈希
+	Merge                 *repo.MergeStats `json:"merge,omitempty"`
+	Guest                 bool             `json:"guest"`
+	OperationID           string           `json:"operation_id,omitempty"` // 合并/链接操作唯一 ID（AP-076）
+	EmailVerified         *bool            `json:"email_verified,omitempty"`
+	VerificationRequired  bool             `json:"verification_required,omitempty"`
+	DebugSecurityToken    string           `json:"debug_security_token,omitempty"` // 非 production
 }
 
 type revokeDeviceRequest struct {
@@ -130,6 +162,10 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 	existing, err := h.accountRepo.FindBinding(provider, subject)
 	var accountID string
 	var mergeStats *repo.MergeStats
+	var debugTok string
+	var emailVerified bool
+	var verificationRequired bool
+	emailVerifiedSet := false
 	if err == nil {
 		// 绑定已存在 → 登录该账号并合并当前游客资产
 		acc, aerr := h.accountRepo.EnsureAccountActive(existing.AccountID)
@@ -138,10 +174,20 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 			return
 		}
 		if !h.accountRepo.VerifyBindingCredential(existing, secret) {
+			// 反枚举：与不存在统一
+			middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
+			return
+		}
+		// AP-079：未验证邮箱不能作为恢复凭证（bind 既有身份等同恢复）
+		if provider == "email" && !existing.Verified {
 			middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 			return
 		}
 		accountID = acc.AccountID
+		if provider == "email" {
+			emailVerified = existing.Verified
+			emailVerifiedSet = true
+		}
 		// 若设备已绑其他账号
 		if dev.AccountID != "" && dev.AccountID != accountID {
 			middleware.WriteError(c, http.StatusConflict, "device_bound", "device bound to another account", false, nil)
@@ -182,13 +228,24 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		} else {
 			credHash = h.accountRepo.HashToken(secret)
 		}
-		if _, err := h.accountRepo.UpsertBinding(accountID, provider, subject, credHash); err != nil {
-			if err == repo.ErrBindingConflict {
+		// email 新建 pending；OAuth 视为已验证（AP-079）
+		verified := provider != "email"
+		binding, berr := h.accountRepo.UpsertBinding(accountID, provider, subject, credHash, verified)
+		if berr != nil {
+			if berr == repo.ErrBindingConflict {
 				middleware.WriteError(c, http.StatusConflict, "binding_conflict", "binding conflict", false, nil)
 				return
 			}
 			middleware.WriteError(c, http.StatusInternalServerError, "bind_failed", "bind failed", true, nil)
 			return
+		}
+		if provider == "email" && binding != nil {
+			emailVerified = binding.Verified
+			emailVerifiedSet = true
+			if !binding.Verified {
+				debugTok, _ = h.issueEmailVerifyToken(accountID, subject, binding.ID)
+				verificationRequired = true
+			}
 		}
 	} else {
 		middleware.WriteError(c, http.StatusInternalServerError, "lookup_failed", "lookup failed", true, nil)
@@ -211,15 +268,22 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		return
 	}
 	_ = h.accountRepo.TouchDevice(deviceID)
-	c.JSON(http.StatusOK, accountAuthResponse{
-		Token:        token,
-		ExpiresAt:    exp.Format(time.RFC3339),
-		TokenType:    "Bearer",
-		AccountID:    accountID,
-		RefreshToken: refresh,
-		Merge:        mergeStats,
-		Guest:        false,
-	})
+	resp := accountAuthResponse{
+		Token:                token,
+		ExpiresAt:            exp.Format(time.RFC3339),
+		TokenType:            "Bearer",
+		AccountID:            accountID,
+		RefreshToken:         refresh,
+		Merge:                mergeStats,
+		Guest:                false,
+		VerificationRequired: verificationRequired,
+		DebugSecurityToken:   debugTok,
+	}
+	if emailVerifiedSet || verificationRequired {
+		v := emailVerified
+		resp.EmailVerified = &v
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // Login POST /auth/login — 清除本地后用 email/mock OAuth 恢复。
@@ -249,10 +313,16 @@ func (h *AccountHandler) Login(c *gin.Context) {
 
 	binding, err := h.accountRepo.FindBinding(provider, subject)
 	if err != nil {
+		// 反枚举：账号不存在与凭证错误不可区分
 		middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 		return
 	}
 	if !h.accountRepo.VerifyBindingCredential(binding, secret) {
+		middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
+		return
+	}
+	// AP-079：未验证邮箱不可恢复登录
+	if provider == "email" && !binding.Verified {
 		middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 		return
 	}
@@ -512,13 +582,54 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"guest": true, "device_id": deviceID})
 		return
 	}
+	bindings, _ := h.accountRepo.ListBindings(acc.AccountID)
+	items := make([]gin.H, 0, len(bindings))
+	for _, b := range bindings {
+		subj := b.ProviderSubject
+		if b.Provider == "email" {
+			subj = maskEmail(subj)
+		}
+		items = append(items, gin.H{
+			"provider":         b.Provider,
+			"provider_subject": subj,
+			"verified":         b.Verified,
+		})
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"guest":        false,
 		"account_id":   acc.AccountID,
 		"display_name": acc.DisplayName,
 		"status":       acc.Status,
 		"device_id":    deviceID,
+		"bindings":     items,
 	})
+}
+
+func maskEmail(email string) string {
+	email = strings.TrimSpace(email)
+	at := strings.Index(email, "@")
+	if at <= 1 {
+		return "***"
+	}
+	return email[:1] + "***" + email[at:]
+}
+
+// issueEmailVerifyToken 签发并投递邮箱验证令牌；非 prod 可返回明文。
+func (h *AccountHandler) issueEmailVerifyToken(accountID, email string, bindingID uint) (debug string, err error) {
+	_ = h.accountRepo.InvalidateSecurityTokens(accountID, models.SecurityPurposeEmailVerify)
+	plain, _, err := h.accountRepo.CreateSecurityToken(models.SecurityPurposeEmailVerify, accountID, email, bindingID, h.emailVerifyTTL)
+	if err != nil {
+		return "", err
+	}
+	if h.mailer != nil {
+		if merr := h.mailer.SendSecurityMail(email, models.SecurityPurposeEmailVerify, plain); merr != nil {
+			slog.Error("send email verify mail failed", "err", merr)
+		}
+	}
+	if h.exposeDebugTokens {
+		return plain, nil
+	}
+	return "", nil
 }
 
 func (h *AccountHandler) issueToken(deviceID, accountID string, tokenVersion int) (string, time.Time, error) {

@@ -35,7 +35,7 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
-		&models.RefreshToken{},
+		&models.RefreshToken{}, &models.AccountSecurityToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -46,6 +46,10 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
 	r.POST("/api/v1/auth/login", acctH.Login)
 	r.POST("/api/v1/auth/refresh", acctH.Refresh)
+	r.POST("/api/v1/auth/email/verify", acctH.VerifyEmail)
+	r.POST("/api/v1/auth/email/verify/request", acctH.RequestEmailVerify)
+	r.POST("/api/v1/auth/password/forgot", acctH.ForgotPassword)
+	r.POST("/api/v1/auth/password/reset", acctH.ResetPassword)
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
 	{
@@ -54,6 +58,9 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 		auth.GET("/auth/devices", acctH.ListDevices)
 		auth.POST("/auth/devices/revoke", acctH.RevokeDevice)
 		auth.GET("/auth/account", acctH.GetAccount)
+		auth.POST("/auth/password/change", acctH.ChangePassword)
+		auth.POST("/auth/unbind", acctH.UnbindProvider)
+		auth.POST("/auth/reauth", acctH.Reauth)
 		auth.GET("/sync/animals", func(c *gin.Context) {
 			deviceID := middleware.GetDeviceID(c)
 			accountID := middleware.GetAccountID(c)
@@ -109,6 +116,19 @@ func deviceAuthFull(t *testing.T, r *gin.Engine, deviceID string) (token, instal
 	tok, _ := resp["token"].(string)
 	sec, _ := resp["installation_secret"].(string)
 	return tok, sec
+}
+
+
+func verifyEmailFromBind(t *testing.T, r *gin.Engine, bindBody []byte) {
+	t.Helper()
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(bindBody, &resp))
+	tok, _ := resp["debug_security_token"].(string)
+	if tok == "" {
+		return // already verified / oauth
+	}
+	w := authedJSON(t, r, "POST", "/api/v1/auth/email/verify", "", map[string]string{"token": tok})
+	require.Equal(t, 200, w.Code, w.Body.String())
 }
 
 func postLogin(t *testing.T, r *gin.Engine, payload map[string]string) *httptest.ResponseRecorder {
@@ -288,6 +308,7 @@ func TestRecoverAfterClearLocal_MockLogin(t *testing.T) {
 		"provider": "email", "email": "user@example.com", "password": "password123",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 	var bindResp accountAuthResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bindResp))
 	require.NotEmpty(t, bindResp.AccountID)
@@ -383,7 +404,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
-		&models.RefreshToken{},
+		&models.RefreshToken{}, &models.AccountSecurityToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -394,6 +415,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
 	r.POST("/api/v1/auth/login", acctH.Login)
 	r.POST("/api/v1/auth/refresh", acctH.Refresh)
+	r.POST("/api/v1/auth/email/verify", acctH.VerifyEmail)
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
 	{
@@ -470,6 +492,7 @@ func TestLogin_HijackGuestAssets_WithoutProofFails(t *testing.T) {
 		"provider": "email", "email": "attacker@example.com", "password": "password123",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 
 	// 攻击：登录时填入受害者 device_id，无 installation_secret
 	w2 := postLogin(t, r, map[string]string{
@@ -572,6 +595,7 @@ func TestLogin_MigrationTicket_ReplayFails(t *testing.T) {
 		"provider": "email", "email": "ticket@example.com", "password": "password123",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 	var bind accountAuthResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
 
@@ -621,6 +645,7 @@ func TestLogin_ConcurrentMergeOnce(t *testing.T) {
 		"provider": "email", "email": "conc@example.com", "password": "password123",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 	var bind accountAuthResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
 
@@ -694,6 +719,8 @@ func bindAndGetRefresh(t *testing.T, r *gin.Engine, deviceID, email string) (acc
 		"provider": "email", "email": email, "password": "password123",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
+	// re-fetch account after verify if needed (session still valid)
 	var resp accountAuthResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.RefreshToken)

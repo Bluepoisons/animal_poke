@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0018_social_graph"
+const CurrentVersion = "0019_account_security"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -84,6 +84,7 @@ func allMigrations() []migrationSpec {
 		{"0016_pvp_matchmaking", migrate0016},
 		{"0017_admin_rbac", migrate0017},
 		{"0018_social_graph", migrate0018},
+		{"0019_account_security", migrate0019},
 	}
 }
 
@@ -310,6 +311,15 @@ func migrate0017(db *gorm.DB) error {
 	return db.AutoMigrate(&models.AdminSession{}, &models.AdminActionLog{})
 }
 
+// migrate0018 社交图谱（AP-083）。
 func migrate0018(db *gorm.DB) error {
 	return db.AutoMigrate(&models.SocialProfile{}, &models.FriendRequest{}, &models.Friendship{}, &models.SocialBlock{}, &models.SocialMute{}, &models.SocialUserReport{}, &models.SocialShare{})
+}
+
+// migrate0019 账号安全：邮箱验证状态、安全令牌表（AP-079）。
+func migrate0019(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.AccountBinding{},
+		&models.AccountSecurityToken{},
+	)
 }

@@ -170,6 +170,8 @@ export interface paths {
          * Bind current device to an account (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
          * @description Guest remains default. Binding creates or attaches an account, merges guest
          *     animals/entitlements without double-granting rewards. Credentials are stored hashed.
+         *     New email bindings start unverified (AP-079); OAuth bindings are verified immediately.
+         *     Unverified email cannot be used as a recovery credential on subsequent bind/login.
          */
         post: operations["authBind"];
         delete?: never;
@@ -289,6 +291,150 @@ export interface paths {
         put?: never;
         /** Revoke a lost device */
         post: operations["authRevokeDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/verify/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request email verification mail (anti-enumeration)
+         * @description Always returns 200 `accepted` whether or not the email exists or is pending (AP-079).
+         *     Only unverified email bindings receive a verification token (TTL = EMAIL_VERIFY_TTL).
+         */
+        post: operations["authEmailVerifyRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify email with one-time token
+         * @description Consumes an email_verify security token; replay is rejected (AP-079).
+         */
+        post: operations["authEmailVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request password reset mail (anti-enumeration)
+         * @description Always returns 200 `accepted`. Only verified email bindings receive a reset token (AP-079).
+         *     Unverified emails cannot recover.
+         */
+        post: operations["authPasswordForgot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset password with one-time token
+         * @description Consumes password_reset token, updates password hash, and revokes all access/refresh sessions (AP-079).
+         */
+        post: operations["authPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change password (authenticated)
+         * @description Requires verified email binding and current password. Invalidates all sessions and
+         *     re-issues access/refresh for the current device (AP-079).
+         */
+        post: operations["authPasswordChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/unbind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unbind a provider
+         * @description Requires reauth_password or reauth_token. Cannot remove the last recovery method
+         *     (verified email or OAuth) (AP-079).
+         */
+        post: operations["authUnbind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue short-lived re-auth token
+         * @description Verifies password against verified email binding and returns a reauth token (AP-079).
+         */
+        post: operations["authReauth"];
         delete?: never;
         options?: never;
         head?: never;
@@ -542,7 +688,7 @@ export interface paths {
         /**
          * Request data deletion
          * @description scope=device (default) deletes this device only.
-         *     scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
+         *     scope=account requires reauth_password or reauth_token and confirm=DELETE; wipes all devices under the account (AP-077/AP-079).
          *     Transactional delete: soft-delete animals (tombstone + server_version bump),
          *     remove inferences and security reports, clear historical export payloads,
          *     deactivate entitlements, revoke consent, bump token_version.
@@ -1400,8 +1546,10 @@ export interface components {
              * @enum {string}
              */
             scope: "device" | "account";
-            /** @description Required when scope=account (email password re-auth) */
+            /** @description Required when scope=account unless reauth_token is provided (verified email password) */
             reauth_password?: string;
+            /** @description Short-lived reauth token from POST /auth/reauth (AP-079) */
+            reauth_token?: string;
             /** @description Must be DELETE when scope=account */
             confirm?: string;
         };
@@ -1465,6 +1613,39 @@ export interface components {
             };
             /** @description Unique login link/merge operation id for audit (AP-076) */
             operation_id?: string;
+            /** @description Present for email bind flows (AP-079) */
+            email_verified?: boolean;
+            /** @description True when email binding is pending verification */
+            verification_required?: boolean;
+            /** @description Non-production only; email verify token for local/test */
+            debug_security_token?: string;
+        };
+        AuthEmailRequest: {
+            /** Format: email */
+            email: string;
+        };
+        AuthTokenRequest: {
+            token: string;
+        };
+        AuthAcceptedResponse: {
+            /** @example accepted */
+            status?: string;
+            /** @description Non-production only */
+            debug_security_token?: string;
+        };
+        AuthPasswordResetRequest: {
+            token: string;
+            new_password: string;
+        };
+        AuthPasswordChangeRequest: {
+            current_password: string;
+            new_password: string;
+        };
+        AuthUnbindRequest: {
+            provider: string;
+            subject?: string;
+            reauth_password?: string;
+            reauth_token?: string;
         };
         AuthAccountInfo: {
             guest?: boolean;
@@ -1472,6 +1653,12 @@ export interface components {
             display_name?: string;
             status?: string;
             device_id?: string;
+            bindings?: {
+                provider?: string;
+                /** @description Masked for email */
+                provider_subject?: string;
+                verified?: boolean;
+            }[];
         };
         AuthDeviceList: {
             guest?: boolean;
@@ -2369,6 +2556,243 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    authEmailVerifyRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted (anti-enumeration) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAcceptedResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    authEmailVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Email verified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example verified */
+                        status?: string;
+                        account_id?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Token replay */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    authPasswordForgot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted (anti-enumeration) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAcceptedResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    authPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthPasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Password reset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example password_reset */
+                        status?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Token replay */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    authPasswordChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthPasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Password changed; new tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    authUnbind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthUnbindRequest"];
+            };
+        };
+        responses: {
+            /** @description Unbound */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        provider?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Re-auth required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Last recovery method */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    authReauth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Reauth token issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        reauth_token?: string;
+                        expires_at?: string;
+                        /** @example reauth */
+                        token_type?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getCity: {

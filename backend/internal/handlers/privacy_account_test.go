@@ -27,6 +27,7 @@ func setupPrivacyAccount(t *testing.T) (*gin.Engine, *gorm.DB, *repo.AccountRepo
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DataRequest{}, &models.SecurityReport{}, &models.Inference{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.RefreshToken{},
+		&models.AccountSecurityToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -39,6 +40,7 @@ func setupPrivacyAccount(t *testing.T) (*gin.Engine, *gorm.DB, *repo.AccountRepo
 	r := gin.New()
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
 	r.POST("/api/v1/auth/login", acctH.Login)
+	r.POST("/api/v1/auth/email/verify", acctH.VerifyEmail)
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
 	{
@@ -66,6 +68,7 @@ func TestPrivacy_AccountDelete_RequiresReauth(t *testing.T) {
 		"provider": "email", "email": "user@example.com", "password": "password12",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 	var bind map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
 	token = bind["token"].(string)
@@ -84,6 +87,7 @@ func TestPrivacy_AccountDelete_WipesAccountData(t *testing.T) {
 		"provider": "email", "email": "wipe@example.com", "password": "password12",
 	})
 	require.Equal(t, 200, w.Code, w.Body.String())
+	verifyEmailFromBind(t, r, w.Body.Bytes())
 	var bind map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bind))
 	tokenA = bind["token"].(string)

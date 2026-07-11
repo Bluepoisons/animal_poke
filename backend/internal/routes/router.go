@@ -152,6 +152,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		} else {
 			api.POST("/auth/device", unavailable("db_unavailable"))
 		}
+		// AP-079：邮件相关端点更严限流（防枚举/轰炸）
+		mailLimiter := middleware.NewRateLimiter(5.0/60.0, 3).WithShared(sharedCounter)
+
 		if deviceRepo != nil && accountRepo != nil {
 			// mock_oauth 仅 development/test 且 AUTH_MOCK_OAUTH_ENABLED 默认开启时可用（AP-063）
 			accountHandler = handlers.NewAccountHandler(
@@ -159,6 +162,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				cfg.AuthMockOAuthEnabled,
 			)
 			accountHandler.SetRefreshPolicy(cfg.JWTRefreshAbsoluteTTL, cfg.JWTRefreshIdleTTL)
+			accountHandler.SetSecurityOptions(
+				services.LogSecurityMailer{},
+				cfg.EmailVerifyTTL, cfg.PasswordResetTTL, cfg.ReauthTTL,
+				!cfg.IsProduction(),
+			)
 			api.POST("/auth/login",
 				middleware.RateLimitByIP(ipLimiter),
 				middleware.BodyLimit(middleware.MaxBodyDefault),
@@ -170,9 +178,34 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				middleware.BodyLimit(middleware.MaxBodyDefault),
 				accountHandler.Refresh,
 			)
+			// AP-079 公开安全端点（反枚举 + 邮件限流）
+			api.POST("/auth/email/verify/request",
+				middleware.RateLimitByIP(mailLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.RequestEmailVerify,
+			)
+			api.POST("/auth/email/verify",
+				middleware.RateLimitByIP(mailLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.VerifyEmail,
+			)
+			api.POST("/auth/password/forgot",
+				middleware.RateLimitByIP(mailLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.ForgotPassword,
+			)
+			api.POST("/auth/password/reset",
+				middleware.RateLimitByIP(mailLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.ResetPassword,
+			)
 		} else {
 			api.POST("/auth/login", unavailable("db_unavailable"))
 			api.POST("/auth/refresh", unavailable("db_unavailable"))
+			api.POST("/auth/email/verify/request", unavailable("db_unavailable"))
+			api.POST("/auth/email/verify", unavailable("db_unavailable"))
+			api.POST("/auth/password/forgot", unavailable("db_unavailable"))
+			api.POST("/auth/password/reset", unavailable("db_unavailable"))
 		}
 
 		// JWT
@@ -201,19 +234,25 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			analyticsHandler := handlers.NewAnalyticsHandler()
 			auth.POST("/analytics/events", middleware.BodyLimit(middleware.MaxBodyDefault), analyticsHandler.Ingest)
 
-			// 账号绑定 / 设备管理
+			// 账号绑定 / 设备管理 / 安全（AP-079）
 			if accountHandler != nil {
 				auth.POST("/auth/bind", accountHandler.Bind)
 				auth.POST("/auth/logout", accountHandler.Logout)
 				auth.GET("/auth/devices", accountHandler.ListDevices)
 				auth.POST("/auth/devices/revoke", accountHandler.RevokeDevice)
 				auth.GET("/auth/account", accountHandler.GetAccount)
+				auth.POST("/auth/password/change", middleware.BodyLimit(middleware.MaxBodyDefault), accountHandler.ChangePassword)
+				auth.POST("/auth/unbind", middleware.BodyLimit(middleware.MaxBodyDefault), accountHandler.UnbindProvider)
+				auth.POST("/auth/reauth", middleware.BodyLimit(middleware.MaxBodyDefault), accountHandler.Reauth)
 			} else {
 				auth.POST("/auth/bind", unavailable("db_unavailable"))
 				auth.POST("/auth/logout", unavailable("db_unavailable"))
 				auth.GET("/auth/devices", unavailable("db_unavailable"))
 				auth.POST("/auth/devices/revoke", unavailable("db_unavailable"))
 				auth.GET("/auth/account", unavailable("db_unavailable"))
+				auth.POST("/auth/password/change", unavailable("db_unavailable"))
+				auth.POST("/auth/unbind", unavailable("db_unavailable"))
+				auth.POST("/auth/reauth", unavailable("db_unavailable"))
 			}
 
 			product := handlers.NewProductHandlerWithOptions(handlers.ProductOptions{

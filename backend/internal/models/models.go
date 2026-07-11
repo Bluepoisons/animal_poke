@@ -259,19 +259,47 @@ func (Account) TableName() string { return "accounts" }
 
 // AccountBinding 账号外部身份绑定（email / mock_oauth 等）。
 // CredentialHash 仅存哈希，永不存明文 token/password。
+// AP-079：email 新建默认可为 pending（Verified=false）；OAuth 绑定视为已验证。
+// 未验证邮箱不得作为恢复凭证（login / 找回密码）。
 type AccountBinding struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	AccountID       string    `gorm:"index;size:36;not null" json:"account_id"`
-	Provider        string    `gorm:"uniqueIndex:idx_binding_provider_subject,priority:1;size:32;not null" json:"provider"` // email|mock_oauth|apple|google
-	ProviderSubject string    `gorm:"uniqueIndex:idx_binding_provider_subject,priority:2;size:191;not null" json:"provider_subject"`
-	CredentialHash  string    `gorm:"size:128;not null" json:"-"`
-	Verified        bool      `gorm:"not null;default:true" json:"verified"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              uint       `gorm:"primaryKey" json:"id"`
+	AccountID       string     `gorm:"index;size:36;not null" json:"account_id"`
+	Provider        string     `gorm:"uniqueIndex:idx_binding_provider_subject,priority:1;size:32;not null" json:"provider"` // email|mock_oauth|apple|google
+	ProviderSubject string     `gorm:"uniqueIndex:idx_binding_provider_subject,priority:2;size:191;not null" json:"provider_subject"`
+	CredentialHash  string     `gorm:"size:128;not null" json:"-"`
+	Verified        bool       `gorm:"not null;default:false" json:"verified"`
+	VerifiedAt      *time.Time `json:"verified_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // TableName 明确表名。
 func (AccountBinding) TableName() string { return "account_bindings" }
+
+// 安全令牌用途（AP-079）。
+const (
+	SecurityPurposeEmailVerify   = "email_verify"
+	SecurityPurposePasswordReset = "password_reset"
+	SecurityPurposeReauth        = "reauth"
+)
+
+// AccountSecurityToken 邮箱验证 / 找回密码 / 近期 re-auth 一次性令牌（AP-079）。
+// 明文仅签发时返回或投递邮件；库中仅存 peppered SHA-256 哈希。
+type AccountSecurityToken struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	TokenID   string     `gorm:"uniqueIndex;size:36;not null" json:"token_id"`
+	TokenHash string     `gorm:"uniqueIndex;size:128;not null" json:"-"`
+	Purpose   string     `gorm:"index:idx_sec_token_purpose_account,priority:1;size:32;not null" json:"purpose"` // email_verify|password_reset|reauth
+	AccountID string     `gorm:"index:idx_sec_token_purpose_account,priority:2;size:36;not null" json:"account_id"`
+	Subject   string     `gorm:"index;size:191" json:"subject,omitempty"` // 规范化邮箱等
+	BindingID uint       `gorm:"index" json:"binding_id,omitempty"`
+	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (AccountSecurityToken) TableName() string { return "account_security_tokens" }
 
 // DeviceAccount 设备与账号的关联（支持多设备、撤销）。
 type DeviceAccount struct {

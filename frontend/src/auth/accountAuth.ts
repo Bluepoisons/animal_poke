@@ -22,6 +22,7 @@ export type AccountInfo = {
   displayName?: string
   status?: string
   deviceId?: string
+  bindings?: Array<{ provider: string; providerSubject: string; verified: boolean }>
 }
 
 export type DeviceInfo = {
@@ -171,6 +172,7 @@ export async function fetchAccount(signal?: AbortSignal): Promise<AccountInfo> {
     display_name?: string
     status?: string
     device_id?: string
+    bindings?: Array<{ provider: string; provider_subject?: string; verified?: boolean }>
   }>({
     method: 'GET',
     path: '/api/v1/auth/account',
@@ -184,6 +186,11 @@ export async function fetchAccount(signal?: AbortSignal): Promise<AccountInfo> {
     displayName: res.display_name,
     status: res.status,
     deviceId: res.device_id,
+    bindings: (res.bindings || []).map((b) => ({
+      provider: b.provider,
+      providerSubject: b.provider_subject || '',
+      verified: !!b.verified,
+    })),
   }
 }
 
@@ -225,6 +232,115 @@ export async function revokeDevice(deviceId: string, signal?: AbortSignal): Prom
     body: JSON.stringify({ device_id: deviceId }),
     signal,
   })
+}
+
+
+/** 请求邮箱验证（反枚举） */
+export async function requestEmailVerify(email: string, signal?: AbortSignal): Promise<void> {
+  await apiRequest({
+    method: 'POST',
+    path: '/api/v1/auth/email/verify/request',
+    body: JSON.stringify({ email }),
+    signal,
+  })
+}
+
+/** 使用令牌验证邮箱 */
+export async function verifyEmail(token: string, signal?: AbortSignal): Promise<void> {
+  await apiRequest({
+    method: 'POST',
+    path: '/api/v1/auth/email/verify',
+    body: JSON.stringify({ token }),
+    signal,
+  })
+}
+
+/** 忘记密码（反枚举） */
+export async function forgotPassword(email: string, signal?: AbortSignal): Promise<void> {
+  await apiRequest({
+    method: 'POST',
+    path: '/api/v1/auth/password/forgot',
+    body: JSON.stringify({ email }),
+    signal,
+  })
+}
+
+/** 使用重置令牌设置新密码 */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest({
+    method: 'POST',
+    path: '/api/v1/auth/password/reset',
+    body: JSON.stringify({ token, new_password: newPassword }),
+    signal,
+  })
+}
+
+/** 改密：成功后写入新 access/refresh */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  signal?: AbortSignal,
+): Promise<BindResult> {
+  const auth = await ensureAuth(signal)
+  const res = await apiRequest<AccountAuthResponse>({
+    method: 'POST',
+    path: '/api/v1/auth/password/change',
+    token: auth.token,
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+    signal,
+  })
+  const state: AuthState = {
+    deviceId: auth.deviceId,
+    token: res.token,
+    expiresAt: res.expires_at,
+  }
+  persistBound(state, res.account_id, res.refresh_token)
+  return {
+    ...state,
+    accountId: res.account_id || '',
+    refreshToken: res.refresh_token,
+  }
+}
+
+/** 解绑 provider（需 reauth） */
+export async function unbindProvider(
+  provider: string,
+  opts?: { subject?: string; reauthPassword?: string; reauthToken?: string },
+  signal?: AbortSignal,
+): Promise<void> {
+  const auth = await ensureAuth(signal)
+  await apiRequest({
+    method: 'POST',
+    path: '/api/v1/auth/unbind',
+    token: auth.token,
+    body: JSON.stringify({
+      provider,
+      subject: opts?.subject,
+      reauth_password: opts?.reauthPassword,
+      reauth_token: opts?.reauthToken,
+    }),
+    signal,
+  })
+}
+
+/** 近期 re-auth 令牌 */
+export async function reauth(password: string, signal?: AbortSignal): Promise<string> {
+  const auth = await ensureAuth(signal)
+  const res = await apiRequest<{ reauth_token: string }>({
+    method: 'POST',
+    path: '/api/v1/auth/reauth',
+    token: auth.token,
+    body: JSON.stringify({ password }),
+    signal,
+  })
+  return res.reauth_token
 }
 
 export function __resetAccountForTests(): void {

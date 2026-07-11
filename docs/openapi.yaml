@@ -234,6 +234,8 @@ paths:
       description: |
         Guest remains default. Binding creates or attaches an account, merges guest
         animals/entitlements without double-granting rewards. Credentials are stored hashed.
+        New email bindings start unverified (AP-079); OAuth bindings are verified immediately.
+        Unverified email cannot be used as a recovery credential on subsequent bind/login.
       operationId: authBind
       security:
         - bearerAuth: []
@@ -444,6 +446,249 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: Device not found
+
+  /api/v1/auth/email/verify/request:
+    post:
+      tags: [Auth]
+      summary: Request email verification mail (anti-enumeration)
+      description: |
+        Always returns 200 `accepted` whether or not the email exists or is pending (AP-079).
+        Only unverified email bindings receive a verification token (TTL = EMAIL_VERIFY_TTL).
+      operationId: authEmailVerifyRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthEmailRequest"
+      responses:
+        "200":
+          description: Accepted (anti-enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAcceptedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/email/verify:
+    post:
+      tags: [Auth]
+      summary: Verify email with one-time token
+      description: Consumes an email_verify security token; replay is rejected (AP-079).
+      operationId: authEmailVerify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthTokenRequest"
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: verified
+                  account_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Token replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/password/forgot:
+    post:
+      tags: [Auth]
+      summary: Request password reset mail (anti-enumeration)
+      description: |
+        Always returns 200 `accepted`. Only verified email bindings receive a reset token (AP-079).
+        Unverified emails cannot recover.
+      operationId: authPasswordForgot
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthEmailRequest"
+      responses:
+        "200":
+          description: Accepted (anti-enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAcceptedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Reset password with one-time token
+      description: |
+        Consumes password_reset token, updates password hash, and revokes all access/refresh sessions (AP-079).
+      operationId: authPasswordReset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPasswordResetRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: password_reset
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Token replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/password/change:
+    post:
+      tags: [Auth]
+      summary: Change password (authenticated)
+      description: |
+        Requires verified email binding and current password. Invalidates all sessions and
+        re-issues access/refresh for the current device (AP-079).
+      operationId: authPasswordChange
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPasswordChangeRequest"
+      responses:
+        "200":
+          description: Password changed; new tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/auth/unbind:
+    post:
+      tags: [Auth]
+      summary: Unbind a provider
+      description: |
+        Requires reauth_password or reauth_token. Cannot remove the last recovery method
+        (verified email or OAuth) (AP-079).
+      operationId: authUnbind
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthUnbindRequest"
+      responses:
+        "200":
+          description: Unbound
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  provider:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Re-auth required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Last recovery method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/reauth:
+    post:
+      tags: [Auth]
+      summary: Issue short-lived re-auth token
+      description: Verifies password against verified email binding and returns a reauth token (AP-079).
+      operationId: authReauth
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Reauth token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reauth_token:
+                    type: string
+                  expires_at:
+                    type: string
+                  token_type:
+                    type: string
+                    example: reauth
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/geo/city:
     get:
       tags: [Geo]
@@ -1048,7 +1293,7 @@ paths:
       summary: Request data deletion
       description: |
         scope=device (default) deletes this device only.
-        scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
+        scope=account requires reauth_password or reauth_token and confirm=DELETE; wipes all devices under the account (AP-077/AP-079).
         Transactional delete: soft-delete animals (tombstone + server_version bump),
         remove inferences and security reports, clear historical export payloads,
         deactivate entitlements, revoke consent, bump token_version.
@@ -2960,7 +3205,10 @@ components:
           default: device
         reauth_password:
           type: string
-          description: Required when scope=account (email password re-auth)
+          description: Required when scope=account unless reauth_token is provided (verified email password)
+        reauth_token:
+          type: string
+          description: Short-lived reauth token from POST /auth/reauth (AP-079)
         confirm:
           type: string
           description: Must be DELETE when scope=account
@@ -3062,6 +3310,67 @@ components:
         operation_id:
           type: string
           description: Unique login link/merge operation id for audit (AP-076)
+        email_verified:
+          type: boolean
+          description: Present for email bind flows (AP-079)
+        verification_required:
+          type: boolean
+          description: True when email binding is pending verification
+        debug_security_token:
+          type: string
+          description: Non-production only; email verify token for local/test
+    AuthEmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    AuthTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    AuthAcceptedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: accepted
+        debug_security_token:
+          type: string
+          description: Non-production only
+    AuthPasswordResetRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+    AuthPasswordChangeRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+    AuthUnbindRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+        subject:
+          type: string
+        reauth_password:
+          type: string
+        reauth_token:
+          type: string
     AuthAccountInfo:
       type: object
       properties:
@@ -3075,6 +3384,18 @@ components:
           type: string
         device_id:
           type: string
+        bindings:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              provider_subject:
+                type: string
+                description: Masked for email
+              verified:
+                type: boolean
     AuthDeviceList:
       type: object
       properties:
