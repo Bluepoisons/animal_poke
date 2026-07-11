@@ -252,10 +252,24 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/sync/animal", middleware.BodyLimit(middleware.MaxBodyDefault), syncHandler.SyncAnimal)
 				auth.POST("/sync/animals", middleware.BodyLimit(middleware.MaxBodySyncBatch), syncHandler.SyncAnimalsBatch)
 				auth.GET("/sync/animals", syncHandler.PullAnimals)
+				// AP-090: 单只收藏详情 / 编辑 / 删除（乐观锁）
+				auth.GET("/sync/animals/:uuid", syncHandler.GetAnimalDetail)
+				auth.PATCH("/sync/animals/:uuid", middleware.BodyLimit(middleware.MaxBodyDefault), syncHandler.PatchAnimal)
+				auth.DELETE("/sync/animals/:uuid", syncHandler.DeleteAnimal)
+				// 别名：/collection/:uuid
+				auth.GET("/collection/:uuid", syncHandler.GetAnimalDetail)
+				auth.PATCH("/collection/:uuid", middleware.BodyLimit(middleware.MaxBodyDefault), syncHandler.PatchAnimal)
+				auth.DELETE("/collection/:uuid", syncHandler.DeleteAnimal)
 			} else {
 				auth.POST("/sync/animal", unavailable("db_unavailable"))
 				auth.POST("/sync/animals", unavailable("db_unavailable"))
 				auth.GET("/sync/animals", unavailable("db_unavailable"))
+				auth.GET("/sync/animals/:uuid", unavailable("db_unavailable"))
+				auth.PATCH("/sync/animals/:uuid", unavailable("db_unavailable"))
+				auth.DELETE("/sync/animals/:uuid", unavailable("db_unavailable"))
+				auth.GET("/collection/:uuid", unavailable("db_unavailable"))
+				auth.PATCH("/collection/:uuid", unavailable("db_unavailable"))
+				auth.DELETE("/collection/:uuid", unavailable("db_unavailable"))
 			}
 
 			// 隐私 / 安全 / 商业化 / 内容审核

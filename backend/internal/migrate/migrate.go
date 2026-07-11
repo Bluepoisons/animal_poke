@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0011_account_merge_proof"
+const CurrentVersion = "0012_collection_item_fields"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -77,6 +77,7 @@ func allMigrations() []migrationSpec {
 		{"0008_commerce_security", migrate0008},
 		{"0009_check_constraints", migrate0009},
 		{"0011_account_merge_proof", migrate0011},
+		{"0012_collection_item_fields", migrate0012},
 	}
 }
 
@@ -236,4 +237,9 @@ func migrate0009(db *gorm.DB) error {
 // migrate0011 登录合并设备持有证明：迁移票据 + 合并操作审计。
 func migrate0011(db *gorm.DB) error {
 	return db.AutoMigrate(&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{})
+}
+
+// migrate0012 收藏项可编辑元数据：nickname / favorite / locked。
+func migrate0012(db *gorm.DB) error {
+	return db.AutoMigrate(&models.Animal{})
 }

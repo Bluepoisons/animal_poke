@@ -713,6 +713,233 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/sync/animals/{uuid}:
+    get:
+      tags: [Sync]
+      summary: Get single collection animal detail
+      description: |
+        Returns one owned animal by uuid. Soft-deleted animals return a minimal
+        tombstone (`uuid`, `deleted_at`, `server_version`). Unauthorized access
+        returns 404 (no existence leak).
+      operationId: getAnimalDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Animal detail or tombstone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionAnimalDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found or not owned
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      tags: [Sync]
+      summary: Patch collection animal (nickname/favorite/locked)
+      description: |
+        Partial update of client-editable collection metadata.
+        Optimistic lock via `If-Match` header (preferred) or body `server_version`.
+        On version conflict returns 409 with `current` representation for merge.
+      operationId: patchAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Expected server_version (quoted ETag supported)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionAnimalPatch"
+      responses:
+        "200":
+          description: Updated animal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionAnimalDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found or not owned
+        "409":
+          description: Version conflict / already deleted / locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionVersionConflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags: [Sync]
+      summary: Soft-delete animal (tombstone)
+      description: |
+        Soft-deletes one animal and bumps server_version for pull.
+        Response is a minimal tombstone only — never full content.
+        Requires If-Match or query server_version. Locked animals return 409.
+        Double delete returns 409 already_deleted with current tombstone.
+      operationId: deleteAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: server_version
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Tombstone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionTombstone"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found or not owned
+        "409":
+          description: Version conflict / already deleted / locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionVersionConflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/collection/{uuid}:
+    get:
+      tags: [Sync]
+      summary: Get collection animal (alias of /sync/animals/{uuid})
+      operationId: getCollectionAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Animal detail or tombstone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionAnimalDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found or not owned
+    patch:
+      tags: [Sync]
+      summary: Patch collection animal (alias)
+      operationId: patchCollectionAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionAnimalPatch"
+      responses:
+        "200":
+          description: Updated animal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionAnimalDetail"
+        "409":
+          description: Version conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionVersionConflict"
+    delete:
+      tags: [Sync]
+      summary: Soft-delete collection animal (alias)
+      operationId: deleteCollectionAnimal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tombstone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionTombstone"
+        "409":
+          description: Version conflict / already deleted / locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionVersionConflict"
+
+
   /api/v1/privacy/consent:
     post:
       tags: [Privacy]
@@ -2032,6 +2259,70 @@ components:
         generated_at: { type: string, format: date-time }
         inference_request_id: { type: string }
         keep_precise_location: { type: boolean }
+        nickname: { type: string, maxLength: 32, description: Client-editable display nickname }
+        favorite: { type: boolean, description: Favorited flag }
+        locked: { type: boolean, description: Collection lock; blocks delete when true }
+    CollectionAnimalDetail:
+      type: object
+      description: |
+        Full detail for an active animal, or a minimal tombstone when deleted.
+        Tombstone fields only: uuid, deleted_at, server_version.
+      properties:
+        uuid: { type: string, format: uuid }
+        device_id: { type: string }
+        account_id: { type: string }
+        species: { type: string }
+        breed: { type: string }
+        rarity: { type: integer }
+        hp: { type: integer }
+        atk: { type: integer }
+        def: { type: integer }
+        spd: { type: integer }
+        class: { type: string }
+        element: { type: string }
+        city: { type: string }
+        geohash: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        generated_at: { type: string, format: date-time }
+        inference_request_id: { type: string }
+        nickname: { type: string, maxLength: 32 }
+        favorite: { type: boolean }
+        locked: { type: boolean }
+        server_version: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time }
+    CollectionAnimalPatch:
+      type: object
+      description: Partial update; at least one of nickname/favorite/locked required.
+      properties:
+        nickname: { type: string, maxLength: 32 }
+        favorite: { type: boolean }
+        locked: { type: boolean }
+        server_version:
+          type: integer
+          format: int64
+          description: Expected version when If-Match header is absent
+    CollectionTombstone:
+      type: object
+      required: [uuid, server_version]
+      properties:
+        uuid: { type: string, format: uuid }
+        deleted_at: { type: string, format: date-time }
+        server_version: { type: integer, format: int64 }
+    CollectionVersionConflict:
+      type: object
+      required: [error, reason_code]
+      properties:
+        error: { type: string }
+        reason_code:
+          type: string
+          enum: [version_conflict, already_deleted, animal_locked]
+        current:
+          description: Current server representation for client merge
+          oneOf:
+            - $ref: "#/components/schemas/CollectionAnimalDetail"
+            - $ref: "#/components/schemas/CollectionTombstone"
     SyncAnimalResponse:
       type: object
       required: [status, uuid]
