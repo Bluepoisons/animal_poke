@@ -87,21 +87,10 @@ test.describe('AP-075 settings and account', () => {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
     })
 
-    await page.goto('/')
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
-
-    const openAccount = page.getByTestId('open-account')
-    const hasAccount = await openAccount.isVisible().catch(() => false)
-    if (hasAccount) {
-      await openAccount.click({ timeout: 5_000 })
-      await expect(
-        page.getByTestId('account-settings').or(page.getByText(/访客|Guest|账号|Account/i).first()),
-      ).toBeVisible({ timeout: 10_000 })
-    } else {
-      // Account entry may be feature-flagged; settings hash still proves account surface exists.
-      await page.goto('/#settings')
-      await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 15_000 })
-    }
+    // Account controls live under settings in the production entry.
+    await page.goto('/#settings')
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('privacy-center')).toBeVisible()
 
     const axeResult = await scanA11y(page)
     expect(axeResult.violations, `a11y violations on settings+account:\n${axeResult.details}`).toBe(0)
