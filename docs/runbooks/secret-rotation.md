@@ -51,3 +51,10 @@ cd backend
 cp .env.example .env   # 仅此一份服务端配置
 # 编辑 .env 填入真实值；切勿提交
 ```
+
+## MySQL / Redis TLS（AP-088）
+- 生产 `DB_TLS` 必须为 `require` / `verify-ca` / `verify-full`（Kustomize 静态门禁拒绝 `false` / `skip-verify`）。
+- 自定义 CA：将 PEM 挂载为文件，设置 `DB_TLS_CA`；可选 `DB_TLS_SERVER_NAME`、客户端 `DB_TLS_CERT`/`DB_TLS_KEY`。
+- CA 轮换：先挂载新 CA（或双 CA bundle），滚动 backend，再撤旧 CA。TLS 配置名包含材料哈希，换文件即换注册名。
+- Redis：生产 `REDIS_URL` 必须为 `rediss://:password@host:port/db`（TLS + 密码 + 主机名校验）；禁止 `skip_verify`。
+- `/readyz` 在 DB 失败时返回 `db_reason`=`cert|auth|pool|network|unavailable`（不含密钥/DSN）。

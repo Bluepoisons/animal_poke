@@ -1,31 +1,33 @@
 package repo
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"animalpoke/backend/internal/config"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// InitDB 连接 MySQL 并做连接池配置与连通性校验。
+// InitDB 使用驱动原生 mysql.Config + NewConnector 连接 MySQL（特殊字符密码安全），
+// 并配置连接池与连通性校验。
 func InitDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
-	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
-	})
+	mysqlCfg, err := cfg.MySQLConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mysql config: %w", err)
 	}
-	sqlDB, err := db.DB()
+	connector, err := mysqldriver.NewConnector(mysqlCfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mysql connector: %w", err)
 	}
-	if err := sqlDB.Ping(); err != nil {
-		return nil, err
-	}
+	sqlDB := sql.OpenDB(connector)
+
 	maxOpen := cfg.MaxOpenConns
 	if maxOpen <= 0 {
 		maxOpen = 25
@@ -46,10 +48,27 @@ func InitDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	} else {
 		sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("mysql ping (%s): %w", config.ClassifyDBError(err), err)
+	}
+
+	db, err := gorm.Open(mysql.New(mysql.Config{Conn: sqlDB}), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Warn),
+	})
+	if err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("gorm open (%s): %w", config.ClassifyDBError(err), err)
+	}
+
 	slog.Debug("数据库初始化完成",
 		"max_open", maxOpen,
 		"max_idle", maxIdle,
 		"conn_max_lifetime", cfg.ConnMaxLifetime.String(),
+		"tls_mode", config.NormalizeTLSMode(cfg.TLSMode),
 	)
 	return db, nil
 }

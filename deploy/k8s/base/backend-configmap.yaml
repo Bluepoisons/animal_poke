@@ -21,7 +21,9 @@ data:
   DB_PORT: "3306"
   DB_NAME: "animal_poke"
   DB_USER: "animal_poke"
-  DB_TLS: "false"
+  # AP-088: production must use verified MySQL TLS (require|verify-ca|verify-full).
+  # Mount CA via Secret; set DB_TLS_CA / DB_TLS_SERVER_NAME when using private CAs.
+  DB_TLS: "require"
   # 生产必须配置精确前端 Origin（逗号分隔）
   CORS_ALLOWED_ORIGINS: "https://app.animal-poke.example.com"
   HTTP_READ_HEADER_TIMEOUT: "5s"
