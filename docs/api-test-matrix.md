@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `144` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `153` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -14,6 +14,7 @@
 | ID | Method | Path | operationId | Success tests | Failure tests |
 |---|---|---|---|---|---|
 | API-deleteCollectionAnimal | `DELETE` | `/api/v1/collection/{uuid}` | `deleteCollectionAnimal` | TestContractMatrix/deleteCollectionAnimal/success | TestContractMatrix/deleteCollectionAnimal/failure |
+| API-deletePushToken | `DELETE` | `/api/v1/notifications/push-tokens` | `deletePushToken` | TestContractMatrix/deletePushToken/success | TestContractMatrix/deletePushToken/failure |
 | API-deleteAnimal | `DELETE` | `/api/v1/sync/animals/{uuid}` | `deleteAnimal` | TestContractMatrix/deleteAnimal/success | TestContractMatrix/deleteAnimal/failure |
 | API-accountDefaults | `GET` | `/api/v1/account/defaults` | `accountDefaults` | TestContractMatrix/accountDefaults/success | TestContractMatrix/accountDefaults/failure |
 | API-listAuditLogs | `GET` | `/api/v1/admin/audit/logs` | `listAuditLogs` | TestContractMatrix/listAuditLogs/success | TestContractMatrix/listAuditLogs/failure |
@@ -42,6 +43,8 @@
 | API-narrativeProgress | `GET` | `/api/v1/narrative/progress` | `narrativeProgress` | TestContractMatrix/narrativeProgress/success | TestContractMatrix/narrativeProgress/failure |
 | API-narrativePullAllProgress | `GET` | `/api/v1/narrative/progress/all` | `narrativePullAllProgress` | TestContractMatrix/narrativePullAllProgress/success | TestContractMatrix/narrativePullAllProgress/failure |
 | API-narrativeListSeen | `GET` | `/api/v1/narrative/seen` | `narrativeListSeen` | TestContractMatrix/narrativeListSeen/success | TestContractMatrix/narrativeListSeen/failure |
+| API-listNotificationInbox | `GET` | `/api/v1/notifications/inbox` | `listNotificationInbox` | TestContractMatrix/listNotificationInbox/success | TestContractMatrix/listNotificationInbox/failure |
+| API-getNotificationPreferences | `GET` | `/api/v1/notifications/preferences` | `getNotificationPreferences` | TestContractMatrix/getNotificationPreferences/success | TestContractMatrix/getNotificationPreferences/failure |
 | API-opsMetricsSummary | `GET` | `/api/v1/ops/metrics-summary` | `opsMetricsSummary` | TestContractMatrix/opsMetricsSummary/success | TestContractMatrix/opsMetricsSummary/failure |
 | API-photoGetCalibration | `GET` | `/api/v1/photo/calibration` | `photoGetCalibration` | TestContractMatrix/photoGetCalibration/success | TestContractMatrix/photoGetCalibration/failure |
 | API-photoPersonalBest | `GET` | `/api/v1/photo/personal-best` | `photoPersonalBest` | TestContractMatrix/photoPersonalBest/success | TestContractMatrix/photoPersonalBest/failure |
@@ -112,11 +115,16 @@
 | API-narrativeFailForward | `POST` | `/api/v1/narrative/fail-forward` | `narrativeFailForward` | TestContractMatrix/narrativeFailForward/success | TestContractMatrix/narrativeFailForward/failure |
 | API-narrativeObservation | `POST` | `/api/v1/narrative/observation` | `narrativeObservation` | TestContractMatrix/narrativeObservation/success | TestContractMatrix/narrativeObservation/failure |
 | API-narrativeMarkSeen | `POST` | `/api/v1/narrative/seen` | `narrativeMarkSeen` | TestContractMatrix/narrativeMarkSeen/success | TestContractMatrix/narrativeMarkSeen/failure |
+| API-ackNotification | `POST` | `/api/v1/notifications/inbox/{id}/ack` | `ackNotification` | TestContractMatrix/ackNotification/success | TestContractMatrix/ackNotification/failure |
+| API-readNotification | `POST` | `/api/v1/notifications/inbox/{id}/read` | `readNotification` | TestContractMatrix/readNotification/success | TestContractMatrix/readNotification/failure |
+| API-registerPushToken | `POST` | `/api/v1/notifications/push-tokens` | `registerPushToken` | TestContractMatrix/registerPushToken/success | TestContractMatrix/registerPushToken/failure |
 | API-revokeContentManifest | `POST` | `/api/v1/ops/content/manifest/revoke` | `revokeContentManifest` | TestContractMatrix/revokeContentManifest/success | TestContractMatrix/revokeContentManifest/failure |
 | API-rollbackContentManifest | `POST` | `/api/v1/ops/content/manifest/rollback` | `rollbackContentManifest` | TestContractMatrix/rollbackContentManifest/success | TestContractMatrix/rollbackContentManifest/failure |
 | API-rollbackGameConfig | `POST` | `/api/v1/ops/game-config/rollback` | `rollbackGameConfig` | TestContractMatrix/rollbackGameConfig/success | TestContractMatrix/rollbackGameConfig/failure |
 | API-cancelLiveOpsInstance | `POST` | `/api/v1/ops/liveops/instances/{id}/cancel` | `cancelLiveOpsInstance` | TestContractMatrix/cancelLiveOpsInstance/success | TestContractMatrix/cancelLiveOpsInstance/failure |
 | API-settleLiveOpsInstance | `POST` | `/api/v1/ops/liveops/instances/{id}/settle` | `settleLiveOpsInstance` | TestContractMatrix/settleLiveOpsInstance/success | TestContractMatrix/settleLiveOpsInstance/failure |
+| API-enqueueNotification | `POST` | `/api/v1/ops/notifications/enqueue` | `enqueueNotification` | TestContractMatrix/enqueueNotification/success | TestContractMatrix/enqueueNotification/failure |
+| API-processNotificationOutbox | `POST` | `/api/v1/ops/notifications/process` | `processNotificationOutbox` | TestContractMatrix/processNotificationOutbox/success | TestContractMatrix/processNotificationOutbox/failure |
 | API-photoCalibrate | `POST` | `/api/v1/photo/calibrate` | `photoCalibrate` | TestContractMatrix/photoCalibrate/success | TestContractMatrix/photoCalibrate/failure |
 | API-photoScore | `POST` | `/api/v1/photo/score` | `photoScore` | TestContractMatrix/photoScore/success | TestContractMatrix/photoScore/failure |
 | API-photoThemeProgress | `POST` | `/api/v1/photo/theme/progress` | `photoThemeProgress` | TestContractMatrix/photoThemeProgress/success | TestContractMatrix/photoThemeProgress/failure |
@@ -154,6 +162,7 @@
 | API-debitWallet | `POST` | `/api/v1/wallet/debit` | `debitWallet` | TestContractMatrix/debitWallet/success | TestContractMatrix/debitWallet/failure |
 | API-reconcileWallet | `POST` | `/api/v1/wallet/reconcile` | `reconcileWallet` | TestContractMatrix/reconcileWallet/success | TestContractMatrix/reconcileWallet/failure |
 | API-adminWriteGameConfig | `PUT` | `/api/v1/admin/config/game` | `adminWriteGameConfig` | TestContractMatrix/adminWriteGameConfig/success | TestContractMatrix/adminWriteGameConfig/failure |
+| API-putNotificationPreferences | `PUT` | `/api/v1/notifications/preferences` | `putNotificationPreferences` | TestContractMatrix/putNotificationPreferences/success | TestContractMatrix/putNotificationPreferences/failure |
 | API-publishContentManifest | `PUT` | `/api/v1/ops/content/manifest` | `publishContentManifest` | TestContractMatrix/publishContentManifest/success | TestContractMatrix/publishContentManifest/failure |
 | API-putGameConfig | `PUT` | `/api/v1/ops/game-config` | `putGameConfig` | TestContractMatrix/putGameConfig/success | TestContractMatrix/putGameConfig/failure |
 | API-upsertLiveOpsDefinition | `PUT` | `/api/v1/ops/liveops/definitions` | `upsertLiveOpsDefinition` | TestContractMatrix/upsertLiveOpsDefinition/success | TestContractMatrix/upsertLiveOpsDefinition/failure |

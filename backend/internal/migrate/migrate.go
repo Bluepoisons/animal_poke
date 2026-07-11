@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0024_narrative_schema"
+const CurrentVersion = "0025_notification_outbox"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -90,6 +90,7 @@ func allMigrations() []migrationSpec {
 		{"0022_photo_quality", migrate0022},
 		{"0023_battle_design", migrate0023},
 		{"0024_narrative_schema", migrate0024},
+		{"0025_notification_outbox", migrate0025},
 	}
 }
 
@@ -343,5 +344,15 @@ func migrate0024(db *gorm.DB) error {
 		&models.StoryFragment{},
 		&models.StoryFragmentUnlock{},
 		&models.ClueState{},
+	)
+}
+
+// migrate0025 站内信 / 事务 outbox / 推送偏好（AP-084）。
+func migrate0025(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.InboxMessage{},
+		&models.NotificationOutbox{},
+		&models.PushDeviceToken{},
+		&models.NotificationPreference{},
 	)
 }

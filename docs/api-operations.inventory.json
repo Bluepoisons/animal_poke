@@ -2,13 +2,19 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 144,
+  "count": 153,
   "operations": [
     {
       "method": "DELETE",
       "path": "/api/v1/collection/{uuid}",
       "operationId": "deleteCollectionAnimal",
       "key": "DELETE /api/v1/collection/{uuid}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/notifications/push-tokens",
+      "operationId": "deletePushToken",
+      "key": "DELETE /api/v1/notifications/push-tokens"
     },
     {
       "method": "DELETE",
@@ -177,6 +183,18 @@
       "path": "/api/v1/narrative/seen",
       "operationId": "narrativeListSeen",
       "key": "GET /api/v1/narrative/seen"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/inbox",
+      "operationId": "listNotificationInbox",
+      "key": "GET /api/v1/notifications/inbox"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/preferences",
+      "operationId": "getNotificationPreferences",
+      "key": "GET /api/v1/notifications/preferences"
     },
     {
       "method": "GET",
@@ -600,6 +618,24 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/notifications/inbox/{id}/ack",
+      "operationId": "ackNotification",
+      "key": "POST /api/v1/notifications/inbox/{id}/ack"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/inbox/{id}/read",
+      "operationId": "readNotification",
+      "key": "POST /api/v1/notifications/inbox/{id}/read"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/push-tokens",
+      "operationId": "registerPushToken",
+      "key": "POST /api/v1/notifications/push-tokens"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/ops/content/manifest/revoke",
       "operationId": "revokeContentManifest",
       "key": "POST /api/v1/ops/content/manifest/revoke"
@@ -627,6 +663,18 @@
       "path": "/api/v1/ops/liveops/instances/{id}/settle",
       "operationId": "settleLiveOpsInstance",
       "key": "POST /api/v1/ops/liveops/instances/{id}/settle"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/notifications/enqueue",
+      "operationId": "enqueueNotification",
+      "key": "POST /api/v1/ops/notifications/enqueue"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/notifications/process",
+      "operationId": "processNotificationOutbox",
+      "key": "POST /api/v1/ops/notifications/process"
     },
     {
       "method": "POST",
@@ -849,6 +897,12 @@
       "path": "/api/v1/admin/config/game",
       "operationId": "adminWriteGameConfig",
       "key": "PUT /api/v1/admin/config/game"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/notifications/preferences",
+      "operationId": "putNotificationPreferences",
+      "key": "PUT /api/v1/notifications/preferences"
     },
     {
       "method": "PUT",
