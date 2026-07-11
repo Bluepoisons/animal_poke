@@ -19,9 +19,9 @@ servers:
 tags:
   - name: Health
   - name: Content
+    description: Versioned multi-locale content manifests (AP-080)
   - name: LiveOps
     description: Server-authoritative season and event instances (AP-081)
-    description: Versioned multi-locale content manifests (AP-080)
   - name: Auth
     description: Device registration, account binding and JWT issuance
   - name: Geo
