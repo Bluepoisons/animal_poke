@@ -47,6 +47,8 @@ tags:
     description: Metrics and operational endpoints
   - name: Analytics
     description: Privacy-friendly funnel event ingest
+  - name: Growth
+    description: Researcher growth tracks, virtual companion profiles and authoritative growth events (AP-099)
 
 paths:
   /health:
@@ -1783,6 +1785,193 @@ paths:
         "409":
           description: Insufficient item quantity (reason_code insufficient_item)
 
+
+  /api/v1/growth/catalog:
+    get:
+      tags: [Growth]
+      summary: Growth catalog and rules
+      description: |
+        Versioned growth configuration: researcher tracks, allowed events,
+        companion memory nodes (>=3 visible), and hard rules
+        (no decay, no real-world feeding, no paid power, combat/recognition unchanged).
+      operationId: getGrowthCatalog
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Growth catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrowthCatalogResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/growth/researcher:
+    get:
+      tags: [Growth]
+      summary: Get researcher growth tracks
+      description: |
+        Photography, ecology knowledge and safe observation tracks for the JWT owner
+        (account when bound — cross-device; else device guest).
+      operationId: getResearcherGrowth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Researcher tracks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResearcherGrowthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/growth/events:
+    get:
+      tags: [Growth]
+      summary: List growth events
+      description: Paginated authoritative growth event ledger (newest first) for cross-device restore.
+      operationId: listGrowthEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: after_id
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Event page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrowthEventListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Growth]
+      summary: Record growth event
+      description: |
+        Server-authoritative, idempotent on event_id. Unlocks convenience/content only —
+        never changes recognition results or combat stats. Rejects paid power, decay and
+        real-world feeding kinds.
+      operationId: postGrowthEvent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrowthEventRequest"
+      responses:
+        "201":
+          description: Event applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrowthEventApplyResponse"
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrowthEventApplyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden kind (paid power / decay / real feed)
+        "404":
+          description: Companion animal not found or not owned
+
+  /api/v1/growth/companions:
+    get:
+      tags: [Growth]
+      summary: List companion profiles
+      operationId: listGrowthCompanions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Companion summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/growth/companions/{animal_uuid}:
+    get:
+      tags: [Growth]
+      summary: Get companion profile and growth nodes
+      description: |
+        Pure virtual companion profile with decorative/memory nodes.
+        Guarantees at least 3 visible growth nodes per collection animal.
+        Does not modify combat power.
+      operationId: getGrowthCompanion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: animal_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Companion profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+
+  /api/v1/growth/reset:
+    post:
+      tags: [Growth]
+      summary: Auditable growth reset or config migration
+      description: |
+        Resets researcher tracks and/or companion profiles with a required reason.
+        Snapshot is stored for audit; growth event ledger is retained.
+      operationId: resetGrowth
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrowthResetRequest"
+      responses:
+        "200":
+          description: Reset audit recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrowthResetResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/admin/auth/token:
     post:
       tags: [Admin]
@@ -3200,6 +3389,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/FeatureUnavailableError"
+    NotImplemented:
+      description: Feature not implemented or not enabled (HTTP 501)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
 
   schemas:
     GameConfig:
@@ -4293,3 +4491,216 @@ components:
         expired: { type: integer }
         request_id: { type: string }
 
+
+    GrowthCatalogResponse:
+      type: object
+      required: [config_version, tracks, companion_nodes, rules]
+      properties:
+        config_version: { type: string }
+        tracks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, enum: [photography, ecology, safe_observation] }
+              title: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string }
+              track: { type: string }
+              delta_xp: { type: integer, format: int64 }
+        companion_nodes:
+          type: array
+          minItems: 3
+          items:
+            type: object
+            properties:
+              node_id: { type: string }
+              title: { type: string }
+              kind: { type: string }
+              unlock_at_xp: { type: integer, format: int64 }
+        rules:
+          type: object
+          properties:
+            min_visible_nodes_per_companion: { type: integer, minimum: 3 }
+            no_decay: { type: boolean }
+            no_real_world_feeding: { type: boolean }
+            no_paid_power: { type: boolean }
+            combat_stats_unchanged: { type: boolean }
+            recognition_unchanged: { type: boolean }
+            cross_device_authoritative: { type: boolean }
+        level_thresholds:
+          type: object
+          additionalProperties: true
+        request_id: { type: string }
+    ResearcherTrack:
+      type: object
+      properties:
+        track:
+          type: string
+          enum: [photography, ecology, safe_observation]
+        xp: { type: integer, format: int64, minimum: 0 }
+        level: { type: integer, minimum: 0 }
+        config_version: { type: string }
+        updated_at: { type: string, format: date-time }
+    ResearcherGrowthResponse:
+      type: object
+      required: [owner_key, tracks]
+      properties:
+        owner_key: { type: string }
+        config_version: { type: string }
+        tracks:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/ResearcherTrack"
+        request_id: { type: string }
+    GrowthEventRequest:
+      type: object
+      required: [event_id, kind]
+      properties:
+        event_id: { type: string, maxLength: 128 }
+        kind:
+          type: string
+          enum:
+            - photo_capture
+            - photo_quality
+            - species_first
+            - species_research
+            - safe_explore
+            - distance_respect
+            - companion_interact
+            - companion_memory
+            - companion_decor
+        animal_uuid: { type: string, format: uuid }
+        source_type: { type: string }
+        source_id: { type: string }
+        metadata: { type: string }
+        override_delta:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 50
+    GrowthEvent:
+      type: object
+      properties:
+        event_id: { type: string }
+        owner_key: { type: string }
+        kind: { type: string }
+        track: { type: string }
+        animal_uuid: { type: string }
+        delta_xp: { type: integer, format: int64 }
+        xp_after: { type: integer, format: int64 }
+        level_after: { type: integer }
+        node_id: { type: string }
+        config_version: { type: string }
+        created_at: { type: string, format: date-time }
+    GrowthEventApplyResponse:
+      type: object
+      required: [idempotent, combat_unchanged]
+      properties:
+        event:
+          $ref: "#/components/schemas/GrowthEvent"
+        idempotent: { type: boolean }
+        researcher:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResearcherTrack"
+        companion:
+          $ref: "#/components/schemas/CompanionProfile"
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanionMemoryNode"
+        unlocked_nodes:
+          type: array
+          items: { type: string }
+        combat_unchanged: { type: boolean }
+        request_id: { type: string }
+    GrowthEventListResponse:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrowthEvent"
+        next_after: { type: integer, format: int64 }
+        request_id: { type: string }
+    CompanionProfile:
+      type: object
+      properties:
+        animal_uuid: { type: string, format: uuid }
+        owner_key: { type: string }
+        bond_xp: { type: integer, format: int64, minimum: 0 }
+        bond_level: { type: integer, minimum: 0 }
+        decor_stage: { type: integer, minimum: 0, description: Decorative stage only — not combat power }
+        title: { type: string }
+        config_version: { type: string }
+        updated_at: { type: string, format: date-time }
+    CompanionMemoryNode:
+      type: object
+      properties:
+        node_id: { type: string }
+        title: { type: string }
+        kind:
+          type: string
+          enum: [memory, decor, journal]
+        visible: { type: boolean }
+        unlocked: { type: boolean }
+        unlock_at_xp: { type: integer, format: int64 }
+        unlocked_at: { type: string, format: date-time }
+    CompanionListResponse:
+      type: object
+      required: [companions]
+      properties:
+        companions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanionProfile"
+        request_id: { type: string }
+    CompanionDetailResponse:
+      type: object
+      required: [companion, nodes, visible_nodes, min_visible, combat_unchanged]
+      properties:
+        companion:
+          $ref: "#/components/schemas/CompanionProfile"
+        nodes:
+          type: array
+          minItems: 3
+          items:
+            $ref: "#/components/schemas/CompanionMemoryNode"
+        visible_nodes: { type: integer, minimum: 3 }
+        unlocked_nodes: { type: integer }
+        min_visible: { type: integer, minimum: 3 }
+        combat_unchanged: { type: boolean }
+        request_id: { type: string }
+    GrowthResetRequest:
+      type: object
+      required: [reason]
+      properties:
+        scope:
+          type: string
+          enum: [researcher, companion, all]
+        animal_uuid: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 256 }
+        to_version: { type: string }
+    GrowthResetResponse:
+      type: object
+      required: [audit]
+      properties:
+        audit:
+          type: object
+          properties:
+            audit_id: { type: string }
+            scope: { type: string }
+            reason: { type: string }
+            from_version: { type: string }
+            to_version: { type: string }
+            snapshot_json: { type: string }
+            created_at: { type: string, format: date-time }
+        request_id: { type: string }

@@ -823,3 +823,122 @@ type QuestEventLog struct {
 
 // TableName 明确表名。
 func (QuestEventLog) TableName() string { return "quest_event_logs" }
+
+// ---------- AP-099 Researcher Growth + Virtual Companion ----------
+
+// 研究员成长轨道。
+const (
+	GrowthTrackPhotography     = "photography"
+	GrowthTrackEcology         = "ecology"
+	GrowthTrackSafeObservation = "safe_observation"
+)
+
+// 成长事件类型（服务端权威，幂等 event_id）。
+const (
+	GrowthEventPhotoCapture      = "photo_capture"
+	GrowthEventPhotoQuality      = "photo_quality"
+	GrowthEventSpeciesFirst      = "species_first"
+	GrowthEventSpeciesResearch   = "species_research"
+	GrowthEventSafeExplore       = "safe_explore"
+	GrowthEventDistanceRespect   = "distance_respect"
+	GrowthEventCompanionInteract = "companion_interact"
+	GrowthEventCompanionMemory   = "companion_memory"
+	GrowthEventCompanionDecor    = "companion_decor"
+)
+
+// 成长配置版本（迁移/重置可审计）。
+const GrowthConfigVersion = "growth.v1"
+
+// ResearcherTrack 玩家研究员成长轨道快照（摄影 / 生态知识 / 安全观察）。
+// owner_key = "acc:<id>" | "dev:<id>"，绑定账号后跨设备共享。
+type ResearcherTrack struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey      string    `gorm:"uniqueIndex:idx_research_owner_track,priority:1;size:68;not null" json:"owner_key"`
+	Track         string    `gorm:"uniqueIndex:idx_research_owner_track,priority:2;size:32;not null" json:"track"`
+	DeviceID      string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID     string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	XP            int64     `gorm:"not null;default:0" json:"xp"`
+	Level         int       `gorm:"not null;default:0" json:"level"`
+	ConfigVersion string    `gorm:"size:32;not null;default:growth.v1" json:"config_version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (ResearcherTrack) TableName() string { return "researcher_tracks" }
+
+// GrowthEvent 不可变成长事件流水（跨设备恢复权威源）。
+type GrowthEvent struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	EventID       string    `gorm:"uniqueIndex;size:128;not null" json:"event_id"`
+	OwnerKey      string    `gorm:"index:idx_growth_event_owner_time,priority:1;size:68;not null" json:"owner_key"`
+	DeviceID      string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID     string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Kind          string    `gorm:"size:32;not null;index" json:"kind"`
+	Track         string    `gorm:"size:32" json:"track,omitempty"` // photography|ecology|safe_observation|companion
+	AnimalUUID    string    `gorm:"index;size:36" json:"animal_uuid,omitempty"`
+	DeltaXP       int64     `gorm:"not null;default:0" json:"delta_xp"`
+	XPAfter       int64     `gorm:"not null;default:0" json:"xp_after"`
+	LevelAfter    int       `gorm:"not null;default:0" json:"level_after"`
+	NodeID        string    `gorm:"size:64" json:"node_id,omitempty"`
+	SourceType    string    `gorm:"size:32" json:"source_type,omitempty"`
+	SourceID      string    `gorm:"size:128" json:"source_id,omitempty"`
+	Metadata      string    `gorm:"type:text" json:"metadata,omitempty"`
+	ConfigVersion string    `gorm:"size:32;not null" json:"config_version"`
+	CreatedAt     time.Time `gorm:"index:idx_growth_event_owner_time,priority:2" json:"created_at"`
+}
+
+func (GrowthEvent) TableName() string { return "growth_events" }
+
+// CompanionProfile 收藏对象纯虚拟伙伴档案（装饰成长，不改战斗力）。
+type CompanionProfile struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	AnimalUUID    string    `gorm:"uniqueIndex;size:36;not null" json:"animal_uuid"`
+	OwnerKey      string    `gorm:"index:idx_companion_owner,priority:1;size:68;not null" json:"owner_key"`
+	DeviceID      string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID     string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	BondXP        int64     `gorm:"not null;default:0" json:"bond_xp"`
+	BondLevel     int       `gorm:"not null;default:0" json:"bond_level"`
+	DecorStage    int       `gorm:"not null;default:0" json:"decor_stage"` // 装饰阶段，非战力
+	Title         string    `gorm:"size:64" json:"title,omitempty"`
+	ConfigVersion string    `gorm:"size:32;not null;default:growth.v1" json:"config_version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (CompanionProfile) TableName() string { return "companion_profiles" }
+
+// CompanionMemoryNode 伙伴可见成长节点（每收藏至少 3 个可见节点）。
+type CompanionMemoryNode struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	AnimalUUID string     `gorm:"uniqueIndex:idx_companion_node,priority:1;size:36;not null" json:"animal_uuid"`
+	NodeID     string     `gorm:"uniqueIndex:idx_companion_node,priority:2;size:64;not null" json:"node_id"`
+	OwnerKey   string     `gorm:"index;size:68;not null" json:"owner_key"`
+	Title      string     `gorm:"size:64;not null" json:"title"`
+	Kind       string     `gorm:"size:32;not null" json:"kind"` // memory|decor|journal
+	Visible    bool       `gorm:"not null;default:true" json:"visible"`
+	Unlocked   bool       `gorm:"not null;default:false" json:"unlocked"`
+	UnlockAtXP int64      `gorm:"not null;default:0" json:"unlock_at_xp"`
+	UnlockedAt *time.Time `json:"unlocked_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+func (CompanionMemoryNode) TableName() string { return "companion_memory_nodes" }
+
+// GrowthResetAudit 成长重置/迁移审计（可审计、可回放）。
+type GrowthResetAudit struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	AuditID      string    `gorm:"uniqueIndex;size:36;not null" json:"audit_id"`
+	OwnerKey     string    `gorm:"index;size:68;not null" json:"owner_key"`
+	DeviceID     string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID    string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Scope        string    `gorm:"size:32;not null" json:"scope"` // researcher|companion|all
+	AnimalUUID   string    `gorm:"size:36" json:"animal_uuid,omitempty"`
+	Reason       string    `gorm:"size:256;not null" json:"reason"`
+	FromVersion  string    `gorm:"size:32" json:"from_version,omitempty"`
+	ToVersion    string    `gorm:"size:32" json:"to_version,omitempty"`
+	SnapshotJSON string    `gorm:"type:longtext" json:"snapshot_json,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (GrowthResetAudit) TableName() string { return "growth_reset_audits" }
