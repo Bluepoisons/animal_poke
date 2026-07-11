@@ -339,9 +339,7 @@ func inQuietHours(now time.Time, p *models.NotificationPreference) bool {
 	start, end := p.QuietStartHour, p.QuietEndHour
 	if p.Minor {
 		// Stricter: 21:00-08:00 minimum window for minors.
-		if start > 21 {
-			start = start
-		} else {
+		if start < 21 {
 			start = 21
 		}
 		if end < 8 {
