@@ -30,7 +30,7 @@ func CORSWithConfig(cfg CORSConfig) gin.HandlerFunc {
 		}
 	}
 	methods := "GET, POST, PUT, DELETE, OPTIONS"
-	headers := "Origin, Content-Type, Authorization, X-Request-ID, X-Admin-Key, Idempotency-Key"
+	headers := "Origin, Content-Type, Authorization, X-Request-ID, X-Admin-Key, X-Admin-Actor, X-Admin-Reason, Idempotency-Key"
 
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")

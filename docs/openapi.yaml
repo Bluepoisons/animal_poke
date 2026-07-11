@@ -1049,7 +1049,6 @@ paths:
       description: |
         scope=device (default) deletes this device only.
         scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
-      description: |
         Transactional delete: soft-delete animals (tombstone + server_version bump),
         remove inferences and security reports, clear historical export payloads,
         deactivate entitlements, revoke consent, bump token_version.
@@ -1537,16 +1536,136 @@ paths:
         "409":
           description: Insufficient item quantity (reason_code insufficient_item)
 
+  /api/v1/admin/auth/token:
+    post:
+      tags: [Admin]
+      summary: Issue short-lived admin JWT
+      description: |
+        Issues a short-lived admin access JWT bound to a session (AP-085).
+        Allowed via: super admin JWT, break-glass (X-Admin-Key + X-Admin-Actor + X-Admin-Reason),
+        or non-production dev_secret. Production forbids shared key as regular auth.
+      operationId: adminIssueToken
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AdminActorHeader"
+        - $ref: "#/components/parameters/AdminReasonHeader"
+        - $ref: "#/components/parameters/AdminKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor, role]
+              properties:
+                actor: { type: string }
+                role:
+                  type: string
+                  enum: [support, content, ops, finance, security, super]
+                subject: { type: string }
+                dev_secret: { type: string }
+      responses:
+        "200":
+          description: Admin token issued
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/admin/sessions/revoke:
+    post:
+      tags: [Admin]
+      summary: Revoke admin session(s)
+      description: Revokes one session_id or all sessions for actor_id. Requires session.revoke.
+      operationId: adminRevokeSession
+      security:
+        - adminBearer: []
+        - adminBreakGlass: []
+      parameters:
+        - $ref: "#/components/parameters/AdminReasonHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string }
+                actor_id: { type: string }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/admin/config/game:
+    put:
+      tags: [Admin]
+      summary: Write game config (RBAC)
+      description: |
+        Config write gated by config.write permission.
+        Support/finance roles are denied (AP-085).
+      operationId: adminWriteGameConfig
+      security:
+        - adminBearer: []
+        - adminBreakGlass: []
+      parameters:
+        - $ref: "#/components/parameters/AdminReasonHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Accepted
+        "403":
+          description: Permission denied
+
+  /api/v1/admin/security/reports/{id}:
+    get:
+      tags: [Admin]
+      summary: Get security report
+      description: |
+        Returns security report metadata for roles with security.report.read_meta.
+        Payload body is redacted unless role has security.report.read_body
+        (finance cannot read body; security/super can).
+      operationId: adminGetSecurityReport
+      security:
+        - adminBearer: []
+        - adminBreakGlass: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Report (body may be redacted)
+        "403":
+          description: Permission denied
+        "404":
+          description: Not found
+
   /api/v1/admin/commerce/orders/refund:
     post:
       tags: [Admin, Commerce]
       summary: Admin refund order
       description: |
-        Admin/ops refund path. Requires X-Admin-Key.
-        Device JWT clients must not call this.
+        Admin refund path (AP-085). Requires admin JWT (or break-glass) with commerce.refund.
+        Support cannot refund. Device JWT clients must not call this.
+        Every refund is audited with real actor/session/reason/request_id.
       operationId: adminRefundOrder
       security:
-        - adminKey: []
+        - adminBearer: []
+        - adminBreakGlass: []
+      parameters:
+        - $ref: "#/components/parameters/AdminReasonHeader"
       requestBody:
         required: true
         content:
@@ -1565,7 +1684,7 @@ paths:
         "200":
           description: Refunded or already refunded
         "403":
-          description: Missing or invalid admin key
+          description: Missing auth or insufficient permission
         "404":
           description: Order not found
         "501":
@@ -1579,10 +1698,11 @@ paths:
       summary: Platform refund webhook stub
       description: |
         Stub webhook for store platform refund notifications.
-        Currently authenticated with Admin API key; real integration will verify platform signatures.
+        Authenticated via admin JWT/break-glass with commerce.refund until platform signatures land.
       operationId: webhookRefundOrder
       security:
-        - adminKey: []
+        - adminBearer: []
+        - adminBreakGlass: []
       requestBody:
         required: true
         content:
@@ -1601,15 +1721,17 @@ paths:
         "200":
           description: Refunded
         "403":
-          description: Missing or invalid admin key
+          description: Missing or invalid admin credentials
 
   /api/v1/admin/audit/logs:
     get:
       tags: [Admin]
       summary: List audit logs
+      description: Requires audit.logs.read. Actor identity is recorded on each query.
       operationId: listAuditLogs
       security:
-        - adminKey: []
+        - adminBearer: []
+        - adminBreakGlass: []
       responses:
         "200":
           description: Logs
@@ -1620,6 +1742,8 @@ paths:
                 additionalProperties: true
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -1627,20 +1751,25 @@ paths:
     post:
       tags: [Admin]
       summary: Ack audit log
+      description: Requires audit.logs.ack. Acked_by is the real admin actor.
       operationId: ackAuditLog
       security:
-        - adminKey: []
+        - adminBearer: []
+        - adminBreakGlass: []
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+        - $ref: "#/components/parameters/AdminReasonHeader"
       responses:
         "200":
           description: Acked
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -1998,10 +2127,23 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived admin JWT (AP-085). iss/aud env-isolated; includes actor/role/sid.
+    adminBreakGlass:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: |
+        Break-glass only. Requires X-Admin-Actor + X-Admin-Reason.
+        Production rejects shared key as regular auth unless ADMIN_BREAK_GLASS_ENABLED=true.
     adminKey:
       type: apiKey
       in: header
       name: X-Admin-Key
+      description: Deprecated alias for break-glass; prefer adminBearer.
 
   parameters:
     Lat:
@@ -2028,7 +2170,24 @@ components:
       required: false
       schema:
         type: string
-
+    AdminKeyHeader:
+      name: X-Admin-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: Break-glass shared key (not regular production auth)
+    AdminActorHeader:
+      name: X-Admin-Actor
+      in: header
+      required: false
+      schema: { type: string }
+      description: Real operator identity for break-glass
+    AdminReasonHeader:
+      name: X-Admin-Reason
+      in: header
+      required: false
+      schema: { type: string }
+      description: Required reason for admin write / break-glass actions
   headers:
     RequestID:
       description: Request correlation ID
@@ -2051,6 +2210,15 @@ components:
             $ref: "#/components/schemas/Error"
     Unauthorized:
       description: Unauthorized
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Forbidden
       headers:
         X-Request-ID:
           $ref: "#/components/headers/RequestID"

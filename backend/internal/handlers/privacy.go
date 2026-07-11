@@ -619,22 +619,38 @@ func (h *AuditHandler) List(c *gin.Context) {
 		middleware.WriteError(c, http.StatusInternalServerError, "query_failed", "query failed", true, nil)
 		return
 	}
-	// 管理员查询本身记审计
+	// 管理员查询本身记审计（真实 actor，禁止写死 admin）
+	actorID := "unknown"
+	if a := middleware.GetAdminActor(c); a != nil && a.ActorID != "" {
+		actorID = a.ActorID
+	}
 	_ = h.auditRepo.Create(&models.AuditLog{
-		DeviceID: "admin", Type: "admin", Message: "audit_query",
-		Metadata: deviceID + "|" + logType, Status: "closed",
+		DeviceID: actorID, Type: "admin", Message: "audit_query",
+		Metadata: deviceID + "|" + logType + "|sid=" + adminSessionID(c) + "|rid=" + middleware.GetRequestID(c),
+		Status:   "closed",
 	})
-	c.JSON(http.StatusOK, gin.H{"items": logs, "total": total})
+	c.JSON(http.StatusOK, gin.H{"items": logs, "total": total, "actor": actorID, "request_id": middleware.GetRequestID(c)})
 }
 
 // Ack POST /admin/audit/logs/:id/ack
 func (h *AuditHandler) Ack(c *gin.Context) {
 	id64, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.auditRepo.Ack(uint(id64), "admin"); err != nil {
+	actorID := "unknown"
+	if a := middleware.GetAdminActor(c); a != nil && a.ActorID != "" {
+		actorID = a.ActorID
+	}
+	if err := h.auditRepo.Ack(uint(id64), actorID); err != nil {
 		middleware.WriteError(c, http.StatusInternalServerError, "ack_failed", "ack failed", true, nil)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ack"})
+	c.JSON(http.StatusOK, gin.H{"status": "ack", "acked_by": actorID, "request_id": middleware.GetRequestID(c)})
+}
+
+func adminSessionID(c *gin.Context) string {
+	if a := middleware.GetAdminActor(c); a != nil {
+		return a.SessionID
+	}
+	return ""
 }
 
 // CommerceHandler 订单与权益。
@@ -916,6 +932,7 @@ func (h *CommerceHandler) RefundOrder(c *gin.Context) {
 }
 
 // AdminRefundOrder POST /admin/commerce/orders/refund — 管理员/运维退款。
+// 要求 RBAC commerce.refund；审计写入真实 actor/session/reason/request_id。
 func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 	if h.commerceGate(c, "refund") {
 		return
@@ -930,6 +947,25 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 		return
 	}
 
+	actorID := "unknown"
+	sessionID := ""
+	role := ""
+	if a := middleware.GetAdminActor(c); a != nil {
+		if a.ActorID != "" {
+			actorID = a.ActorID
+		}
+		sessionID = a.SessionID
+		role = a.Role
+	}
+	reason := req.Reason
+	if reason == "" {
+		reason = middleware.GetAdminReason(c)
+	}
+	if reason == "" {
+		middleware.AbortBadRequest(c, "admin_reason_required", "refund reason required", nil)
+		return
+	}
+
 	var order models.Order
 	q := h.db.Where("order_id = ?", req.OrderID)
 	if req.DeviceID != "" {
@@ -940,7 +976,7 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 		return
 	}
 	if order.Status == "refunded" {
-		c.JSON(http.StatusOK, gin.H{"status": "already_refunded", "order_id": order.OrderID})
+		c.JSON(http.StatusOK, gin.H{"status": "already_refunded", "order_id": order.OrderID, "actor": actorID})
 		return
 	}
 
@@ -959,15 +995,22 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 		middleware.WriteError(c, http.StatusInternalServerError, "refund_failed", "refund failed", true, nil)
 		return
 	}
-	meta := order.OrderID
-	if req.Reason != "" {
-		meta = order.OrderID + "|" + req.Reason
-	}
+	meta, _ := json.Marshal(map[string]any{
+		"order_id":   order.OrderID,
+		"reason":     reason,
+		"actor":      actorID,
+		"session_id": sessionID,
+		"role":       role,
+		"request_id": middleware.GetRequestID(c),
+	})
 	_ = h.db.Create(&models.AuditLog{
 		DeviceID: order.DeviceID, Type: "commerce", Message: "order_refunded_admin",
-		Metadata: meta, Status: "closed",
+		Metadata: string(meta), Status: "closed",
 	})
-	c.JSON(http.StatusOK, gin.H{"status": "refunded", "order_id": order.OrderID})
+	c.JSON(http.StatusOK, gin.H{
+		"status": "refunded", "order_id": order.OrderID,
+		"actor": actorID, "request_id": middleware.GetRequestID(c),
+	})
 }
 
 // WebhookRefundOrder POST /admin/commerce/webhooks/refund — 平台 webhook 占位。

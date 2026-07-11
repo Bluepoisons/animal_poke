@@ -51,8 +51,10 @@ func clearProviderEnv(t *testing.T) {
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
 		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
 		"LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
-		"VISION_REUSE_LLM",
 		"CORS_ALLOWED_ORIGINS", "ADMIN_API_KEY", "OPS_TOKEN",
+		"ADMIN_JWT_SECRET", "ADMIN_JWT_SECRET_PREVIOUS", "ADMIN_JWT_ISSUER",
+		"ADMIN_TOKEN_TTL", "ADMIN_BREAK_GLASS_ENABLED", "ADMIN_DEV_ISSUE_SECRET",
+		"ADMIN_SESSION_REVOKE_GRACE",
 		"FEATURE_RANKING", "FEATURE_PVP", "FEATURE_SOCIAL", "FEATURE_OPS",
 		"COMMERCE_ENABLED", "COMMERCE_STORE_VERIFY",
 	}
@@ -275,12 +277,14 @@ func TestLoad_VisionAtomicTriplet(t *testing.T) {
 	}
 }
 
-// applyStrongCryptoKeys 为 production Validate 测试填充四类互不相同的强密钥。
+// applyStrongCryptoKeys 为 production Validate 测试填充互不相同的强密钥。
 func applyStrongCryptoKeys(cfg *Config) {
 	cfg.JWTSecret = "prod-jwt-signing-key-32chars-min!"
 	cfg.AccountTokenPepper = "prod-account-pepper-32chars-min!!"
 	cfg.StatsHMACKey = "prod-stats-hmac-key-32chars-min!"
 	cfg.TimeSigningKey = "prod-time-signing-key-32chars-min!"
+	cfg.AdminJWTSecret = "prod-admin-jwt-secret-32chars-min!"
+	cfg.AdminTokenTTL = 15 * time.Minute
 	cfg.AuthMockOAuthEnabled = false
 }
 
@@ -365,10 +369,12 @@ func TestLoad_CryptoKeys_DevDefaultsDistinct(t *testing.T) {
 	assert.Equal(t, DefaultDevAccountTokenPepper, cfg.AccountTokenPepper)
 	assert.Equal(t, DefaultDevStatsHMACKey, cfg.StatsHMACKey)
 	assert.Equal(t, DefaultDevTimeSigningKey, cfg.TimeSigningKey)
+	assert.Equal(t, DefaultDevAdminJWTSecret, cfg.AdminJWTSecret)
 	// 开发默认也按用途分离，避免误用同一串
 	assert.NotEqual(t, cfg.JWTSecret, cfg.AccountTokenPepper)
 	assert.NotEqual(t, cfg.JWTSecret, cfg.StatsHMACKey)
 	assert.NotEqual(t, cfg.JWTSecret, cfg.TimeSigningKey)
+	assert.NotEqual(t, cfg.JWTSecret, cfg.AdminJWTSecret)
 }
 
 func TestLoad_JWTSigningKeyPreferredOverAlias(t *testing.T) {
@@ -436,6 +442,8 @@ func TestValidate_ProductionSharedKeysRejected(t *testing.T) {
 	cfg.AccountTokenPepper = shared
 	cfg.StatsHMACKey = "prod-stats-hmac-key-32chars-min!"
 	cfg.TimeSigningKey = "prod-time-signing-key-32chars-min!"
+	cfg.AdminJWTSecret = "prod-admin-jwt-secret-32chars-min!"
+	cfg.AdminTokenTTL = 15 * time.Minute
 	cfg.Database.Password = "complex-pass"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
@@ -454,17 +462,19 @@ func TestValidate_ProductionNoCrossPurposeFallback(t *testing.T) {
 	clearProviderEnv(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("JWT_SIGNING_KEY", "prod-jwt-signing-key-32chars-min!")
-	// 故意不设 ACCOUNT/STATS/TIME
+	// 故意不设 ACCOUNT/STATS/TIME/ADMIN
 	cfg := Load()
 	assert.Equal(t, "prod-jwt-signing-key-32chars-min!", cfg.JWTSecret)
 	assert.Empty(t, cfg.AccountTokenPepper)
 	assert.Empty(t, cfg.StatsHMACKey)
 	assert.Empty(t, cfg.TimeSigningKey)
+	assert.Empty(t, cfg.AdminJWTSecret)
 	err := cfg.Validate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ACCOUNT_TOKEN_PEPPER")
 	assert.Contains(t, err.Error(), "STATS_HMAC_KEY")
 	assert.Contains(t, err.Error(), "TIME_SIGNING_KEY")
+	assert.Contains(t, err.Error(), "ADMIN_JWT_SECRET")
 }
 
 func TestCapabilityStatus_NoSecrets(t *testing.T) {

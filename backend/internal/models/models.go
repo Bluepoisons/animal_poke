@@ -502,3 +502,48 @@ type PvPQueue struct {
 
 func (PvPQueue) TableName() string { return "pvp_queue" }
 
+// ---------- AP-085 Admin RBAC ----------
+
+// AdminSession 管理端会话（短期 JWT 绑定 sid，支持撤权）。
+type AdminSession struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	SessionID string     `gorm:"uniqueIndex;size:36;not null" json:"session_id"`
+	ActorID   string     `gorm:"index;size:128;not null" json:"actor_id"`
+	Subject   string     `gorm:"index;size:128;not null" json:"subject"`
+	Role      string     `gorm:"size:32;not null" json:"role"`
+	Env       string     `gorm:"size:32;not null" json:"env"`
+	AuthMode  string     `gorm:"size:32;not null" json:"auth_mode"` // jwt|break_glass
+	Status    string     `gorm:"size:16;not null;default:active;index" json:"status"` // active|revoked
+	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	RevokedBy string     `gorm:"size:128" json:"revoked_by,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (AdminSession) TableName() string { return "admin_sessions" }
+
+// AdminActionLog 管理动作审计（真实 actor/session/reason/request_id + 防篡改 HMAC）。
+type AdminActionLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	EntryID   string    `gorm:"uniqueIndex;size:36;not null" json:"entry_id"`
+	ActorID   string    `gorm:"index:idx_admin_action_actor_time,priority:1;size:128;not null" json:"actor_id"`
+	Subject   string    `gorm:"size:128;not null" json:"subject"`
+	Role      string    `gorm:"size:32;not null" json:"role"`
+	SessionID string    `gorm:"index;size:36" json:"session_id"`
+	AuthMode  string    `gorm:"size:32;not null" json:"auth_mode"`
+	Action    string    `gorm:"index:idx_admin_action_name_time,priority:1;size:64;not null" json:"action"`
+	Resource  string    `gorm:"size:128" json:"resource"`
+	Reason    string    `gorm:"size:512" json:"reason"`
+	RequestID string    `gorm:"index;size:64" json:"request_id"`
+	Outcome   string    `gorm:"size:16;not null" json:"outcome"` // allow|deny|error|ok
+	Metadata  string    `gorm:"type:text" json:"metadata,omitempty"`
+	Env       string    `gorm:"size:32" json:"env"`
+	Integrity string    `gorm:"size:128;not null" json:"integrity"` // HMAC-SHA256 hex
+	CreatedAt time.Time `gorm:"index:idx_admin_action_actor_time,priority:2;index:idx_admin_action_name_time,priority:2" json:"created_at"`
+}
+
+// TableName 明确表名。
+func (AdminActionLog) TableName() string { return "admin_action_logs" }
+

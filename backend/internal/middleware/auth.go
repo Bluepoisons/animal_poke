@@ -273,18 +273,3 @@ func GetRole(c *gin.Context) string {
 	return ""
 }
 
-// AdminAuth 简单管理员 API Key 校验。
-func AdminAuth(adminKey string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if adminKey == "" {
-			AbortForbidden(c, "admin_not_configured", "admin not configured")
-			return
-		}
-		key := c.GetHeader("X-Admin-Key")
-		if key == "" || key != adminKey {
-			AbortForbidden(c, "forbidden", "forbidden")
-			return
-		}
-		c.Next()
-	}
-}
