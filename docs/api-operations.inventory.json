@@ -1,0 +1,302 @@
+{
+  "generated_by": "scripts/api-test-matrix-gate.mjs",
+  "openapi": "docs/openapi.yaml",
+  "router": "backend/internal/routes/router.go",
+  "count": 49,
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/account/defaults",
+      "operationId": "accountDefaults",
+      "key": "GET /api/v1/account/defaults"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit/logs",
+      "operationId": "listAuditLogs",
+      "key": "GET /api/v1/admin/audit/logs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/account",
+      "operationId": "authAccount",
+      "key": "GET /api/v1/auth/account"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/devices",
+      "operationId": "authListDevices",
+      "key": "GET /api/v1/auth/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/commerce/entitlements",
+      "operationId": "listEntitlements",
+      "key": "GET /api/v1/commerce/entitlements"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/commerce/orders/{id}",
+      "operationId": "getOrder",
+      "key": "GET /api/v1/commerce/orders/{id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/config/game",
+      "operationId": "getGameConfig",
+      "key": "GET /api/v1/config/game"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/geo/city",
+      "operationId": "getCity",
+      "key": "GET /api/v1/geo/city"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ops/metrics-summary",
+      "operationId": "opsMetricsSummary",
+      "key": "GET /api/v1/ops/metrics-summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ping",
+      "operationId": "ping",
+      "key": "GET /api/v1/ping"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/privacy/requests/{id}",
+      "operationId": "getPrivacyRequest",
+      "key": "GET /api/v1/privacy/requests/{id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ranking/daily",
+      "operationId": "rankingDaily",
+      "key": "GET /api/v1/ranking/daily"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/social/friends",
+      "operationId": "socialFriends",
+      "key": "GET /api/v1/social/friends"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sync/animals",
+      "operationId": "pullAnimals",
+      "key": "GET /api/v1/sync/animals"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/time",
+      "operationId": "getTime",
+      "key": "GET /api/v1/time"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/weather/week",
+      "operationId": "getWeatherWeek",
+      "key": "GET /api/v1/weather/week"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "operationId": "getHealth",
+      "key": "GET /health"
+    },
+    {
+      "method": "GET",
+      "path": "/livez",
+      "operationId": "getLivez",
+      "key": "GET /livez"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "operationId": "getMetrics",
+      "key": "GET /metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "operationId": "getReady",
+      "key": "GET /ready"
+    },
+    {
+      "method": "GET",
+      "path": "/readyz",
+      "operationId": "getReadyz",
+      "key": "GET /readyz"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/audit/logs/{id}/ack",
+      "operationId": "ackAuditLog",
+      "key": "POST /api/v1/admin/audit/logs/{id}/ack"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/commerce/orders/refund",
+      "operationId": "adminRefundOrder",
+      "key": "POST /api/v1/admin/commerce/orders/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/commerce/webhooks/refund",
+      "operationId": "webhookRefundOrder",
+      "key": "POST /api/v1/admin/commerce/webhooks/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/analytics/events",
+      "operationId": "analyticsIngest",
+      "key": "POST /api/v1/analytics/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/bind",
+      "operationId": "authBind",
+      "key": "POST /api/v1/auth/bind"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/device",
+      "operationId": "authDevice",
+      "key": "POST /api/v1/auth/device"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/devices/revoke",
+      "operationId": "authRevokeDevice",
+      "key": "POST /api/v1/auth/devices/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "operationId": "authLogin",
+      "key": "POST /api/v1/auth/login"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "operationId": "authLogout",
+      "key": "POST /api/v1/auth/logout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/commerce/orders",
+      "operationId": "createOrder",
+      "key": "POST /api/v1/commerce/orders"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/commerce/orders/fulfill",
+      "operationId": "fulfillOrder",
+      "key": "POST /api/v1/commerce/orders/fulfill"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/commerce/orders/refund",
+      "operationId": "refundOrder",
+      "key": "POST /api/v1/commerce/orders/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/errors/report",
+      "operationId": "errorsReport",
+      "key": "POST /api/v1/errors/report"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/game-config/rollback",
+      "operationId": "rollbackGameConfig",
+      "key": "POST /api/v1/ops/game-config/rollback"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/privacy/consent",
+      "operationId": "putConsent",
+      "key": "POST /api/v1/privacy/consent"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/privacy/delete",
+      "operationId": "deleteData",
+      "key": "POST /api/v1/privacy/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/privacy/export",
+      "operationId": "exportData",
+      "key": "POST /api/v1/privacy/export"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/pvp/match",
+      "operationId": "pvpMatch",
+      "key": "POST /api/v1/pvp/match"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/pvp/result",
+      "operationId": "pvpResult",
+      "key": "POST /api/v1/pvp/result"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety/report",
+      "operationId": "safetyReport",
+      "key": "POST /api/v1/safety/report"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/security/report",
+      "operationId": "securityReport",
+      "key": "POST /api/v1/security/report"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/share",
+      "operationId": "socialShare",
+      "key": "POST /api/v1/social/share"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sync/animal",
+      "operationId": "syncAnimal",
+      "key": "POST /api/v1/sync/animal"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sync/animals",
+      "operationId": "syncAnimalsBatch",
+      "key": "POST /api/v1/sync/animals"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/value/generate",
+      "operationId": "valueGenerate",
+      "key": "POST /api/v1/value/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/vision/analyze",
+      "operationId": "visionAnalyze",
+      "key": "POST /api/v1/vision/analyze"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/vision/detect",
+      "operationId": "visionDetect",
+      "key": "POST /api/v1/vision/detect"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/ops/game-config",
+      "operationId": "putGameConfig",
+      "key": "PUT /api/v1/ops/game-config"
+    }
+  ]
+}
