@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "owner": "content-audio",
+  "entries": [
+    {
+      "licenseId": "lic.self.guide_open_v1",
+      "title": "Guide open line (placeholder)",
+      "source": "self-produced",
+      "rights": "all-rights-animal-poke",
+      "locales": ["zh", "en"],
+      "roles": ["guide"],
+      "version": 1,
+      "notes": "Replace with final VO before release; keep transcript in content pack."
+    },
+    {
+      "licenseId": "lic.self.river_ambience_v1",
+      "title": "River night ambience bed",
+      "source": "self-produced",
+      "rights": "all-rights-animal-poke",
+      "locales": ["*"],
+      "roles": ["ambience"],
+      "version": 1
+    }
+  ]
+}
