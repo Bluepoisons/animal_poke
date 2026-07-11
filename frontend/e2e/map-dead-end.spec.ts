@@ -109,3 +109,4 @@ test.describe('AP-075 map dead-end and empty states', () => {
     await page.goto('/#discover')
     await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
   })
+})
