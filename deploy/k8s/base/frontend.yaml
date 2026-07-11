@@ -20,6 +20,7 @@ spec:
       labels:
         app: animal-poke-frontend
     spec:
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
@@ -27,6 +28,28 @@ spec:
         fsGroup: 101
         seccompProfile:
           type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: animal-poke-frontend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: animal-poke-frontend
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 80
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: animal-poke-frontend
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: frontend
           image: registry.cn-beijing.aliyuncs.com/animal-poke/frontend:0.0.0-unset
@@ -64,6 +87,10 @@ spec:
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,142 @@
+# AP-111 production NetworkPolicy: default deny + explicit dependency allowlist.
+# Required egress: DNS, same-namespace services, MySQL/Redis (if in-cluster),
+# public HTTPS for third-party APIs (maps/weather/vision). Metrics scrape from
+# monitoring namespace only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-default-deny
+  namespace: production
+  labels:
+    app.kubernetes.io/part-of: animal-poke
+    environment: production
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-backend-allow
+  namespace: production
+  labels:
+    app: animal-poke-backend
+    app.kubernetes.io/part-of: animal-poke
+    environment: production
+spec:
+  podSelector:
+    matchLabels:
+      app: animal-poke-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Frontend reverse-proxy
+    - from:
+        - podSelector:
+            matchLabels:
+              app: animal-poke-frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus / metrics scrapers
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: monitoring
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Cluster DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Same-namespace deps (mysql/redis/services when co-located)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: production
+      ports:
+        - protocol: TCP
+          port: 3306
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+    # Public HTTPS for maps / weather / vision / LLM providers
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-frontend-allow
+  namespace: production
+  labels:
+    app: animal-poke-frontend
+    app.kubernetes.io/part-of: animal-poke
+    environment: production
+spec:
+  podSelector:
+    matchLabels:
+      app: animal-poke-frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: animal-poke-backend
+      ports:
+        - protocol: TCP
+          port: 8080

@@ -151,6 +151,26 @@ assert_production() {
     "production: backup schedule supports RPO<=15m"
   assert_no_match "${file}" 'TODO: aws s3|TODO:.*rclone' \
     "production: backup must not leave S3 upload as TODO"
+
+  # AP-111: PDB, topology spread, graceful drain, production NetworkPolicy
+  assert_match "${file}" 'kind:[[:space:]]*PodDisruptionBudget' \
+    "production: includes PodDisruptionBudget"
+  assert_match "${file}" 'name:[[:space:]]*animal-poke-backend-pdb' \
+    "production: backend PDB present"
+  assert_match "${file}" 'minAvailable:[[:space:]]*2' \
+    "production: backend PDB minAvailable=2"
+  assert_match "${file}" 'topologySpreadConstraints' \
+    "production: topologySpreadConstraints present"
+  assert_match "${file}" 'topology.kubernetes.io/zone' \
+    "production: zone topology key present"
+  assert_match "${file}" 'terminationGracePeriodSeconds' \
+    "production: terminationGracePeriodSeconds present"
+  assert_match "${file}" 'preStop' \
+    "production: preStop lifecycle present"
+  assert_match "${file}" 'kind:[[:space:]]*NetworkPolicy' \
+    "production: NetworkPolicy present"
+  assert_match "${file}" 'name:[[:space:]]*production-backend-allow' \
+    "production: backend NetworkPolicy present"
 }
 
 assert_staging() {

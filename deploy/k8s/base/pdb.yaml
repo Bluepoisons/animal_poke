@@ -1,0 +1,29 @@
+# AP-111: keep core API available during voluntary disruptions (drain, upgrade).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: animal-poke-backend-pdb
+  namespace: production
+  labels:
+    app: animal-poke-backend
+    app.kubernetes.io/part-of: animal-poke
+spec:
+  # With minReplicas=3 HPA, require at least 2 ready pods during drain.
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: animal-poke-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: animal-poke-frontend-pdb
+  namespace: production
+  labels:
+    app: animal-poke-frontend
+    app.kubernetes.io/part-of: animal-poke
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: animal-poke-frontend
