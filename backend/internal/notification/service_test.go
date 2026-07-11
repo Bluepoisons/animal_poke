@@ -24,6 +24,10 @@ func testDB(t *testing.T) *gorm.DB {
 		&models.InboxMessage{}, &models.NotificationOutbox{},
 		&models.PushDeviceToken{}, &models.NotificationPreference{},
 	))
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	// SQLite memory DBs are single-writer; serialize connections for concurrent tests.
+	sqlDB.SetMaxOpenConns(1)
 	return db
 }
 
