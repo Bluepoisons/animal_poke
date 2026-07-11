@@ -1,4 +1,5 @@
 import type { ScreenId } from '../data/types'
+import { useI18n } from '../../../i18n'
 
 interface PhoneFrameProps {
   variant: ScreenId
@@ -6,8 +7,9 @@ interface PhoneFrameProps {
 }
 
 export default function PhoneFrame({ variant, children }: PhoneFrameProps) {
+  const { t } = useI18n()
   return (
-    <section className={`ap-phone ap-phone--${variant}`} aria-label="手机界面">
+    <section className={`ap-phone ap-phone--${variant}`} aria-label={t('phone.label')}>
       {children}
     </section>
   )

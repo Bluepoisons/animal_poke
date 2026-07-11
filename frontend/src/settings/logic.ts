@@ -7,7 +7,7 @@ import {
 import type { Locale } from '../i18n'
 
 export function isLocale(v: unknown): v is Locale {
-  return v === 'zh' || v === 'en' || v === 'ja'
+  return v === 'zh' || v === 'en'
 }
 
 export function normalizeSettings(raw: Partial<UserSettings> | null | undefined): UserSettings {

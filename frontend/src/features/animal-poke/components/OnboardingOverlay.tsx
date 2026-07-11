@@ -7,10 +7,12 @@ import {
   type OnboardingState,
 } from '../onboarding'
 import { useFocusTrap } from '../../../a11y'
+import { useI18n } from '../../../i18n'
 
 export default function OnboardingOverlay() {
   const [state, setState] = useState<OnboardingState>(() => loadOnboarding())
   const dialogRef = useRef<HTMLDivElement>(null)
+  const { t } = useI18n()
   useFocusTrap({
     containerRef: dialogRef,
     active: state.step !== 'done' && !state.skipped,
@@ -55,10 +57,10 @@ export default function OnboardingOverlay() {
             className="ap-map-chip"
             onClick={() => setState(advanceOnboarding())}
           >
-            继续
+            {t('onboarding.continue')}
           </button>
           <button type="button" className="ap-map-chip" onClick={() => setState(skipOnboarding())}>
-            跳过教学
+            {t('onboarding.skip')}
           </button>
         </div>
       </div>

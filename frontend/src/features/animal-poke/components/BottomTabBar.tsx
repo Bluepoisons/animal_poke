@@ -1,6 +1,7 @@
 import type { ScreenId } from '../data/types'
 import { FEATURE_FLAGS } from '../featureFlags'
 import type { FeatureId } from '../../../progression'
+import { useI18n } from '../../../i18n'
 
 interface BottomTabBarProps {
   active: ScreenId
@@ -10,12 +11,12 @@ interface BottomTabBarProps {
   unlockedFeatures?: Set<FeatureId>
 }
 
-const tabs: { id: ScreenId | 'achievement'; feature: FeatureId; label: string; icon: string }[] = [
-  { id: 'discover', feature: 'discover', label: '发现', icon: '◎' },
-  { id: 'pokedex', feature: 'pokedex', label: '图鉴', icon: '▣' },
-  { id: 'battle', feature: 'battle', label: '战斗', icon: '✦' },
-  { id: 'store', feature: 'store', label: '商店', icon: '◇' },
-  { id: 'achievement', feature: 'achievement', label: '成就', icon: '☆' },
+const tabs: { id: ScreenId | 'achievement'; feature: FeatureId; labelKey: string; icon: string }[] = [
+  { id: 'discover', feature: 'discover', labelKey: 'tab.camera', icon: '◎' },
+  { id: 'pokedex', feature: 'pokedex', labelKey: 'tab.collection', icon: '▣' },
+  { id: 'battle', feature: 'battle', labelKey: 'tab.fight', icon: '✦' },
+  { id: 'store', feature: 'store', labelKey: 'tab.store', icon: '◇' },
+  { id: 'achievement', feature: 'achievement', labelKey: 'tab.achievement', icon: '☆' },
 ]
 
 export default function BottomTabBar({
@@ -24,6 +25,7 @@ export default function BottomTabBar({
   onAchievement,
   unlockedFeatures,
 }: BottomTabBarProps) {
+  const { t } = useI18n()
   const visible = tabs.filter((tab) => {
     if (tab.id === 'achievement' && !FEATURE_FLAGS.achievements) return false
     if (!unlockedFeatures) return true
@@ -40,7 +42,7 @@ export default function BottomTabBar({
               <span className="ap-tab-icon" aria-hidden="true">
                 {tab.icon}
               </span>
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           )
         }
@@ -56,7 +58,7 @@ export default function BottomTabBar({
             <span className="ap-tab-icon" aria-hidden="true">
               {tab.icon}
             </span>
-            {tab.label}
+            {t(tab.labelKey)}
           </button>
         )
       })}

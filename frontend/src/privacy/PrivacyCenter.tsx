@@ -31,7 +31,7 @@ export interface PrivacyCenterProps {
 function formatTs(ms: number | null, locale: string): string {
   if (ms == null) return '—'
   try {
-    return new Date(ms).toLocaleString(locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US')
+    return new Date(ms).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')
   } catch {
     return String(ms)
   }

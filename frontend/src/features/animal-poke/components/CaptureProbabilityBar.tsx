@@ -1,4 +1,5 @@
 import { ProgressBar } from '../../../a11y'
+import { useI18n } from '../../../i18n'
 interface CaptureProbabilityBarProps {
   title: string
   successRate: number
@@ -12,10 +13,11 @@ export default function CaptureProbabilityBar({
   bestMin,
   bestMax,
 }: CaptureProbabilityBarProps) {
+  const { t } = useI18n()
   return (
     <div className="ap-probability-card">
       <h2>{title}</h2>
-      <div className="ap-probability" aria-hidden="true">
+      <div className="ap-probability" aria-label={t('capture.probability')}>
         <span style={{ width: '33%' }} />
         <span style={{ width: '34%' }} />
         <span style={{ width: '7%' }} />
@@ -23,13 +25,11 @@ export default function CaptureProbabilityBar({
       </div>
       <ProgressBar
         value={Math.round(successRate * 100)}
-        label="捕获成功率"
-        valueText={`捕获成功率 ${Math.round(successRate * 100)}%，最佳力度 ${bestMin}-${bestMax}`}
+        label={t('capture.probability')}
+        valueText={t('capture.probability_detail', { rate: Math.round(successRate * 100), min: bestMin, max: bestMax })}
         animated={false}
       />
-      <p>
-        捕获成功率 {Math.round(successRate * 100)}% · 最佳力度 {bestMin}-{bestMax}
-      </p>
+      <p>{t('capture.probability_detail', { rate: Math.round(successRate * 100), min: bestMin, max: bestMax })}</p>
     </div>
   )
 }

@@ -8,17 +8,13 @@ import { AnimalRepository } from '../../../db/repositories/animal-repository'
 import type { AnimalRecord } from '../../../db/types'
 import type { RarityTier, SpeciesType } from '../../../types'
 import AccessibleDialog from '../../../a11y/AccessibleDialog'
+import { useI18n } from '../../../i18n'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
 }
 
-const filters: { id: PokedexFilter; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'cat', label: '猫' },
-  { id: 'goose', label: '鹅' },
-  { id: 'dog', label: '狗' },
-]
+const filters: PokedexFilter[] = ['all', 'cat', 'goose', 'dog']
 
 function mapRecord(r: AnimalRecord): AnimalEntry {
   const rarity = (r.rarity || 'common') as Rarity
@@ -41,6 +37,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [entries, setEntries] = useState<AnimalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<AnimalEntry | null>(null)
+  const { t } = useI18n()
 
 
   useEffect(() => {
@@ -69,7 +66,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
 
   const handleCardClick = (entry: AnimalEntry) => {
     if (!entry.collected) {
-      onToast('尚未发现')
+      onToast(t('pokedex.none'))
       return
     }
     setSelected(entry)
@@ -78,29 +75,29 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   return (
     <div className="ap-screen">
       <PageTitle
-        title="图鉴"
-        subtitle="POKEDEX · 贴纸收藏册"
-        rightText={loading ? '加载中…' : `已收集 ${collectedCount}`}
+        title={t('collection.title')}
+        subtitle={t('pokedex.subtitle')}
+        rightText={loading ? t('common.loading') : t('pokedex.collected', { count: collectedCount })}
         rightTone="pink"
       />
 
-      <nav className="ap-pokedex-tabs" aria-label="图鉴过滤">
+      <nav className="ap-pokedex-tabs" aria-label={t('pokedex.filter_label')}>
         {filters.map((item) => (
           <button
-            key={item.id}
-            className={filter === item.id ? 'is-active' : ''}
-            onClick={() => setFilter(item.id)}
+            key={item}
+            className={filter === item ? 'is-active' : ''}
+            onClick={() => setFilter(item)}
             type="button"
           >
-            {item.label}
+            {item === 'all' ? t('collection.filter.all') : t(`species.${item}`)}
           </button>
         ))}
       </nav>
 
       {!loading && entries.length === 0 && (
         <div role="status" style={{ padding: 24, textAlign: 'center', opacity: 0.8 }}>
-          <p style={{ fontWeight: 700 }}>还没有贴纸</p>
-          <p style={{ fontSize: 13 }}>去发现页识别并捕获后，这里会自动出现真实收藏。</p>
+          <p style={{ fontWeight: 700 }}>{t('pokedex.empty_title')}</p>
+          <p style={{ fontSize: 13 }}>{t('pokedex.empty_body')}</p>
         </div>
       )}
 
@@ -114,7 +111,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
         <AccessibleDialog
           open={!!selected}
           onClose={() => setSelected(null)}
-          title="图鉴详情"
+          title={t('pokedex.detail_label')}
         >
           <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
           <p style={{ margin: 0, fontSize: 13 }}>
@@ -127,7 +124,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
             style={{ marginTop: 12 }}
             onClick={() => setSelected(null)}
           >
-            关闭
+            {t('pokedex.close_detail')}
           </button>
         </AccessibleDialog>
       )}
