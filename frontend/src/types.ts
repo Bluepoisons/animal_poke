@@ -1,95 +1,48 @@
+import {
+  buildSpeciesDefs,
+  capturableSpeciesIds,
+  getRarityWeights,
+  getSpeciesDef,
+  isCapturableSpecies,
+} from './species'
+import type { SpeciesDef as PackSpeciesDef } from './species'
+
 export type RarityTier = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 
-// ===== 物种系统（Issue #35） =====
+// ===== 物种系统（Issue #35 / AP-093 内容包） =====
 
-/** 物种标识 */
-export type SpeciesType = 'cat' | 'goose' | 'dog'
+/** 物种内容 ID（扩展时追加 pack，无需改业务 switch） */
+export type SpeciesType = string
 
-/** 物种定义 */
-export interface SpeciesDef {
-  /** 物种标识 */
-  species: SpeciesType
-  /** 中文名 */
-  name: string
-  /** 显示 emoji */
-  emoji: string
-  /** 投掷物中文名 */
-  throwItem: string
-  /** 投掷物 emoji */
-  throwItemEmoji: string
-  /** 手感描述（仅用于 UI 提示） */
-  captureMechanics: string
-  /** 充能速率（每 tick 增加百分比） */
-  chargeRate: number
-  /** 最佳力度区间 [min, max]（百分比） */
-  optimalRange: [number, number]
-}
+/** 物种定义（由内容包投影） */
+export type SpeciesDef = PackSpeciesDef
 
-/** 物种定义表 */
-export const SPECIES_DEFS: Record<SpeciesType, SpeciesDef> = {
-  cat: {
-    species: 'cat',
-    name: '猫',
-    emoji: '🐱',
-    throwItem: '观察贴纸',
-    throwItemEmoji: '🥫',
-    captureMechanics: '标准抛物线',
-    chargeRate: 2,
-    optimalRange: [40, 80],
-  },
-  goose: {
-    species: 'goose',
-    name: '鹅',
-    emoji: '🪿',
-    throwItem: '友好光点',
-    throwItemEmoji: '🍞',
-    captureMechanics: '弹跳略强',
-    chargeRate: 2.5,
-    optimalRange: [35, 75],
-  },
-  dog: {
-    species: 'dog',
-    name: '狗',
-    emoji: '🐶',
-    throwItem: '镜头信号',
-    throwItemEmoji: '🦴',
-    captureMechanics: '下落更快',
-    chargeRate: 1.5,
-    optimalRange: [45, 85],
-  },
-}
+/** 物种定义表 — 来自内容注册表 */
+export const SPECIES_DEFS: Record<string, SpeciesDef> = buildSpeciesDefs()
 
-/** 物种稀有度权重（猫偏 common，鹅偏 uncommon，狗 balanced） */
-export const SPECIES_RARITY_WEIGHTS: Record<SpeciesType, { tier: RarityTier; weight: number }[]> = {
-  cat: [
-    { tier: 'common', weight: 70 },
-    { tier: 'uncommon', weight: 25 },
-    { tier: 'rare', weight: 12 },
-    { tier: 'epic', weight: 3 },
-    { tier: 'legendary', weight: 1 },
-  ],
-  goose: [
-    { tier: 'common', weight: 45 },
-    { tier: 'uncommon', weight: 35 },
-    { tier: 'rare', weight: 20 },
-    { tier: 'epic', weight: 7 },
-    { tier: 'legendary', weight: 3 },
-  ],
-  dog: [
-    { tier: 'common', weight: 55 },
-    { tier: 'uncommon', weight: 30 },
-    { tier: 'rare', weight: 15 },
-    { tier: 'epic', weight: 5 },
-    { tier: 'legendary', weight: 2 },
-  ],
-}
+/** 当前可捕获物种（已 recognition 认证） */
+export const CAPTURABLE_SPECIES: readonly string[] = capturableSpeciesIds()
+
+/** 物种稀有度权重（内容驱动） */
+export const SPECIES_RARITY_WEIGHTS: Record<string, { tier: RarityTier; weight: number }[]> =
+  Object.fromEntries(
+    capturableSpeciesIds().map((id) => {
+      const weights = getRarityWeights(id).map((w) => ({
+        tier: w.tier as RarityTier,
+        weight: w.weight,
+      }))
+      return [id, weights]
+    }),
+  )
 
 export interface CardEntry {
   id: string
   no: string
   rarity: RarityTier
-  /** 物种标识（可选，兼容旧数据） */
+  /** 物种内容 ID（可选，兼容旧数据） */
   species?: SpeciesType
+  /** 内容包版本（可选） */
+  speciesVersion?: string
   unlocked: boolean
   captureDate: string
   location: string
@@ -102,6 +55,16 @@ export interface CardEntry {
 /** 获取 CardEntry 的物种，未设置的旧数据默认猫 */
 export function getCardSpecies(entry: CardEntry): SpeciesType {
   return entry.species ?? 'cat'
+}
+
+/** 是否允许捕获/发奖 */
+export function canCaptureSpecies(species: string): boolean {
+  return isCapturableSpecies(species)
+}
+
+/** 安全取物种定义（未知 ID 降级） */
+export function resolveSpeciesDef(species: string): SpeciesDef {
+  return SPECIES_DEFS[species] ?? getSpeciesDef(species)
 }
 
 export type FilterTab = 'all' | 'today' | 'week' | 'nearby'
@@ -133,4 +96,6 @@ export const MOCK_ENTRIES: CardEntry[] = [
   { id: 'c007', no: '#000014', rarity: 'legendary', species: 'cat', unlocked: true, captureDate: '2026-07-01', location: '海曙区·月湖', lat: 29.87, lng: 121.55, seed: 7 },
   { id: 'c008', no: '#???', rarity: 'common', species: 'goose', unlocked: false, captureDate: '—', location: '待发现', lat: 0, lng: 0, seed: 8 },
   { id: 'c009', no: '#???', rarity: 'common', species: 'dog', unlocked: false, captureDate: '—', location: '待发现', lat: 0, lng: 0, seed: 9 },
+  // 百科试点（未解锁捕获）
+  { id: 'c010', no: '#E001', rarity: 'common', species: 'rabbit', unlocked: false, captureDate: '—', location: '百科预告', lat: 0, lng: 0, seed: 10 },
 ]

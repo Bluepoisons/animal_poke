@@ -1,4 +1,5 @@
 import type { SpeciesType, RarityTier } from '../types'
+import { capturableSpeciesIds } from '../species'
 import type { GeoLocation, DiscoveryPoint } from './types'
 import {
   RARITY_SPAWN_RATES,
@@ -13,8 +14,8 @@ import {
 } from '../outdoorSafety/logic'
 import { DEFAULT_UNSAFE_ZONES, type UnsafeZone } from '../outdoorSafety/constants'
 
-/** MVP 阶段物种池 */
-const SPECIES_POOL: SpeciesType[] = ['cat', 'goose', 'dog']
+/** 可捕获物种池（内容包） */
+const SPECIES_POOL: SpeciesType[] = capturableSpeciesIds()
 
 /** 按掉率表随机生成稀有度 */
 export function rollRarity(rand: number = Math.random()): RarityTier {

@@ -1,0 +1,57 @@
+{
+  "id": "goose",
+  "version": "1.0.0",
+  "content_id": "species.goose",
+  "status": "capturable",
+  "certification": {
+    "golden_set_version": "1.0.0",
+    "model_track": "detect"
+  },
+  "names": {
+    "common": { "zh-CN": "鹅", "en": "Goose" },
+    "scientific": "Anser sp.",
+    "aliases": ["geese", "gander", "gosling"],
+    "contains": ["goose", "geese", "鹅"],
+    "contains_exclude": ["mongoose"]
+  },
+  "habitat": {
+    "zh-CN": "湖泊、公园水域与湿地边缘",
+    "en": "Lakes, park waterways, and wetland edges"
+  },
+  "observation_tips": {
+    "zh-CN": "勿投喂面包，保持安全距离，警惕护巢行为",
+    "en": "Do not feed bread; keep a safe distance; beware nesting defense"
+  },
+  "welfare": {
+    "level": "wildlife",
+    "notes": { "zh-CN": "野生水禽，优先远距观察" }
+  },
+  "protection": {
+    "status": "none"
+  },
+  "assets": {
+    "emoji": "🪿",
+    "icon": "species/goose.png",
+    "throw_item_emoji": "🍞"
+  },
+  "gameplay": {
+    "throw_item": { "zh-CN": "友好光点", "en": "Friendly spark" },
+    "capture_mechanics": { "zh-CN": "弹跳略强", "en": "Slight bounce" },
+    "charge_rate": 2.5,
+    "optimal_range": [35, 75],
+    "charge_speed": 0.9,
+    "detect_threshold": 0.75,
+    "stat_modifiers": { "hp": 1.0, "atk": 0.8, "def": 1.4, "spd": 0.9, "crit": 2, "eva": 8 },
+    "rarity_weights": [
+      { "tier": "common", "weight": 45 },
+      { "tier": "uncommon", "weight": 35 },
+      { "tier": "rare", "weight": 20 },
+      { "tier": "epic", "weight": 7 },
+      { "tier": "legendary", "weight": 3 }
+    ]
+  },
+  "i18n": {
+    "zh-CN": { "blurb": "警戒性较高的水域观察对象" },
+    "en": { "blurb": "A wary waterside observation target" }
+  }
+}

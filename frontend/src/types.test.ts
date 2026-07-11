@@ -1,14 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { SPECIES_DEFS, getCardSpecies, SPECIES_RARITY_WEIGHTS } from './types'
+import { SPECIES_DEFS, getCardSpecies, SPECIES_RARITY_WEIGHTS, CAPTURABLE_SPECIES, canCaptureSpecies } from './types'
 import type { CardEntry, SpeciesType } from './types'
+import { encyclopediaSpeciesIds } from './species'
 
 describe('types — 物种系统', () => {
-  it('SPECIES_DEFS 包含全部三种物种', () => {
+  it('SPECIES_DEFS 包含可捕获三物种与百科试点', () => {
     const keys = Object.keys(SPECIES_DEFS)
-    expect(keys).toHaveLength(3)
     expect(keys).toContain('cat')
     expect(keys).toContain('goose')
     expect(keys).toContain('dog')
+    expect(keys).toContain('rabbit')
+    expect(CAPTURABLE_SPECIES).toEqual(['cat', 'dog', 'goose'])
+    expect(canCaptureSpecies('rabbit')).toBe(false)
+    expect(encyclopediaSpeciesIds()).toContain('rabbit')
   })
 
   it('所有 SpeciesDef 包含非空的 emoji / name / throwItem / throwItemEmoji', () => {
@@ -18,6 +22,8 @@ describe('types — 物种系统', () => {
       expect(def.name).toBeTruthy()
       expect(def.throwItem).toBeTruthy()
       expect(def.throwItemEmoji).toBeTruthy()
+      expect(def.contentId).toBeTruthy()
+      expect(def.version).toBeTruthy()
     }
   })
 
@@ -53,11 +59,10 @@ describe('types — 物种系统', () => {
     expect(getCardSpecies(entry)).toBe('dog')
   })
 
-  it('SPECIES_RARITY_WEIGHTS 三个物种权重总和接近 100~115', () => {
+  it('SPECIES_RARITY_WEIGHTS 可捕获物种权重总和在合理范围', () => {
     for (const key of Object.keys(SPECIES_RARITY_WEIGHTS) as SpeciesType[]) {
       const weights = SPECIES_RARITY_WEIGHTS[key]
       const total = weights.reduce((s, w) => s + w.weight, 0)
-      // 权重总和应在合理范围（70-115 之间）
       expect(total).toBeGreaterThan(50)
       expect(total).toBeLessThan(150)
     }

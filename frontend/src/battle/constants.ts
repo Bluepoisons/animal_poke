@@ -1,6 +1,7 @@
 import type { RarityTier, SpeciesType } from '../types'
 import type { ElementType, StrategyType, WeatherType, BattleStats } from './types'
 import type { ItemId } from '../shop/constants'
+import { capturableSpeciesIds, getStatModifiers } from '../species'
 
 // AP-032: single source of truth for ItemId lives in shop/constants.
 export type { ItemId }
@@ -14,14 +15,15 @@ export const RARITY_BASE_STATS: Record<RarityTier, BattleStats> = {
   legendary: { hp: 350, atk: 95, def: 68, spd: 88, crit: 20, eva: 20 },
 }
 
-// ===== 物种属性修正 =====
-export const SPECIES_STAT_MODIFIERS: Record<SpeciesType, {
+// ===== 物种属性修正（内容包驱动） =====
+export const SPECIES_STAT_MODIFIERS: Record<string, {
   hp: number; atk: number; def: number; spd: number; crit: number; eva: number
-}> = {
-  cat:   { hp: 0.8, atk: 0.9, def: 0.9, spd: 1.3, crit: 10, eva: 5  },
-  dog:   { hp: 1.3, atk: 1.2, def: 1.0, spd: 0.8, crit: 3,  eva: 2  },
-  goose: { hp: 1.0, atk: 0.8, def: 1.4, spd: 0.9, crit: 2,  eva: 8  },
-}
+}> = Object.fromEntries(
+  capturableSpeciesIds().map((id) => {
+    const m = getStatModifiers(id)
+    return [id, { hp: m.hp, atk: m.atk, def: m.def, spd: m.spd, crit: m.crit, eva: m.eva }]
+  }),
+)
 
 // ===== 元素克制表 =====
 export const ELEMENT_CHART: Record<ElementType, Record<ElementType, number>> = {
@@ -105,5 +107,5 @@ export const WEATHER_ELEMENT_BONUS: Record<WeatherType, Partial<Record<ElementTy
   extreme: {},
 }
 
-// ===== 物种列表 =====
-export const SPECIES_LIST: SpeciesType[] = ['cat', 'goose', 'dog']
+// ===== 物种列表（可捕获内容包） =====
+export const SPECIES_LIST: SpeciesType[] = capturableSpeciesIds()

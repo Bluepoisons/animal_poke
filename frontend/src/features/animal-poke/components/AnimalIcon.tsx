@@ -1,5 +1,7 @@
+import { getSpeciesDef } from '../../../species'
+
 interface AnimalIconProps {
-  species: 'cat' | 'goose' | 'dog' | 'unknown'
+  species: string
   size?: number
   tone?: 'light' | 'dark' | 'muted'
 }
@@ -122,36 +124,23 @@ export default function AnimalIcon({
     )
   }
 
+  // 内容包扩展物种：用 emoji 安全降级（美术素材由 AP-110 补充）
+  const def = getSpeciesDef(species)
   return (
-    <svg
+    <span
       className={`ap-animal ${toneClass}`}
-      width={size}
-      height={size}
-      viewBox="0 0 120 120"
+      style={{
+        display: 'inline-flex',
+        width: size,
+        height: size,
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: Math.round(size * 0.55),
+        lineHeight: 1,
+      }}
       aria-hidden="true"
     >
-      <path
-        d="M40 34c16-14 36-8 40 10 3 14-2 24 18 28l-10 18c-16-2-28-8-36-20 0 10 2 18 10 24-10 4-22 3-30-2 8-6 10-16 8-26-3-12-4-24 0-32Z"
-        fill="rgba(242,230,107,0.35)"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinejoin="round"
-      />
-      <circle cx="56" cy="38" r="3.5" fill="currentColor" />
-      <path
-        d="M50 70c10 10 24 12 36 4M38 96c-3 6-8 8-16 8M56 98c4 6 12 7 20 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M68 42c8 2 12 8 10 14"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-    </svg>
+      {def.emoji || '❓'}
+    </span>
   )
 }
