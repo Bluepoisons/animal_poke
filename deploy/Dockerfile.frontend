@@ -10,6 +10,8 @@ FROM node:22.14.0-alpine AS builder
 WORKDIR /app
 # AP-041: npm only — require package-lock.json
 COPY frontend/package.json frontend/package-lock.json ./
+# npm preinstall runs this script before the complete frontend source is copied.
+COPY frontend/scripts/check-node.mjs ./scripts/check-node.mjs
 RUN npm ci
 COPY frontend/ ./
 # 生产默认空：同域 /api（勿在镜像构建时写死跨域 API host）
