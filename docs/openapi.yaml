@@ -766,6 +766,9 @@ paths:
       tags: [Privacy]
       summary: Request data deletion
       description: |
+        scope=device (default) deletes this device only.
+        scope=account requires reauth_password and confirm=DELETE; wipes all devices under the account (AP-077).
+      description: |
         Transactional delete: soft-delete animals (tombstone + server_version bump),
         remove inferences and security reports, clear historical export payloads,
         deactivate entitlements, revoke consent, bump token_version.
@@ -1695,6 +1698,19 @@ components:
           type: string
         guest:
           type: boolean
+    PrivacyDeleteRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum: [device, account]
+          default: device
+        reauth_password:
+          type: string
+          description: Required when scope=account (email password re-auth)
+        confirm:
+          type: string
+          description: Must be DELETE when scope=account
     AuthBindRequest:
       type: object
       required: [provider]

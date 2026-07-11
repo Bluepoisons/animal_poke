@@ -264,7 +264,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			// safety report only needs structured metadata; always registered
 			auth.POST("/safety/report", middleware.BodyLimit(middleware.MaxBodyDefault), safetyH.Report)
 			if db != nil && deviceRepo != nil {
-				privacy := handlers.NewPrivacyHandler(db, deviceRepo, animalRepo, inferenceRepo, auditRepo)
+				privacy := handlers.NewPrivacyHandlerFull(db, deviceRepo, animalRepo, inferenceRepo, auditRepo, accountRepo)
 				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
 				auth.POST("/privacy/export", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.ExportData)
 				auth.POST("/privacy/delete", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.DeleteData)

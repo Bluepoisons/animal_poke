@@ -123,6 +123,13 @@ func (r *AccountRepo) FindAccount(accountID string) (*models.Account, error) {
 }
 
 // FindBinding 按 provider + subject 查找绑定。
+// ListBindings 列出账号全部绑定（AP-077 reauth）。
+func (r *AccountRepo) ListBindings(accountID string) ([]models.AccountBinding, error) {
+	var rows []models.AccountBinding
+	err := r.db.Where("account_id = ?", accountID).Find(&rows).Error
+	return rows, err
+}
+
 func (r *AccountRepo) FindBinding(provider, subject string) (*models.AccountBinding, error) {
 	var b models.AccountBinding
 	err := r.db.Where("provider = ? AND provider_subject = ?", provider, subject).First(&b).Error
