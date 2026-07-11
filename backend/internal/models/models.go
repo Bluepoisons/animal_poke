@@ -878,6 +878,23 @@ type PhotoThemeProgress struct {
 }
 
 // TableName 明确表名。
+func (PhotoThemeProgress) TableName() string { return "photo_theme_progress" }
+
+// QuestClaim 领取记录；operation_id 与钱包流水一致，保证奖励恰好一次。
+type QuestClaim struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ClaimID     string    `gorm:"uniqueIndex;size:36;not null" json:"claim_id"`
+	OperationID string    `gorm:"uniqueIndex;size:128;not null" json:"operation_id"`
+	OwnerKey    string    `gorm:"index:idx_quest_claim_owner,priority:1;size:68;not null" json:"owner_key"`
+	QuestID     string    `gorm:"index:idx_quest_claim_owner,priority:2;size:64;not null" json:"quest_id"`
+	PeriodKey   string    `gorm:"size:32;not null" json:"period_key"`
+	DeviceID    string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID   string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Status      string    `gorm:"size:16;not null" json:"status"` // claimed|compensated
+	RewardsJSON string    `gorm:"type:text" json:"rewards_json,omitempty"`
+	GoldGranted int64     `gorm:"not null;default:0" json:"gold_granted"`
+	CreatedAt   time.Time `json:"created_at"`
+}
 
 // TableName 明确表名。
 func (QuestClaim) TableName() string { return "quest_claims" }
@@ -1014,5 +1031,4 @@ type GrowthResetAudit struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func (GrowthResetAudit) TableName() string   { return "growth_reset_audits" }
-func (PhotoThemeProgress) TableName() string { return "photo_theme_progress" }
+func (GrowthResetAudit) TableName() string { return "growth_reset_audits" }

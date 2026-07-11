@@ -15,8 +15,6 @@ import (
 
 // Version 当前 schema 版本。
 const CurrentVersion = "0022_photo_quality"
-const CurrentVersion = "0022_photo_quality"
-const CurrentVersion = "0022_photo_quality"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -331,24 +329,17 @@ func migrate0020(db *gorm.DB) error {
 	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
 }
 
-func migrate0020(db *gorm.DB) error {
-	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
-}
-
+// migrate0021 研究员成长与虚拟伙伴（AP-099）。
 func migrate0021(db *gorm.DB) error {
 	return db.AutoMigrate(&models.GrowthEvent{}, &models.CompanionProfile{}, &models.CompanionMemoryNode{}, &models.GrowthResetAudit{})
 }
 
-// migrate0020 摄影质量技巧玩法：设备校准、评分记录、个人最佳、每日主题（AP-098）。
-func migrate0020(db *gorm.DB) error {
+// migrate0022 摄影质量技巧玩法（AP-098）。
+func migrate0022(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.PhotoDeviceCalibration{},
 		&models.PhotoScoreRecord{},
 		&models.PhotoPersonalBest{},
 		&models.PhotoThemeProgress{},
 	)
-}
-
-func migrate0022(db *gorm.DB) error {
-	return db.AutoMigrate(&models.PhotoDeviceCalibration{}, &models.PhotoScoreRecord{}, &models.PhotoPersonalBest{}, &models.PhotoThemeProgress{})
 }
