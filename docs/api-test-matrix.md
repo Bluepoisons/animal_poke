@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `131` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `135` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -25,6 +25,7 @@
 | API-listEntitlements | `GET` | `/api/v1/commerce/entitlements` | `listEntitlements` | TestContractMatrix/listEntitlements/success | TestContractMatrix/listEntitlements/failure |
 | API-getOrder | `GET` | `/api/v1/commerce/orders/{id}` | `getOrder` | TestContractMatrix/getOrder/success | TestContractMatrix/getOrder/failure |
 | API-getGameConfig | `GET` | `/api/v1/config/game` | `getGameConfig` | TestContractMatrix/getGameConfig/success | TestContractMatrix/getGameConfig/failure |
+| API-getContentManifest | `GET` | `/api/v1/content/manifest` | `getContentManifest` | TestContractMatrix/getContentManifest/success | TestContractMatrix/getContentManifest/failure |
 | API-getCity | `GET` | `/api/v1/geo/city` | `getCity` | TestContractMatrix/getCity/success | TestContractMatrix/getCity/failure |
 | API-getGrowthCatalog | `GET` | `/api/v1/growth/catalog` | `getGrowthCatalog` | TestContractMatrix/getGrowthCatalog/success | TestContractMatrix/getGrowthCatalog/failure |
 | API-listGrowthCompanions | `GET` | `/api/v1/growth/companions` | `listGrowthCompanions` | TestContractMatrix/listGrowthCompanions/success | TestContractMatrix/listGrowthCompanions/failure |
@@ -105,6 +106,8 @@
 | API-narrativeFailForward | `POST` | `/api/v1/narrative/fail-forward` | `narrativeFailForward` | TestContractMatrix/narrativeFailForward/success | TestContractMatrix/narrativeFailForward/failure |
 | API-narrativeObservation | `POST` | `/api/v1/narrative/observation` | `narrativeObservation` | TestContractMatrix/narrativeObservation/success | TestContractMatrix/narrativeObservation/failure |
 | API-narrativeMarkSeen | `POST` | `/api/v1/narrative/seen` | `narrativeMarkSeen` | TestContractMatrix/narrativeMarkSeen/success | TestContractMatrix/narrativeMarkSeen/failure |
+| API-revokeContentManifest | `POST` | `/api/v1/ops/content/manifest/revoke` | `revokeContentManifest` | TestContractMatrix/revokeContentManifest/success | TestContractMatrix/revokeContentManifest/failure |
+| API-rollbackContentManifest | `POST` | `/api/v1/ops/content/manifest/rollback` | `rollbackContentManifest` | TestContractMatrix/rollbackContentManifest/success | TestContractMatrix/rollbackContentManifest/failure |
 | API-rollbackGameConfig | `POST` | `/api/v1/ops/game-config/rollback` | `rollbackGameConfig` | TestContractMatrix/rollbackGameConfig/success | TestContractMatrix/rollbackGameConfig/failure |
 | API-photoCalibrate | `POST` | `/api/v1/photo/calibrate` | `photoCalibrate` | TestContractMatrix/photoCalibrate/success | TestContractMatrix/photoCalibrate/failure |
 | API-photoScore | `POST` | `/api/v1/photo/score` | `photoScore` | TestContractMatrix/photoScore/success | TestContractMatrix/photoScore/failure |
@@ -143,6 +146,7 @@
 | API-debitWallet | `POST` | `/api/v1/wallet/debit` | `debitWallet` | TestContractMatrix/debitWallet/success | TestContractMatrix/debitWallet/failure |
 | API-reconcileWallet | `POST` | `/api/v1/wallet/reconcile` | `reconcileWallet` | TestContractMatrix/reconcileWallet/success | TestContractMatrix/reconcileWallet/failure |
 | API-adminWriteGameConfig | `PUT` | `/api/v1/admin/config/game` | `adminWriteGameConfig` | TestContractMatrix/adminWriteGameConfig/success | TestContractMatrix/adminWriteGameConfig/failure |
+| API-publishContentManifest | `PUT` | `/api/v1/ops/content/manifest` | `publishContentManifest` | TestContractMatrix/publishContentManifest/success | TestContractMatrix/publishContentManifest/failure |
 | API-putGameConfig | `PUT` | `/api/v1/ops/game-config` | `putGameConfig` | TestContractMatrix/putGameConfig/success | TestContractMatrix/putGameConfig/failure |
 
 ## 全局断言

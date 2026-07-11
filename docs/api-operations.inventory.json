@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 131,
+  "count": 135,
   "operations": [
     {
       "method": "DELETE",
@@ -75,6 +75,12 @@
       "path": "/api/v1/config/game",
       "operationId": "getGameConfig",
       "key": "GET /api/v1/config/game"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/content/manifest",
+      "operationId": "getContentManifest",
+      "key": "GET /api/v1/content/manifest"
     },
     {
       "method": "GET",
@@ -558,6 +564,18 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/ops/content/manifest/revoke",
+      "operationId": "revokeContentManifest",
+      "key": "POST /api/v1/ops/content/manifest/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/content/manifest/rollback",
+      "operationId": "rollbackContentManifest",
+      "key": "POST /api/v1/ops/content/manifest/rollback"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/ops/game-config/rollback",
       "operationId": "rollbackGameConfig",
       "key": "POST /api/v1/ops/game-config/rollback"
@@ -783,6 +801,12 @@
       "path": "/api/v1/admin/config/game",
       "operationId": "adminWriteGameConfig",
       "key": "PUT /api/v1/admin/config/game"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/ops/content/manifest",
+      "operationId": "publishContentManifest",
+      "key": "PUT /api/v1/ops/content/manifest"
     },
     {
       "method": "PUT",
