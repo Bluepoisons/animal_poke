@@ -401,6 +401,17 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/inventory", walletH.GetInventory)
 				auth.POST("/inventory/grant", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.GrantInventory)
 				auth.POST("/inventory/consume", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.ConsumeInventory)
+
+				// AP-096 数据驱动任务 / 进度 / 幂等领取
+				questRepo := repo.NewQuestRepo(db, walletRepo)
+				_ = questRepo.SeedDefinitions()
+				questH := handlers.NewQuestHandler(questRepo)
+				auth.GET("/quests", questH.ListQuests)
+				auth.GET("/quests/catalog", questH.Catalog)
+				auth.GET("/quests/:quest_id", questH.GetQuest)
+				auth.POST("/quests/events", middleware.BodyLimit(middleware.MaxBodyDefault), questH.ApplyEvents)
+				auth.POST("/quests/:quest_id/claim", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Claim)
+				auth.POST("/quests/compensate", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Compensate)
 			} else {
 				auth.POST("/privacy/consent", unavailable("db_unavailable"))
 				auth.POST("/privacy/export", unavailable("db_unavailable"))
@@ -420,6 +431,12 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/inventory", unavailable("db_unavailable"))
 				auth.POST("/inventory/grant", unavailable("db_unavailable"))
 				auth.POST("/inventory/consume", unavailable("db_unavailable"))
+				auth.GET("/quests", unavailable("db_unavailable"))
+				auth.GET("/quests/catalog", unavailable("db_unavailable"))
+				auth.GET("/quests/:quest_id", unavailable("db_unavailable"))
+				auth.POST("/quests/events", unavailable("db_unavailable"))
+				auth.POST("/quests/:quest_id/claim", unavailable("db_unavailable"))
+				auth.POST("/quests/compensate", unavailable("db_unavailable"))
 			}
 		}
 

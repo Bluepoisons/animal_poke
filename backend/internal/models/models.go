@@ -529,6 +529,7 @@ type PvPQueue struct {
 }
 
 func (PvPQueue) TableName() string { return "pvp_queue" }
+
 // ---------- AP-083 Social: friends / block / mute / report / share ----------
 
 // Social 关系与请求状态常量。
@@ -596,10 +597,10 @@ func (Friendship) TableName() string { return "friendships" }
 
 // SocialBlock 屏蔽关系：Blocker 屏蔽 Blocked；屏蔽优先于任何关系与分享。
 type SocialBlock struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	BlockerUserKey string   `gorm:"uniqueIndex:idx_social_block,priority:1;size:68;not null" json:"blocker_user_key"`
-	BlockedUserKey string   `gorm:"uniqueIndex:idx_social_block,priority:2;index;size:68;not null" json:"blocked_user_key"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	BlockerUserKey string    `gorm:"uniqueIndex:idx_social_block,priority:1;size:68;not null" json:"blocker_user_key"`
+	BlockedUserKey string    `gorm:"uniqueIndex:idx_social_block,priority:2;index;size:68;not null" json:"blocked_user_key"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // TableName 明确表名。
@@ -663,7 +664,7 @@ type AdminSession struct {
 	Subject   string     `gorm:"index;size:128;not null" json:"subject"`
 	Role      string     `gorm:"size:32;not null" json:"role"`
 	Env       string     `gorm:"size:32;not null" json:"env"`
-	AuthMode  string     `gorm:"size:32;not null" json:"auth_mode"` // jwt|break_glass
+	AuthMode  string     `gorm:"size:32;not null" json:"auth_mode"`                   // jwt|break_glass
 	Status    string     `gorm:"size:16;not null;default:active;index" json:"status"` // active|revoked
 	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
@@ -698,3 +699,127 @@ type AdminActionLog struct {
 // TableName 明确表名。
 func (AdminActionLog) TableName() string { return "admin_action_logs" }
 
+// ---------- AP-096 Quest / Objectives / Progress / Claim ----------
+
+// 任务类型。
+const (
+	QuestTypeMain     = "main"
+	QuestTypeResearch = "research"
+	QuestTypeDaily    = "daily"
+	QuestTypeWeekly   = "weekly"
+	QuestTypeCity     = "city"
+	QuestTypeEvent    = "event"
+)
+
+// 重置策略。
+const (
+	QuestResetNone   = "none"
+	QuestResetDaily  = "daily"
+	QuestResetWeekly = "weekly"
+)
+
+// 任务进度状态。
+const (
+	QuestStatusActive      = "active"
+	QuestStatusCompleted   = "completed"
+	QuestStatusClaimed     = "claimed"
+	QuestStatusExpired     = "expired"
+	QuestStatusCompensated = "compensated"
+)
+
+// 可信业务事件（禁止 page_view / open_pokedex / safe_explore 等客户端可伪造事件）。
+const (
+	QuestEventCaptureSuccess  = "capture_success"
+	QuestEventSpeciesNew      = "species_new"
+	QuestEventBattleComplete  = "battle_complete"
+	QuestEventDispatchDone    = "dispatch_complete"
+	QuestEventVisitCity       = "visit_city"
+	QuestEventSeasonCheckin   = "season_checkin"
+	QuestEventResearchNote    = "research_note"
+	QuestEventCollectionCount = "collection_count"
+)
+
+// QuestDefinition 数据驱动任务定义（配置种子 + 可选热更版本）。
+// ObjectivesJSON / RewardsJSON / PrerequisitesJSON 存 JSON 文本。
+type QuestDefinition struct {
+	ID                uint   `gorm:"primaryKey" json:"id"`
+	QuestID           string `gorm:"uniqueIndex;size:64;not null" json:"quest_id"`
+	Type              string `gorm:"index;size:16;not null" json:"type"` // main|research|daily|weekly|city|event
+	Title             string `gorm:"size:128;not null" json:"title"`
+	Description       string `gorm:"size:512" json:"description"`
+	ObjectivesJSON    string `gorm:"type:text;not null" json:"objectives_json"`
+	RewardsJSON       string `gorm:"type:text;not null" json:"rewards_json"`
+	PrerequisitesJSON string `gorm:"type:text" json:"prerequisites_json,omitempty"`
+	ResetPolicy       string `gorm:"size:16;not null;default:none" json:"reset_policy"` // none|daily|weekly
+	Free              bool   `gorm:"not null;default:false" json:"free"`                // 零体力可执行
+	Enabled           bool   `gorm:"not null;default:true;index" json:"enabled"`
+	ConfigVersion     string `gorm:"size:32;not null;default:v1" json:"config_version"`
+	MinLevel          int    `gorm:"not null;default:1" json:"min_level"`
+	SortOrder         int    `gorm:"not null;default:0" json:"sort_order"`
+	// DurationHours >0 时，进度从首次激活起算过期；0 表示仅按 period 边界。
+	DurationHours int `gorm:"not null;default:0" json:"duration_hours"`
+	// StartsAt / EndsAt 活动窗口（event 类型常用）。
+	StartsAt  *time.Time `json:"starts_at,omitempty"`
+	EndsAt    *time.Time `json:"ends_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (QuestDefinition) TableName() string { return "quest_definitions" }
+
+// QuestProgress 玩家任务进度（owner + quest + period 唯一）。
+// ProgressJSON 形如 {"obj_id": currentCount}；复合目标全部达标后 status=completed。
+type QuestProgress struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	OwnerKey      string     `gorm:"uniqueIndex:idx_quest_prog_owner_period,priority:1;size:68;not null" json:"owner_key"`
+	QuestID       string     `gorm:"uniqueIndex:idx_quest_prog_owner_period,priority:2;size:64;not null" json:"quest_id"`
+	PeriodKey     string     `gorm:"uniqueIndex:idx_quest_prog_owner_period,priority:3;size:32;not null" json:"period_key"`
+	DeviceID      string     `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID     string     `gorm:"index;size:36" json:"account_id,omitempty"`
+	ProgressJSON  string     `gorm:"type:text;not null" json:"progress_json"`
+	Status        string     `gorm:"index;size:16;not null;default:active" json:"status"`
+	ConfigVersion string     `gorm:"size:32;not null;default:v1" json:"config_version"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	ClaimedAt     *time.Time `json:"claimed_at,omitempty"`
+	ExpiresAt     *time.Time `gorm:"index" json:"expires_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (QuestProgress) TableName() string { return "quest_progress" }
+
+// QuestClaim 领取记录；operation_id 与钱包流水一致，保证奖励恰好一次。
+type QuestClaim struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ClaimID     string    `gorm:"uniqueIndex;size:36;not null" json:"claim_id"`
+	OperationID string    `gorm:"uniqueIndex;size:128;not null" json:"operation_id"`
+	OwnerKey    string    `gorm:"index:idx_quest_claim_owner,priority:1;size:68;not null" json:"owner_key"`
+	QuestID     string    `gorm:"index:idx_quest_claim_owner,priority:2;size:64;not null" json:"quest_id"`
+	PeriodKey   string    `gorm:"size:32;not null" json:"period_key"`
+	DeviceID    string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID   string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Status      string    `gorm:"size:16;not null" json:"status"` // claimed|compensated
+	RewardsJSON string    `gorm:"type:text" json:"rewards_json,omitempty"`
+	GoldGranted int64     `gorm:"not null;default:0" json:"gold_granted"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (QuestClaim) TableName() string { return "quest_claims" }
+
+// QuestEventLog 可信事件幂等日志（event_id 全局唯一）。
+type QuestEventLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	EventID   string    `gorm:"uniqueIndex;size:128;not null" json:"event_id"`
+	OwnerKey  string    `gorm:"index:idx_quest_event_owner_time,priority:1;size:68;not null" json:"owner_key"`
+	DeviceID  string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	EventType string    `gorm:"size:32;not null" json:"event_type"`
+	Payload   string    `gorm:"type:text" json:"payload,omitempty"`
+	AppliedAt time.Time `gorm:"index:idx_quest_event_owner_time,priority:2" json:"applied_at"`
+}
+
+// TableName 明确表名。
+func (QuestEventLog) TableName() string { return "quest_event_logs" }

@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0019_account_security"
+const CurrentVersion = "0020_quest_system"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -322,4 +322,9 @@ func migrate0019(db *gorm.DB) error {
 		&models.AccountBinding{},
 		&models.AccountSecurityToken{},
 	)
+}
+
+// migrate0020 任务定义/进度/领取（AP-096）。
+func migrate0020(db *gorm.DB) error {
+	return db.AutoMigrate(&models.QuestDefinition{}, &models.QuestProgress{}, &models.QuestClaim{}, &models.QuestEventLog{})
 }
