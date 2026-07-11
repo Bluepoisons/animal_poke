@@ -150,8 +150,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			api.POST("/auth/device", unavailable("db_unavailable"))
 		}
 		if deviceRepo != nil && accountRepo != nil {
+			// mock_oauth 仅 development/test 且 AUTH_MOCK_OAUTH_ENABLED 默认开启时可用（AP-063）
 			accountHandler = handlers.NewAccountHandler(
 				deviceRepo, accountRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
+				cfg.AuthMockOAuthEnabled,
 			)
 			api.POST("/auth/login",
 				middleware.RateLimitByIP(ipLimiter),

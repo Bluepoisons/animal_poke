@@ -32,7 +32,7 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
 	authH := NewAuthHandler(deviceRepo, "test-secret", 24*time.Hour)
-	acctH := NewAccountHandler(deviceRepo, accountRepo, "test-secret", 24*time.Hour, "animal-poke", "animal-poke-client")
+	acctH := NewAccountHandler(deviceRepo, accountRepo, "test-secret", 24*time.Hour, "animal-poke", "animal-poke-client", true)
 
 	r := gin.New()
 	r.POST("/api/v1/auth/device", authH.DeviceAuth)
@@ -338,4 +338,70 @@ func TestGuestRemainsDefault(t *testing.T) {
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, true, body["guest"])
+}
+
+func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *repo.AccountRepo) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open("file:acct_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(
+		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
+		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
+	))
+	deviceRepo := repo.NewDeviceRepo(db)
+	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
+	authH := NewAuthHandler(deviceRepo, "test-secret", 24*time.Hour)
+	acctH := NewAccountHandler(deviceRepo, accountRepo, "test-secret", 24*time.Hour, "animal-poke", "animal-poke-client", allowMock)
+
+	r := gin.New()
+	r.POST("/api/v1/auth/device", authH.DeviceAuth)
+	r.POST("/api/v1/auth/login", acctH.Login)
+	auth := r.Group("/api/v1")
+	auth.Use(middleware.JWTAuthWithChecker("test-secret", "animal-poke", "animal-poke-client", deviceCheckerAdapter{deviceRepo}))
+	{
+		auth.POST("/auth/bind", acctH.Bind)
+		auth.POST("/auth/logout", acctH.Logout)
+		auth.GET("/auth/devices", acctH.ListDevices)
+		auth.POST("/auth/devices/revoke", acctH.RevokeDevice)
+		auth.GET("/auth/account", acctH.GetAccount)
+	}
+	return r, db, deviceRepo, accountRepo
+}
+
+func TestBind_MockOAuth_DisabledReturns404(t *testing.T) {
+	r, _, _, _ := setupAccountTestWithMock(t, false)
+	token := deviceAuth(t, r, "guest-no-mock")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", token, map[string]string{
+		"provider": "mock_oauth", "oauth_subject": "alice", "oauth_token": "secret-token-value",
+	})
+	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "provider_unavailable", resp["reason_code"])
+}
+
+func TestLogin_MockOAuth_DisabledReturns404(t *testing.T) {
+	r, _, _, _ := setupAccountTestWithMock(t, false)
+	body, _ := json.Marshal(map[string]string{
+		"device_id": "dev-login-mock-off", "provider": "mock_oauth",
+		"oauth_subject": "alice", "oauth_token": "secret-token-value",
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "provider_unavailable", resp["reason_code"])
+}
+
+func TestBind_Email_StillWorksWhenMockDisabled(t *testing.T) {
+	r, _, _, _ := setupAccountTestWithMock(t, false)
+	token := deviceAuth(t, r, "guest-email-only")
+	w := authedJSON(t, r, "POST", "/api/v1/auth/bind", token, map[string]string{
+		"provider": "email", "email": "user@example.com", "password": "password12",
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
 }

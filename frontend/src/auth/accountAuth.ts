@@ -75,40 +75,6 @@ export function clearAccountLocal(): void {
   clearAuth()
 }
 
-/** 绑定 mock OAuth（开发） */
-export async function bindMockOAuth(
-  subject: string,
-  token: string,
-  displayName?: string,
-  signal?: AbortSignal,
-): Promise<BindResult> {
-  const auth = await ensureAuth(signal)
-  const res = await apiRequest<AccountAuthResponse>({
-    method: 'POST',
-    path: '/api/v1/auth/bind',
-    token: auth.token,
-    body: JSON.stringify({
-      provider: 'mock_oauth',
-      oauth_subject: subject,
-      oauth_token: token,
-      display_name: displayName,
-    }),
-    signal,
-  })
-  const state: AuthState = {
-    deviceId: auth.deviceId,
-    token: res.token,
-    expiresAt: res.expires_at,
-  }
-  persistBound(state, res.account_id, res.refresh_token)
-  return {
-    ...state,
-    accountId: res.account_id || '',
-    refreshToken: res.refresh_token,
-    merge: res.merge,
-  }
-}
-
 /** 绑定邮箱 */
 export async function bindEmail(
   email: string,
@@ -131,38 +97,6 @@ export async function bindEmail(
   })
   const state: AuthState = {
     deviceId: auth.deviceId,
-    token: res.token,
-    expiresAt: res.expires_at,
-  }
-  persistBound(state, res.account_id, res.refresh_token)
-  return {
-    ...state,
-    accountId: res.account_id || '',
-    refreshToken: res.refresh_token,
-    merge: res.merge,
-  }
-}
-
-/** 清除本地后用 mock 登录恢复 */
-export async function loginMockOAuth(
-  subject: string,
-  token: string,
-  signal?: AbortSignal,
-): Promise<BindResult> {
-  const deviceId = getOrCreateDeviceId()
-  const res = await apiRequest<AccountAuthResponse>({
-    method: 'POST',
-    path: '/api/v1/auth/login',
-    body: JSON.stringify({
-      device_id: deviceId,
-      provider: 'mock_oauth',
-      oauth_subject: subject,
-      oauth_token: token,
-    }),
-    signal,
-  })
-  const state: AuthState = {
-    deviceId,
     token: res.token,
     expiresAt: res.expires_at,
   }

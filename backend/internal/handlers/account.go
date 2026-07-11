@@ -18,25 +18,27 @@ import (
 
 // AccountHandler 账号绑定与设备迁移。
 type AccountHandler struct {
-	deviceRepo  *repo.DeviceRepo
-	accountRepo *repo.AccountRepo
-	jwtSecret   string
-	jwtTTL      time.Duration
-	refreshTTL  time.Duration
-	issuer      string
-	audience    string
+	deviceRepo     *repo.DeviceRepo
+	accountRepo    *repo.AccountRepo
+	jwtSecret      string
+	jwtTTL         time.Duration
+	refreshTTL     time.Duration
+	issuer         string
+	audience       string
+	allowMockOAuth bool // 仅 development/test 可开启；production 必须 false（AP-063）
 }
 
-// NewAccountHandler 构造。
-func NewAccountHandler(deviceRepo *repo.DeviceRepo, accountRepo *repo.AccountRepo, jwtSecret string, jwtTTL time.Duration, issuer, audience string) *AccountHandler {
+// NewAccountHandler 构造。allowMockOAuth 控制 mock_oauth provider；production 必须传 false。
+func NewAccountHandler(deviceRepo *repo.DeviceRepo, accountRepo *repo.AccountRepo, jwtSecret string, jwtTTL time.Duration, issuer, audience string, allowMockOAuth bool) *AccountHandler {
 	return &AccountHandler{
-		deviceRepo:  deviceRepo,
-		accountRepo: accountRepo,
-		jwtSecret:   jwtSecret,
-		jwtTTL:      jwtTTL,
-		refreshTTL:  30 * 24 * time.Hour,
-		issuer:      issuer,
-		audience:    audience,
+		deviceRepo:     deviceRepo,
+		accountRepo:    accountRepo,
+		jwtSecret:      jwtSecret,
+		jwtTTL:         jwtTTL,
+		refreshTTL:     30 * 24 * time.Hour,
+		issuer:         issuer,
+		audience:       audience,
+		allowMockOAuth: allowMockOAuth,
 	}
 }
 
@@ -87,6 +89,15 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 	provider, subject, secret, err := normalizeBindingInput(req.Provider, req.Email, req.Password, req.OAuthSubject, req.OAuthToken)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "reason_code": "invalid_binding"})
+		return
+	}
+	if provider == "mock_oauth" && !h.allowMockOAuth {
+		// AP-063: production / 关闭开关时不暴露 mock provider（结构化 404）
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":       "provider not available",
+			"reason_code": "provider_unavailable",
+			"request_id":  middleware.GetRequestID(c),
+		})
 		return
 	}
 
@@ -212,6 +223,14 @@ func (h *AccountHandler) Login(c *gin.Context) {
 	provider, subject, secret, err := normalizeBindingInput(req.Provider, req.Email, req.Password, req.OAuthSubject, req.OAuthToken)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "reason_code": "invalid_binding"})
+		return
+	}
+	if provider == "mock_oauth" && !h.allowMockOAuth {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":       "provider not available",
+			"reason_code": "provider_unavailable",
+			"request_id":  middleware.GetRequestID(c),
+		})
 		return
 	}
 
