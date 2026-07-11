@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0015_ranking_settlement"
+const CurrentVersion = "0016_pvp_matchmaking"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -81,6 +81,7 @@ func allMigrations() []migrationSpec {
 		{"0013_wallet_inventory_ledger", migrate0013},
 		{"0014_refresh_token_rotation", migrate0014},
 		{"0015_ranking_settlement", migrate0015},
+		{"0016_pvp_matchmaking", migrate0016},
 	}
 }
 
@@ -295,4 +296,9 @@ func migrate0014(db *gorm.DB) error {
 // migrate0015 区域日榜分数、结算快照与奖励发放（AP-114）。
 func migrate0015(db *gorm.DB) error {
 	return db.AutoMigrate(&models.RankingDailyScore{}, &models.RankingSnapshot{}, &models.RankingRewardGrant{})
+}
+
+// migrate0016 PvP 匹配队列、对局与段位（AP-115）。
+func migrate0016(db *gorm.DB) error {
+	return db.AutoMigrate(&models.PvPMatch{}, &models.PvPRating{}, &models.PvPQueue{})
 }

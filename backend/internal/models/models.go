@@ -461,3 +461,44 @@ type RankingRewardGrant struct {
 
 func (RankingRewardGrant) TableName() string { return "ranking_reward_grants" }
 
+// PvPMatch 服务端匹配会话（AP-115）。
+type PvPMatch struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	MatchID     string     `gorm:"uniqueIndex;size:36;not null" json:"match_id"`
+	PlayerA     string     `gorm:"index;size:80;not null" json:"player_a"`
+	PlayerB     string     `gorm:"index;size:80;not null" json:"player_b"`
+	Seed        string     `gorm:"size:64;not null" json:"seed"`
+	RuleVersion string     `gorm:"size:32;not null" json:"rule_version"`
+	Status      string     `gorm:"size:16;not null;index" json:"status"` // matched|completed|cancelled|disputed
+	Winner      string     `gorm:"size:80" json:"winner,omitempty"`
+	ResultJSON  string     `gorm:"type:text" json:"result_json,omitempty"`
+	SettledAt   *time.Time `json:"settled_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+func (PvPMatch) TableName() string { return "pvp_matches" }
+
+// PvPRating 段位分。
+type PvPRating struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey  string    `gorm:"uniqueIndex;size:80;not null" json:"owner_key"`
+	Rating    int       `gorm:"not null;default:1000" json:"rating"`
+	Wins      int       `gorm:"not null;default:0" json:"wins"`
+	Losses    int       `gorm:"not null;default:0" json:"losses"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (PvPRating) TableName() string { return "pvp_ratings" }
+
+// PvPQueue 匹配队列。
+type PvPQueue struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey   string    `gorm:"uniqueIndex;size:80;not null" json:"owner_key"`
+	Rating     int       `gorm:"not null;default:1000;index" json:"rating"`
+	EnqueuedAt time.Time `gorm:"not null;index" json:"enqueued_at"`
+}
+
+func (PvPQueue) TableName() string { return "pvp_queue" }
+

@@ -1728,6 +1728,14 @@ paths:
         "501":
           $ref: "#/components/responses/FeatureUnavailable"
 
+  /api/v1/pvp/cancel:
+    post:
+      tags: [PvP]
+      summary: Cancel matchmaking queue (AP-115)
+      operationId: pvpCancel
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Cancelled}
   /api/v1/pvp/match:
     post:
       tags: [Product]
