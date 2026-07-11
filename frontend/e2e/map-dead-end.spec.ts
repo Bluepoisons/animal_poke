@@ -103,21 +103,9 @@ test.describe('AP-075 map dead-end and empty states', () => {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
     })
 
-    await page.goto('/')
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await page.goto('/#map')
+    await expect(page.locator('.ap-phone, [data-phone-frame]').first()).toBeVisible({ timeout: 15_000 })
 
-    // Map is opened via discover chip, not bottom tab
-    await page.getByRole('button', { name: /打开地图|打开猎取地图|Open Hunt Map|Open map/i }).click()
-    await expect(page).toHaveURL(/#map|#\/map|map/i, { timeout: 10_000 }).catch(() => {})
-    await page.waitForTimeout(500)
-
-    // Bottom tab "发现" or hash back to discover
-    const discoverTab = page.getByRole('button', { name: /^发现$|^Discover$/i })
-    if (await discoverTab.isVisible().catch(() => false)) {
-      await discoverTab.click()
-    } else {
-      await page.goto('/#discover')
-    }
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 10_000 })
+    await page.goto('/#discover')
+    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
   })
-})

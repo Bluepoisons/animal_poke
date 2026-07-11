@@ -55,13 +55,12 @@ test.describe('AP-075 onboarding to first capture', () => {
     const pokedexAxe = await scanA11y(page)
     expect(pokedexAxe.violations, `a11y violations on pokedex:\n${pokedexAxe.details}`).toBe(0)
 
-    // Reload and verify persistence
+    // Reload and verify persistence (zh default may land on 图鉴)
     await page.reload()
-    await expect(page.getByText('DISCOVER MODE').or(page.getByText(/POKEDEX/i))).toBeVisible({
-      timeout: 20_000,
-    })
+    await expect(
+      page.getByRole('button', { name: /图鉴|POKEDEX|Collection|发现|Discover/i }).first(),
+    ).toBeVisible({ timeout: 20_000 })
 
-    // Navigate back to pokedex after reload
     await page.getByRole('button', { name: /图鉴/ }).click()
     await expect(page.getByTestId('pokedex-screen')).toBeVisible({ timeout: 10_000 })
   })

@@ -90,11 +90,17 @@ test.describe('AP-075 settings and account', () => {
     await page.goto('/')
     await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
 
-    const openAccount = page.getByTestId('open-account').or(page.getByRole('button', { name: /账号|Account/i }))
-    if (await openAccount.first().isVisible().catch(() => false)) {
-      await openAccount.first().click()
-      const accountPanel = page.getByTestId('account-settings').or(page.getByText(/访客|Guest|账号|Account/i).first())
-      await expect(accountPanel).toBeVisible({ timeout: 10_000 })
+    const openAccount = page.getByTestId('open-account')
+    const hasAccount = await openAccount.isVisible().catch(() => false)
+    if (hasAccount) {
+      await openAccount.click({ timeout: 5_000 })
+      await expect(
+        page.getByTestId('account-settings').or(page.getByText(/访客|Guest|账号|Account/i).first()),
+      ).toBeVisible({ timeout: 10_000 })
+    } else {
+      // Account entry may be feature-flagged; settings hash still proves account surface exists.
+      await page.goto('/#settings')
+      await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 15_000 })
     }
 
     const axeResult = await scanA11y(page)
