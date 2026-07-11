@@ -86,6 +86,14 @@ func (s *AuditService) LogSync(deviceID string, animal *models.Animal) {
 	s.saveAlert(deviceID, "sync", "animal_sync", animal.InferenceRequestID, animal.UUID, 0)
 }
 
+// LogCollection 记录收藏详情编辑/删除审计（AP-090）。
+// action: get|patch|delete；metadata 为 uuid 或 JSON 摘要。
+func (s *AuditService) LogCollection(deviceID, action, animalUUID, metadata string) {
+	msg := "collection_" + action
+	s.saveAlert(deviceID, "sync", msg, "", metadata, 0)
+	_ = animalUUID
+}
+
 func (s *AuditService) saveAlert(deviceID, logType, msg, requestID, metadata string, risk int) {
 	status := "open"
 	if logType == "sync" {

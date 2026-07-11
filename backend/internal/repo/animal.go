@@ -8,6 +8,7 @@ import (
 	"animalpoke/backend/internal/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // AnimalRepo 动物仓储。
@@ -175,6 +176,241 @@ func (r *AnimalRepo) ListSinceVersionScoped(deviceID, accountID string, sinceVer
 		animals[i].PreciseExpiresAt = nil
 	}
 	return animals, nil
+}
+
+// 收藏项乐观锁 / 所有权相关哨兵错误。
+var (
+	ErrVersionConflict = errors.New("version_conflict")
+	ErrAnimalNotFound  = errors.New("animal_not_found")
+	ErrAnimalNotOwned  = errors.New("animal_not_owned")
+	ErrAnimalLocked    = errors.New("animal_locked")
+	ErrAlreadyDeleted  = errors.New("already_deleted")
+)
+
+// CollectionPatch 可编辑收藏元数据（部分更新）。
+type CollectionPatch struct {
+	Nickname *string
+	Favorite *bool
+	Locked   *bool
+}
+
+// FindByUUIDIncludingDeleted 按 UUID 查找（含软删 tombstone）。
+func (r *AnimalRepo) FindByUUIDIncludingDeleted(uuid string) (*models.Animal, error) {
+	var animal models.Animal
+	err := r.db.Where("uuid = ?", uuid).First(&animal).Error
+	if err != nil {
+		return nil, err
+	}
+	return &animal, nil
+}
+
+// OwnsAnimal 设备或账号是否拥有该动物。
+func OwnsAnimal(a *models.Animal, deviceID, accountID string) bool {
+	if a == nil {
+		return false
+	}
+	if deviceID != "" && a.DeviceID == deviceID {
+		return true
+	}
+	if accountID != "" && a.AccountID != "" && a.AccountID == accountID {
+		return true
+	}
+	return false
+}
+
+// ownershipClause 生成所有权过滤条件。
+func ownershipClause(deviceID, accountID string) clause.Expr {
+	if accountID != "" {
+		return gorm.Expr("(device_id = ? OR account_id = ?)", deviceID, accountID)
+	}
+	return gorm.Expr("device_id = ?", deviceID)
+}
+
+// PatchCollection 乐观锁更新 nickname/favorite/locked。
+// expectedVersion 必须等于当前 server_version；成功后提升版本。
+func (r *AnimalRepo) PatchCollection(uuid, deviceID, accountID string, expectedVersion int64, patch CollectionPatch) (*models.Animal, error) {
+	if uuid == "" {
+		return nil, ErrAnimalNotFound
+	}
+	cur, err := r.FindByUUIDIncludingDeleted(uuid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAnimalNotFound
+		}
+		return nil, err
+	}
+	if !OwnsAnimal(cur, deviceID, accountID) {
+		// 不泄露存在性
+		return nil, ErrAnimalNotFound
+	}
+	if cur.DeletedAt != nil {
+		return cur, ErrAlreadyDeleted
+	}
+	if cur.ServerVersion != expectedVersion {
+		return cur, ErrVersionConflict
+	}
+
+	updates := map[string]interface{}{
+		"server_version": time.Now().UTC().UnixNano(),
+	}
+	if patch.Nickname != nil {
+		updates["nickname"] = *patch.Nickname
+	}
+	if patch.Favorite != nil {
+		updates["favorite"] = *patch.Favorite
+	}
+	if patch.Locked != nil {
+		updates["locked"] = *patch.Locked
+	}
+	if len(updates) == 1 {
+		// 仅版本字段，无实际变更
+		return cur, nil
+	}
+
+	res := r.db.Model(&models.Animal{}).
+		Where("uuid = ? AND deleted_at IS NULL AND server_version = ?", uuid, expectedVersion).
+		Where(ownershipClause(deviceID, accountID)).
+		Updates(updates)
+	if res.Error != nil {
+		// SQLite 并发锁：若版本已被他人推进则返回冲突，便于客户端合并
+		if isBusyOrLocked(res.Error) {
+			fresh, ferr := r.FindByUUIDIncludingDeleted(uuid)
+			if ferr == nil && OwnsAnimal(fresh, deviceID, accountID) {
+				if fresh.DeletedAt != nil {
+					return fresh, ErrAlreadyDeleted
+				}
+				if fresh.ServerVersion != expectedVersion {
+					return fresh, ErrVersionConflict
+				}
+			}
+		}
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		// 并发写：重读当前版本
+		fresh, ferr := r.FindByUUIDIncludingDeleted(uuid)
+		if ferr != nil {
+			if errors.Is(ferr, gorm.ErrRecordNotFound) {
+				return nil, ErrAnimalNotFound
+			}
+			return nil, ferr
+		}
+		if !OwnsAnimal(fresh, deviceID, accountID) {
+			return nil, ErrAnimalNotFound
+		}
+		if fresh.DeletedAt != nil {
+			return fresh, ErrAlreadyDeleted
+		}
+		return fresh, ErrVersionConflict
+	}
+	return r.FindByUUID(uuid)
+}
+
+// SoftDeleteOne 单只软删 tombstone + 乐观锁；清除精确坐标。
+// locked=true 时拒绝删除。
+func (r *AnimalRepo) SoftDeleteOne(uuid, deviceID, accountID string, expectedVersion int64) (*models.Animal, error) {
+	if uuid == "" {
+		return nil, ErrAnimalNotFound
+	}
+	cur, err := r.FindByUUIDIncludingDeleted(uuid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAnimalNotFound
+		}
+		return nil, err
+	}
+	if !OwnsAnimal(cur, deviceID, accountID) {
+		return nil, ErrAnimalNotFound
+	}
+	if cur.DeletedAt != nil {
+		return cur, ErrAlreadyDeleted
+	}
+	if cur.Locked {
+		return cur, ErrAnimalLocked
+	}
+	if cur.ServerVersion != expectedVersion {
+		return cur, ErrVersionConflict
+	}
+
+	now := time.Now().UTC()
+	newVer := now.UnixNano()
+	res := r.db.Model(&models.Animal{}).
+		Where("uuid = ? AND deleted_at IS NULL AND server_version = ? AND locked = ?", uuid, expectedVersion, false).
+		Where(ownershipClause(deviceID, accountID)).
+		Updates(map[string]interface{}{
+			"deleted_at":         now,
+			"server_version":     newVer,
+			"precise_lat":        nil,
+			"precise_lng":        nil,
+			"precise_expires_at": nil,
+			// 内容脱敏：tombstone 不可恢复昵称等用户编辑字段
+			"nickname": "",
+		})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		fresh, ferr := r.FindByUUIDIncludingDeleted(uuid)
+		if ferr != nil {
+			if errors.Is(ferr, gorm.ErrRecordNotFound) {
+				return nil, ErrAnimalNotFound
+			}
+			return nil, ferr
+		}
+		if !OwnsAnimal(fresh, deviceID, accountID) {
+			return nil, ErrAnimalNotFound
+		}
+		if fresh.DeletedAt != nil {
+			return fresh, ErrAlreadyDeleted
+		}
+		if fresh.Locked {
+			return fresh, ErrAnimalLocked
+		}
+		return fresh, ErrVersionConflict
+	}
+	// 返回最小 tombstone
+	return &models.Animal{
+		UUID:          uuid,
+		DeletedAt:     &now,
+		ServerVersion: newVer,
+	}, nil
+}
+
+func isBusyOrLocked(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return containsASCIIFold(s, "database is locked") ||
+		containsASCIIFold(s, "database table is locked") ||
+		containsASCIIFold(s, "busy")
+}
+
+func containsASCIIFold(s, sub string) bool {
+	ls, lsub := len(s), len(sub)
+	if lsub == 0 {
+		return true
+	}
+	for i := 0; i+lsub <= ls; i++ {
+		ok := true
+		for j := 0; j < lsub; j++ {
+			a, b := s[i+j], sub[j]
+			if a >= 'A' && a <= 'Z' {
+				a += 'a' - 'A'
+			}
+			if b >= 'A' && b <= 'Z' {
+				b += 'a' - 'A'
+			}
+			if a != b {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 // AuditLogRepo 审计日志仓储。

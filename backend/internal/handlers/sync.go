@@ -597,6 +597,9 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			"longitude":            items[i].Longitude,
 			"generated_at":         items[i].GeneratedAt,
 			"inference_request_id": items[i].InferenceRequestID,
+			"nickname":             items[i].Nickname,
+			"favorite":             items[i].Favorite,
+			"locked":               items[i].Locked,
 			"server_version":       items[i].ServerVersion,
 			"created_at":           items[i].CreatedAt,
 		})

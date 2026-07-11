@@ -54,9 +54,13 @@ type Animal struct {
 	PreciseExpiresAt   *time.Time `json:"-"`
 	GeneratedAt        time.Time  `gorm:"not null" json:"generated_at"`
 	InferenceRequestID string     `gorm:"index;size:128" json:"inference_request_id"`
-	ServerVersion      int64      `gorm:"not null;default:1" json:"server_version"`
-	DeletedAt          *time.Time `gorm:"index" json:"deleted_at,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
+	// 收藏元数据（AP-090）：客户端可编辑；乐观锁依赖 ServerVersion
+	Nickname      string     `gorm:"size:64" json:"nickname"`
+	Favorite      bool       `gorm:"not null;default:false" json:"favorite"`
+	Locked        bool       `gorm:"not null;default:false" json:"locked"` // 收藏锁：防误删
+	ServerVersion int64      `gorm:"not null;default:1" json:"server_version"`
+	DeletedAt     *time.Time `gorm:"index" json:"deleted_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // TableName 明确表名。
