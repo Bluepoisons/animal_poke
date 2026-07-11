@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0014_refresh_token_rotation"
+const CurrentVersion = "0015_ranking_settlement"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -80,6 +80,7 @@ func allMigrations() []migrationSpec {
 		{"0012_collection_item_fields", migrate0012},
 		{"0013_wallet_inventory_ledger", migrate0013},
 		{"0014_refresh_token_rotation", migrate0014},
+		{"0015_ranking_settlement", migrate0015},
 	}
 }
 
@@ -289,4 +290,9 @@ func migrate0014(db *gorm.DB) error {
 		&models.DeviceAccount{},
 		&models.RefreshToken{},
 	)
+}
+
+// migrate0015 区域日榜分数、结算快照与奖励发放（AP-114）。
+func migrate0015(db *gorm.DB) error {
+	return db.AutoMigrate(&models.RankingDailyScore{}, &models.RankingSnapshot{}, &models.RankingRewardGrant{})
 }
