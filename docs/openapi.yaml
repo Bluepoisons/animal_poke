@@ -21,6 +21,8 @@ tags:
   - name: Content
     description: Versioned multi-locale content manifests (AP-080)
   - name: LiveOps
+  - name: Notifications
+    description: Inbox, outbox delivery and push preferences (AP-084)
     description: Server-authoritative season and event instances (AP-081)
   - name: Auth
     description: Device registration, account binding and JWT issuance
@@ -3680,6 +3682,123 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+
+  /api/v1/notifications/inbox:
+    get:
+      operationId: listNotificationInbox
+      tags: [Notifications]
+      summary: List inbox messages with cursor
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Inbox page }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/notifications/inbox/{id}/read:
+    post:
+      operationId: readNotification
+      tags: [Notifications]
+      summary: Mark inbox message read
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK }
+  /api/v1/notifications/inbox/{id}/ack:
+    post:
+      operationId: ackNotification
+      tags: [Notifications]
+      summary: Ack inbox message
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK }
+  /api/v1/notifications/push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [Notifications]
+      summary: Register or refresh push token
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                platform: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      operationId: deletePushToken
+      tags: [Notifications]
+      summary: Disable push token
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { description: OK }
+  /api/v1/notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [Notifications]
+      summary: Get notification preferences
+      security: [{bearerAuth: []}]
+      responses:
+        "200": { description: Preferences }
+    put:
+      operationId: putNotificationPreferences
+      tags: [Notifications]
+      summary: Update quiet hours and marketing consent
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                marketing_consent: { type: boolean }
+                minor: { type: boolean }
+                quiet_start_hour: { type: integer }
+                quiet_end_hour: { type: integer }
+                timezone: { type: string }
+      responses:
+        "200": { description: Updated }
+  /api/v1/ops/notifications/enqueue:
+    post:
+      operationId: enqueueNotification
+      tags: [Notifications]
+      summary: Enqueue notification (ops/internal)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200": { description: Enqueued }
+  /api/v1/ops/notifications/process:
+    post:
+      operationId: processNotificationOutbox
+      tags: [Notifications]
+      summary: Process outbox delivery batch
+      security: [{bearerAuth: []}]
+      responses:
+        "200": { description: Processed }
 
   /api/v1/liveops/instances:
     get:

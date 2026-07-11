@@ -337,6 +337,18 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/content/manifest", contentH.GetManifest)
 			liveopsH := handlers.NewLiveOpsHandler(nil, cfg.OpsToken)
 			auth.GET("/liveops/instances", liveopsH.ListInstances)
+			if db != nil {
+				notifH := handlers.NewNotificationHandler(db)
+				auth.GET("/notifications/inbox", notifH.ListInbox)
+				auth.POST("/notifications/inbox/:id/read", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.ReadMessage)
+				auth.POST("/notifications/inbox/:id/ack", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.AckMessage)
+				auth.POST("/notifications/push-tokens", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.RegisterPushToken)
+				auth.DELETE("/notifications/push-tokens", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.DeletePushToken)
+				auth.GET("/notifications/preferences", notifH.GetPreferences)
+				auth.PUT("/notifications/preferences", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.PutPreferences)
+				auth.POST("/ops/notifications/enqueue", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.EnqueueTest)
+				auth.POST("/ops/notifications/process", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.ProcessOutbox)
+			}
 			auth.GET("/liveops/instances/:id", liveopsH.GetInstance)
 			auth.POST("/liveops/instances/:id/enroll", middleware.BodyLimit(middleware.MaxBodyDefault), liveopsH.Enroll)
 			auth.POST("/liveops/instances/:id/progress", middleware.BodyLimit(middleware.MaxBodyDefault), liveopsH.Progress)
