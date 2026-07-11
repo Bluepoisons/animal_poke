@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `135` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `144` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -33,6 +33,8 @@
 | API-listGrowthEvents | `GET` | `/api/v1/growth/events` | `listGrowthEvents` | TestContractMatrix/listGrowthEvents/success | TestContractMatrix/listGrowthEvents/failure |
 | API-getResearcherGrowth | `GET` | `/api/v1/growth/researcher` | `getResearcherGrowth` | TestContractMatrix/getResearcherGrowth/success | TestContractMatrix/getResearcherGrowth/failure |
 | API-listInventory | `GET` | `/api/v1/inventory` | `listInventory` | TestContractMatrix/listInventory/success | TestContractMatrix/listInventory/failure |
+| API-listLiveOpsInstances | `GET` | `/api/v1/liveops/instances` | `listLiveOpsInstances` | TestContractMatrix/listLiveOpsInstances/success | TestContractMatrix/listLiveOpsInstances/failure |
+| API-getLiveOpsInstance | `GET` | `/api/v1/liveops/instances/{id}` | `getLiveOpsInstance` | TestContractMatrix/getLiveOpsInstance/success | TestContractMatrix/getLiveOpsInstance/failure |
 | API-narrativeCatalog | `GET` | `/api/v1/narrative/catalog` | `narrativeCatalog` | TestContractMatrix/narrativeCatalog/success | TestContractMatrix/narrativeCatalog/failure |
 | API-narrativeListClues | `GET` | `/api/v1/narrative/clues` | `narrativeListClues` | TestContractMatrix/narrativeListClues/success | TestContractMatrix/narrativeListClues/failure |
 | API-narrativeEndingSummary | `GET` | `/api/v1/narrative/ending-summary` | `narrativeEndingSummary` | TestContractMatrix/narrativeEndingSummary/success | TestContractMatrix/narrativeEndingSummary/failure |
@@ -101,6 +103,10 @@
 | API-resetGrowth | `POST` | `/api/v1/growth/reset` | `resetGrowth` | TestContractMatrix/resetGrowth/success | TestContractMatrix/resetGrowth/failure |
 | API-consumeInventory | `POST` | `/api/v1/inventory/consume` | `consumeInventory` | TestContractMatrix/consumeInventory/success | TestContractMatrix/consumeInventory/failure |
 | API-grantInventory | `POST` | `/api/v1/inventory/grant` | `grantInventory` | TestContractMatrix/grantInventory/success | TestContractMatrix/grantInventory/failure |
+| API-claimLiveOpsReward | `POST` | `/api/v1/liveops/instances/{id}/claim` | `claimLiveOpsReward` | TestContractMatrix/claimLiveOpsReward/success | TestContractMatrix/claimLiveOpsReward/failure |
+| API-compensateLiveOpsInstance | `POST` | `/api/v1/liveops/instances/{id}/compensate` | `compensateLiveOpsInstance` | TestContractMatrix/compensateLiveOpsInstance/success | TestContractMatrix/compensateLiveOpsInstance/failure |
+| API-enrollLiveOpsInstance | `POST` | `/api/v1/liveops/instances/{id}/enroll` | `enrollLiveOpsInstance` | TestContractMatrix/enrollLiveOpsInstance/success | TestContractMatrix/enrollLiveOpsInstance/failure |
+| API-progressLiveOpsInstance | `POST` | `/api/v1/liveops/instances/{id}/progress` | `progressLiveOpsInstance` | TestContractMatrix/progressLiveOpsInstance/success | TestContractMatrix/progressLiveOpsInstance/failure |
 | API-narrativeSubmitChoice | `POST` | `/api/v1/narrative/choices` | `narrativeSubmitChoice` | TestContractMatrix/narrativeSubmitChoice/success | TestContractMatrix/narrativeSubmitChoice/failure |
 | API-narrativeUpdateClue | `POST` | `/api/v1/narrative/clues` | `narrativeUpdateClue` | TestContractMatrix/narrativeUpdateClue/success | TestContractMatrix/narrativeUpdateClue/failure |
 | API-narrativeFailForward | `POST` | `/api/v1/narrative/fail-forward` | `narrativeFailForward` | TestContractMatrix/narrativeFailForward/success | TestContractMatrix/narrativeFailForward/failure |
@@ -109,6 +115,8 @@
 | API-revokeContentManifest | `POST` | `/api/v1/ops/content/manifest/revoke` | `revokeContentManifest` | TestContractMatrix/revokeContentManifest/success | TestContractMatrix/revokeContentManifest/failure |
 | API-rollbackContentManifest | `POST` | `/api/v1/ops/content/manifest/rollback` | `rollbackContentManifest` | TestContractMatrix/rollbackContentManifest/success | TestContractMatrix/rollbackContentManifest/failure |
 | API-rollbackGameConfig | `POST` | `/api/v1/ops/game-config/rollback` | `rollbackGameConfig` | TestContractMatrix/rollbackGameConfig/success | TestContractMatrix/rollbackGameConfig/failure |
+| API-cancelLiveOpsInstance | `POST` | `/api/v1/ops/liveops/instances/{id}/cancel` | `cancelLiveOpsInstance` | TestContractMatrix/cancelLiveOpsInstance/success | TestContractMatrix/cancelLiveOpsInstance/failure |
+| API-settleLiveOpsInstance | `POST` | `/api/v1/ops/liveops/instances/{id}/settle` | `settleLiveOpsInstance` | TestContractMatrix/settleLiveOpsInstance/success | TestContractMatrix/settleLiveOpsInstance/failure |
 | API-photoCalibrate | `POST` | `/api/v1/photo/calibrate` | `photoCalibrate` | TestContractMatrix/photoCalibrate/success | TestContractMatrix/photoCalibrate/failure |
 | API-photoScore | `POST` | `/api/v1/photo/score` | `photoScore` | TestContractMatrix/photoScore/success | TestContractMatrix/photoScore/failure |
 | API-photoThemeProgress | `POST` | `/api/v1/photo/theme/progress` | `photoThemeProgress` | TestContractMatrix/photoThemeProgress/success | TestContractMatrix/photoThemeProgress/failure |
@@ -148,6 +156,7 @@
 | API-adminWriteGameConfig | `PUT` | `/api/v1/admin/config/game` | `adminWriteGameConfig` | TestContractMatrix/adminWriteGameConfig/success | TestContractMatrix/adminWriteGameConfig/failure |
 | API-publishContentManifest | `PUT` | `/api/v1/ops/content/manifest` | `publishContentManifest` | TestContractMatrix/publishContentManifest/success | TestContractMatrix/publishContentManifest/failure |
 | API-putGameConfig | `PUT` | `/api/v1/ops/game-config` | `putGameConfig` | TestContractMatrix/putGameConfig/success | TestContractMatrix/putGameConfig/failure |
+| API-upsertLiveOpsDefinition | `PUT` | `/api/v1/ops/liveops/definitions` | `upsertLiveOpsDefinition` | TestContractMatrix/upsertLiveOpsDefinition/success | TestContractMatrix/upsertLiveOpsDefinition/failure |
 
 ## 全局断言
 

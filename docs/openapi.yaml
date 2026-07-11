@@ -19,6 +19,8 @@ servers:
 tags:
   - name: Health
   - name: Content
+  - name: LiveOps
+    description: Server-authoritative season and event instances (AP-081)
     description: Versioned multi-locale content manifests (AP-080)
   - name: Auth
     description: Device registration, account binding and JWT issuance
@@ -3678,6 +3680,138 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+
+  /api/v1/liveops/instances:
+    get:
+      operationId: listLiveOpsInstances
+      tags: [LiveOps]
+      summary: List season/event instances (AP-081)
+      security: [{bearerAuth: []}]
+      responses:
+        "200":
+          description: Instance list with server-driven states
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/liveops/instances/{id}:
+    get:
+      operationId: getLiveOpsInstance
+      tags: [LiveOps]
+      summary: Get instance + player progress
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Instance }
+        "404": { description: Not found }
+  /api/v1/liveops/instances/{id}/enroll:
+    post:
+      operationId: enrollLiveOpsInstance
+      tags: [LiveOps]
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Enrolled }
+        "409": { description: Rejected by state machine }
+  /api/v1/liveops/instances/{id}/progress:
+    post:
+      operationId: progressLiveOpsInstance
+      tags: [LiveOps]
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delta: { type: integer }
+      responses:
+        "200": { description: Progress updated }
+        "409": { description: Rejected }
+  /api/v1/liveops/instances/{id}/claim:
+    post:
+      operationId: claimLiveOpsReward
+      tags: [LiveOps]
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                claim_key: { type: string }
+      responses:
+        "200": { description: Claimed once }
+        "409": { description: Not eligible / wrong state }
+  /api/v1/liveops/instances/{id}/compensate:
+    post:
+      operationId: compensateLiveOpsInstance
+      tags: [LiveOps]
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Compensated }
+        "409": { description: Rejected }
+  /api/v1/ops/liveops/definitions:
+    put:
+      operationId: upsertLiveOpsDefinition
+      tags: [LiveOps]
+      security: []
+      parameters:
+        - { name: X-AP-Ops-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200": { description: Upserted }
+        "400": { description: Invalid }
+        "403": { description: Forbidden }
+  /api/v1/ops/liveops/instances/{id}/cancel:
+    post:
+      operationId: cancelLiveOpsInstance
+      tags: [LiveOps]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: X-AP-Ops-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Cancelled }
+        "403": { description: Forbidden }
+        "409": { description: Rejected }
+  /api/v1/ops/liveops/instances/{id}/settle:
+    post:
+      operationId: settleLiveOpsInstance
+      tags: [LiveOps]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: X-AP-Ops-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                batch_size: { type: integer }
+      responses:
+        "200": { description: Settled batch }
+        "403": { description: Forbidden }
+        "409": { description: Rejected }
 
   /api/v1/content/manifest:
     get:

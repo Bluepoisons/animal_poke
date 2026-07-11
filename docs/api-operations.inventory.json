@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 135,
+  "count": 144,
   "operations": [
     {
       "method": "DELETE",
@@ -123,6 +123,18 @@
       "path": "/api/v1/inventory",
       "operationId": "listInventory",
       "key": "GET /api/v1/inventory"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/liveops/instances",
+      "operationId": "listLiveOpsInstances",
+      "key": "GET /api/v1/liveops/instances"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/liveops/instances/{id}",
+      "operationId": "getLiveOpsInstance",
+      "key": "GET /api/v1/liveops/instances/{id}"
     },
     {
       "method": "GET",
@@ -534,6 +546,30 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/liveops/instances/{id}/claim",
+      "operationId": "claimLiveOpsReward",
+      "key": "POST /api/v1/liveops/instances/{id}/claim"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/liveops/instances/{id}/compensate",
+      "operationId": "compensateLiveOpsInstance",
+      "key": "POST /api/v1/liveops/instances/{id}/compensate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/liveops/instances/{id}/enroll",
+      "operationId": "enrollLiveOpsInstance",
+      "key": "POST /api/v1/liveops/instances/{id}/enroll"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/liveops/instances/{id}/progress",
+      "operationId": "progressLiveOpsInstance",
+      "key": "POST /api/v1/liveops/instances/{id}/progress"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/narrative/choices",
       "operationId": "narrativeSubmitChoice",
       "key": "POST /api/v1/narrative/choices"
@@ -579,6 +615,18 @@
       "path": "/api/v1/ops/game-config/rollback",
       "operationId": "rollbackGameConfig",
       "key": "POST /api/v1/ops/game-config/rollback"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/liveops/instances/{id}/cancel",
+      "operationId": "cancelLiveOpsInstance",
+      "key": "POST /api/v1/ops/liveops/instances/{id}/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/liveops/instances/{id}/settle",
+      "operationId": "settleLiveOpsInstance",
+      "key": "POST /api/v1/ops/liveops/instances/{id}/settle"
     },
     {
       "method": "POST",
@@ -813,6 +861,12 @@
       "path": "/api/v1/ops/game-config",
       "operationId": "putGameConfig",
       "key": "PUT /api/v1/ops/game-config"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/ops/liveops/definitions",
+      "operationId": "upsertLiveOpsDefinition",
+      "key": "PUT /api/v1/ops/liveops/definitions"
     }
   ]
 }
