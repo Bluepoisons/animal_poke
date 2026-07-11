@@ -15,7 +15,7 @@ import (
 // Registry 内容包注册表：ID/别名/状态查询的唯一入口。
 type Registry struct {
 	mu                    sync.RWMutex
-	packs                 map[string]*Pack // id -> pack
+	packs                 map[string]*Pack  // id -> pack
 	exactAlias            map[string]string // lower alias -> id
 	expectedGoldenVersion string
 	nowFn                 func() time.Time
@@ -298,8 +298,8 @@ func (r *Registry) Normalize(raw string) (string, string) {
 
 	// contains 别名：按 ID 稳定顺序；更长 contains 优先（简单实现：全扫取最长命中）
 	type hit struct {
-		id  string
-		n   int
+		id string
+		n  int
 	}
 	var best *hit
 	ids := make([]string, 0, len(r.packs))

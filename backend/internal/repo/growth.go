@@ -41,6 +41,7 @@ var researcherLevelThresholds = []int64{0, 20, 50, 100, 180, 300, 500, 800, 1200
 
 // 伙伴羁绊等级阈值。
 var companionLevelThresholds = []int64{0, 10, 25, 50, 80, 120, 180, 260, 360, 500}
+
 // CompanionNodeDef 可见成长节点定义（每收藏至少 3 个）。
 type CompanionNodeDef struct {
 	NodeID     string `json:"node_id"`
@@ -81,15 +82,15 @@ var AllowedGrowthEvents = map[string]GrowthEventSpec{
 
 // ForbiddenGrowthKinds 明确拒绝的路径（衰减/现实投喂/付费战力）。
 var ForbiddenGrowthKinds = map[string]error{
-	"feed":            ErrGrowthDecayForbidden, // 现实投喂
-	"real_feed":       ErrGrowthDecayForbidden,
-	"decay":           ErrGrowthDecayForbidden,
-	"affinity_decay":  ErrGrowthDecayForbidden,
-	"paid_power":      ErrGrowthPaidPower,
-	"iap_power":       ErrGrowthPaidPower,
-	"combat_boost":    ErrGrowthPaidPower,
-	"stat_boost":      ErrGrowthPaidPower,
-	"battle_power":    ErrGrowthPaidPower,
+	"feed":           ErrGrowthDecayForbidden, // 现实投喂
+	"real_feed":      ErrGrowthDecayForbidden,
+	"decay":          ErrGrowthDecayForbidden,
+	"affinity_decay": ErrGrowthDecayForbidden,
+	"paid_power":     ErrGrowthPaidPower,
+	"iap_power":      ErrGrowthPaidPower,
+	"combat_boost":   ErrGrowthPaidPower,
+	"stat_boost":     ErrGrowthPaidPower,
+	"battle_power":   ErrGrowthPaidPower,
 }
 
 // GrowthRepo 成长仓储。
@@ -145,27 +146,27 @@ func AllResearcherTracks() []string {
 
 // ApplyGrowthRequest 记录成长事件请求。
 type ApplyGrowthRequest struct {
-	DeviceID    string
-	AccountID   string
-	EventID     string
-	Kind        string
-	AnimalUUID  string
-	SourceType  string
-	SourceID    string
-	Metadata    string
+	DeviceID   string
+	AccountID  string
+	EventID    string
+	Kind       string
+	AnimalUUID string
+	SourceType string
+	SourceID   string
+	Metadata   string
 	// OverrideDelta 可选：服务端可按质量覆盖默认 XP（仍受 cap 与白名单约束）。
 	OverrideDelta *int64
 }
 
 // ApplyGrowthResult 成长事件结果。
 type ApplyGrowthResult struct {
-	Event          *models.GrowthEvent       `json:"event"`
-	Idempotent     bool                      `json:"idempotent"`
-	Researcher     []models.ResearcherTrack  `json:"researcher,omitempty"`
-	Companion      *models.CompanionProfile  `json:"companion,omitempty"`
-	Nodes          []models.CompanionMemoryNode `json:"nodes,omitempty"`
-	UnlockedNodes  []string                  `json:"unlocked_nodes,omitempty"`
-	CombatUnchanged bool                     `json:"combat_unchanged"`
+	Event           *models.GrowthEvent          `json:"event"`
+	Idempotent      bool                         `json:"idempotent"`
+	Researcher      []models.ResearcherTrack     `json:"researcher,omitempty"`
+	Companion       *models.CompanionProfile     `json:"companion,omitempty"`
+	Nodes           []models.CompanionMemoryNode `json:"nodes,omitempty"`
+	UnlockedNodes   []string                     `json:"unlocked_nodes,omitempty"`
+	CombatUnchanged bool                         `json:"combat_unchanged"`
 }
 
 // ApplyEvent 幂等记录成长事件并更新快照。
@@ -487,8 +488,7 @@ func ensureCompanion(tx *gorm.DB, owner, deviceID, accountID, animalUUID string)
 		}
 	}
 	// 确保节点
-	nodes, err := ensureCompanionNodes(tx, &comp)
-	if err != nil {
+	if _, err := ensureCompanionNodes(tx, &comp); err != nil {
 		return nil, nil, err
 	}
 	// 0 XP 时解锁 first_meeting
@@ -630,12 +630,12 @@ func (r *GrowthRepo) ListCompanions(accountID, deviceID string, limit int) ([]mo
 
 // CatalogResponse 配置目录（客户端渲染节点树）。
 type GrowthCatalog struct {
-	ConfigVersion string              `json:"config_version"`
-	Tracks        []CatalogTrack      `json:"tracks"`
-	Events        []CatalogEvent      `json:"events"`
-	CompanionNodes []CompanionNodeDef `json:"companion_nodes"`
-	Rules         CatalogRules        `json:"rules"`
-	LevelThresholds CatalogThresholds `json:"level_thresholds"`
+	ConfigVersion   string             `json:"config_version"`
+	Tracks          []CatalogTrack     `json:"tracks"`
+	Events          []CatalogEvent     `json:"events"`
+	CompanionNodes  []CompanionNodeDef `json:"companion_nodes"`
+	Rules           CatalogRules       `json:"rules"`
+	LevelThresholds CatalogThresholds  `json:"level_thresholds"`
 }
 
 type CatalogTrack struct {

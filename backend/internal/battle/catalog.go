@@ -35,7 +35,7 @@ func Skills() []SkillDef {
 		{
 			ID: "claw_strike", NameZH: "利爪突袭", NameEN: "Claw Strike", Kind: SkillKindActive,
 			Element: ElementDark, Roles: []RoleID{RoleDPS, RoleControl}, Cooldown: 0, BasePower: 1.0,
-			Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.0}},
+			Effects:     []SkillEffect{{Kind: EffectDamage, Power: 1.0}},
 			UpgradeNote: "每级伤害 +12%", Description: "基础物理输出技能",
 		},
 		{
@@ -68,13 +68,13 @@ func Skills() []SkillDef {
 		{
 			ID: "heal_lick", NameZH: "舔舐愈合", NameEN: "Heal Lick", Kind: SkillKindActive,
 			Roles: []RoleID{RoleSupport}, Cooldown: 2, BasePower: 0.22,
-			Effects: []SkillEffect{{Kind: EffectHeal, Power: 0.22, TargetSelf: true}},
+			Effects:     []SkillEffect{{Kind: EffectHeal, Power: 0.22, TargetSelf: true}},
 			UpgradeNote: "治疗量 +4% 最大生命", Description: "回复自身生命",
 		},
 		{
 			ID: "howl", NameZH: "战吼", NameEN: "Howl", Kind: SkillKindActive,
 			Roles: []RoleID{RoleSupport, RoleTank}, Cooldown: 3, BasePower: 0,
-			Effects: []SkillEffect{{Kind: EffectStatus, Status: StatusAtkUp, Duration: 2, TargetSelf: true}},
+			Effects:     []SkillEffect{{Kind: EffectStatus, Status: StatusAtkUp, Duration: 2, TargetSelf: true}},
 			UpgradeNote: "攻击增益叠加上限 +1", Description: "提升攻击，适合低稀有度开团",
 		},
 		{
@@ -125,7 +125,7 @@ func Skills() []SkillDef {
 		{
 			ID: "light_flare", NameZH: "闪光爆裂", NameEN: "Light Flare", Kind: SkillKindActive,
 			Element: ElementLight, Roles: []RoleID{RoleDPS, RoleSupport}, Cooldown: 3, BasePower: 1.2,
-			Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.2}},
+			Effects:     []SkillEffect{{Kind: EffectDamage, Power: 1.2}},
 			UpgradeNote: "对暗系额外 +10%", Description: "光系高伤",
 		},
 		{
@@ -140,13 +140,13 @@ func Skills() []SkillDef {
 		{
 			ID: "energy_burst", NameZH: "能量爆发", NameEN: "Energy Burst", Kind: SkillKindEnergy,
 			Roles: []RoleID{RoleDPS, RoleTank, RoleSupport, RoleControl}, Cooldown: 0, EnergyCost: EnergySkillCost, BasePower: 1.8,
-			Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.8}},
+			Effects:     []SkillEffect{{Kind: EffectDamage, Power: 1.8}},
 			UpgradeNote: "能量技伤害 +12%/级", Description: "能量满时可释放大招，忽略闪避",
 		},
 		{
 			ID: "pack_regen", NameZH: "群体再生", NameEN: "Pack Regen", Kind: SkillKindActive,
 			Roles: []RoleID{RoleSupport}, Cooldown: 4, BasePower: 0,
-			Effects: []SkillEffect{{Kind: EffectStatus, Status: StatusRegen, Duration: 3, TargetSelf: true}},
+			Effects:     []SkillEffect{{Kind: EffectStatus, Status: StatusRegen, Duration: 3, TargetSelf: true}},
 			UpgradeNote: "再生强度提升", Description: "持续回复，低稀有度续航核心",
 		},
 	}
@@ -166,7 +166,7 @@ func Archetypes() []ArchetypeDef {
 	return []ArchetypeDef{
 		{
 			ID: "bruiser", NameZH: "莽撞重击手", NameEN: "Bruiser", Difficulty: 2,
-			ThreatTags: []string{"high_hp", "high_atk"},
+			ThreatTags:  []string{"high_hp", "high_atk"},
 			CounterHint: "用控制打断输出窗口，或高防坦克硬吃",
 			Members: []ArchMember{
 				{Name: "狂犬", Species: "dog", Role: RoleTank, Slot: SlotFront, Element: ElementFire, HP: 160, ATK: 42, DEF: 28, SPD: 22, SkillIDs: []string{"bite", "taunt", "energy_burst"}},
@@ -175,7 +175,7 @@ func Archetypes() []ArchetypeDef {
 		},
 		{
 			ID: "glass_cannon", NameZH: "玻璃大炮", NameEN: "Glass Cannon", Difficulty: 2,
-			ThreatTags: []string{"burst", "low_hp"},
+			ThreatTags:  []string{"burst", "low_hp"},
 			CounterHint: "先手秒杀或护盾硬抗一波",
 			Members: []ArchMember{
 				{Name: "影猫", Species: "cat", Role: RoleDPS, Slot: SlotBack, Element: ElementDark, HP: 80, ATK: 58, DEF: 12, SPD: 48, SkillIDs: []string{"dark_fang", "claw_strike", "energy_burst"}},
@@ -184,7 +184,7 @@ func Archetypes() []ArchetypeDef {
 		},
 		{
 			ID: "iron_wall", NameZH: "铁壁防线", NameEN: "Iron Wall", Difficulty: 3,
-			ThreatTags: []string{"high_def", "stall"},
+			ThreatTags:  []string{"high_def", "stall"},
 			CounterHint: "百分比灼烧/中毒与破防增益",
 			Members: []ArchMember{
 				{Name: "甲鹅", Species: "goose", Role: RoleTank, Slot: SlotFront, Element: ElementWater, HP: 180, ATK: 28, DEF: 48, SPD: 18, SkillIDs: []string{"shell_guard", "taunt", "water_splash"}},
@@ -193,7 +193,7 @@ func Archetypes() []ArchetypeDef {
 		},
 		{
 			ID: "controller", NameZH: "控场大师", NameEN: "Controller", Difficulty: 3,
-			ThreatTags: []string{"stun", "root", "slow"},
+			ThreatTags:  []string{"stun", "root", "slow"},
 			CounterHint: "带净化/高 SPD，利用连控免疫窗口输出",
 			Members: []ArchMember{
 				{Name: "沼鹅", Species: "goose", Role: RoleControl, Slot: SlotMid, Element: ElementGrass, HP: 120, ATK: 34, DEF: 30, SPD: 36, SkillIDs: []string{"mud_trap", "leaf_bind", "wing_gust"}},
@@ -202,7 +202,7 @@ func Archetypes() []ArchetypeDef {
 		},
 		{
 			ID: "swarmer", NameZH: "群聚骚扰", NameEN: "Swarmer", Difficulty: 2,
-			ThreatTags: []string{"multi_hit", "attrition"},
+			ThreatTags:  []string{"multi_hit", "attrition"},
 			CounterHint: "AOE 或优先击杀高速单位",
 			Members: []ArchMember{
 				{Name: "兔A", Species: "rabbit", Role: RoleDPS, Slot: SlotFront, Element: ElementGrass, HP: 70, ATK: 32, DEF: 14, SPD: 46, SkillIDs: []string{"claw_strike", "leaf_bind"}},
@@ -212,7 +212,7 @@ func Archetypes() []ArchetypeDef {
 		},
 		{
 			ID: "healer_boss", NameZH: "再生首领", NameEN: "Healer Boss", Difficulty: 4,
-			ThreatTags: []string{"regen", "sustain"},
+			ThreatTags:  []string{"regen", "sustain"},
 			CounterHint: "爆发窗口集火，或持续压制治疗",
 			Members: []ArchMember{
 				{Name: "首领犬", Species: "dog", Role: RoleTank, Slot: SlotFront, Element: ElementLight, HP: 200, ATK: 36, DEF: 34, SPD: 20, SkillIDs: []string{"shell_guard", "taunt", "energy_burst"}},
@@ -227,26 +227,26 @@ func RecommendedTeams() []TeamBuild {
 	return []TeamBuild{
 		{
 			ID: "budget_sustain", NameZH: "低配续航流", NameEN: "Budget Sustain",
-			Roles: []RoleID{RoleTank, RoleSupport, RoleDPS},
-			SkillIDs: []string{"shell_guard", "heal_lick", "pack_regen", "claw_strike", "howl"},
-			Counters: []string{"bruiser", "swarmer", "glass_cannon"},
-			RarityHint: "common/uncommon 即可通关多数 2 星",
+			Roles:       []RoleID{RoleTank, RoleSupport, RoleDPS},
+			SkillIDs:    []string{"shell_guard", "heal_lick", "pack_regen", "claw_strike", "howl"},
+			Counters:    []string{"bruiser", "swarmer", "glass_cannon"},
+			RarityHint:  "common/uncommon 即可通关多数 2 星",
 			Description: "坦克承伤 + 治疗续航，靠策略与节奏磨死，不依赖高稀有度",
 		},
 		{
 			ID: "control_burst", NameZH: "控场爆发流", NameEN: "Control Burst",
-			Roles: []RoleID{RoleControl, RoleDPS, RoleSupport},
-			SkillIDs: []string{"mud_trap", "dark_fang", "fire_pounce", "water_splash", "energy_burst"},
-			Counters: []string{"glass_cannon", "healer_boss", "swarmer"},
-			RarityHint: "uncommon 起，强调先手与能量大招",
+			Roles:       []RoleID{RoleControl, RoleDPS, RoleSupport},
+			SkillIDs:    []string{"mud_trap", "dark_fang", "fire_pounce", "water_splash", "energy_burst"},
+			Counters:    []string{"glass_cannon", "healer_boss", "swarmer"},
+			RarityHint:  "uncommon 起，强调先手与能量大招",
 			Description: "短控创造输出窗口，大招斩杀；连控不会无限延长",
 		},
 		{
 			ID: "element_counter", NameZH: "元素克制流", NameEN: "Element Counter",
-			Roles: []RoleID{RoleDPS, RoleDPS, RoleTank},
-			SkillIDs: []string{"fire_pounce", "water_splash", "leaf_bind", "light_flare", "shell_guard"},
-			Counters: []string{"iron_wall", "bruiser", "controller"},
-			RarityHint: "按敌方元素换技能即可，低稀有度可打过克制关",
+			Roles:       []RoleID{RoleDPS, RoleDPS, RoleTank},
+			SkillIDs:    []string{"fire_pounce", "water_splash", "leaf_bind", "light_flare", "shell_guard"},
+			Counters:    []string{"iron_wall", "bruiser", "controller"},
+			RarityHint:  "按敌方元素换技能即可，低稀有度可打过克制关",
 			Description: "围绕元素表换装，三套技能覆盖常见威胁",
 		},
 	}
@@ -264,12 +264,12 @@ func GetCatalog() Catalog {
 		Archetypes:       Archetypes(),
 		RecommendedTeams: RecommendedTeams(),
 		Limits: map[string]int{
-			"max_team_size":          MaxTeamSize,
-			"max_rounds":             MaxRounds,
-			"max_energy":             MaxEnergy,
-			"max_control_streak":     MaxControlStreak,
-			"max_status_stacks":      MaxStatusStacks,
-			"max_skill_level":        MaxSkillLevel,
+			"max_team_size":           MaxTeamSize,
+			"max_rounds":              MaxRounds,
+			"max_energy":              MaxEnergy,
+			"max_control_streak":      MaxControlStreak,
+			"max_status_stacks":       MaxStatusStacks,
+			"max_skill_level":         MaxSkillLevel,
 			"zero_damage_break_after": ZeroDamageBreakAfter,
 		},
 	}

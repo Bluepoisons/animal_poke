@@ -2337,6 +2337,14 @@ paths:
           schema: {type: string}
       responses:
         "200": {description: Progress}
+  /api/v1/narrative/progress/all:
+    get:
+      tags: [Narrative]
+      summary: Pull all narrative progress records
+      operationId: narrativePullAllProgress
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Progress records}
   /api/v1/narrative/choices:
     post:
       tags: [Narrative]
@@ -2357,6 +2365,31 @@ paths:
       responses:
         "200": {description: Idempotent replay}
         "201": {description: Applied}
+  /api/v1/narrative/seen:
+    get:
+      tags: [Narrative]
+      summary: List seen narrative nodes
+      operationId: narrativeListSeen
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Seen narrative nodes}
+    post:
+      tags: [Narrative]
+      summary: Mark a narrative node as seen
+      operationId: narrativeMarkSeen
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [node_id]
+              properties:
+                node_id: {type: string}
+                summary: {type: string}
+      responses:
+        "200": {description: Seen state recorded}
   /api/v1/narrative/fail-forward:
     post:
       tags: [Narrative]
@@ -2388,6 +2421,14 @@ paths:
       security: [{bearerAuth: []}]
       responses:
         "200": {description: Updated}
+  /api/v1/narrative/ending-summary:
+    get:
+      tags: [Narrative]
+      summary: Get ending choice summary
+      operationId: narrativeEndingSummary
+      security: [{bearerAuth: []}]
+      responses:
+        "200": {description: Ending choice summary}
   /api/v1/quests:
     get:
       tags: [Quest]
@@ -3815,16 +3856,6 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
 
-    NotImplemented:
-      description: Feature not implemented or disabled (HTTP 501)
-      headers:
-        X-Request-ID:
-          $ref: "#/components/headers/RequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/FeatureUnavailableError"
-
   schemas:
     GameConfig:
       type: object
@@ -4722,7 +4753,7 @@ components:
     SocialTargetUserRequest:
       type: object
       properties:
-        target_user_id: { type: string, description: account_id, device_id, or user_key }
+        target_user_id: { type: string, description: "account_id, device_id, or user_key" }
         user_key: { type: string }
     SocialRequestIDBody:
       type: object

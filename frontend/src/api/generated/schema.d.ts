@@ -1369,6 +1369,301 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/narrative/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Narrative content catalog version (AP-132) */
+        get: operations["narrativeCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/nodes/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get narrative node and choices */
+        get: operations["narrativeGetNode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get or create chapter progress */
+        get: operations["narrativeProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/progress/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pull all narrative progress records */
+        get: operations["narrativePullAllProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit narrative choice (idempotent) */
+        post: operations["narrativeSubmitChoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List seen narrative nodes */
+        get: operations["narrativeListSeen"];
+        put?: never;
+        /** Mark a narrative node as seen */
+        post: operations["narrativeMarkSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/fail-forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fail-forward narrative on miss/empty (AP-120) */
+        post: operations["narrativeFailForward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/observation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Observation event unlocks story fragments (AP-118) */
+        post: operations["narrativeObservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/clues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List clue states (AP-127) */
+        get: operations["narrativeListClues"];
+        put?: never;
+        /** Update clue status */
+        post: operations["narrativeUpdateClue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/narrative/ending-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get ending choice summary */
+        get: operations["narrativeEndingSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List quests with progress
+         * @description Returns enabled quests for the JWT owner with current period progress.
+         *     Use `free=true` to list only zero-stamina executable quests.
+         *     Progress is never advanced by page opens — only trusted business events.
+         */
+        get: operations["listQuests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quest definition catalog
+         * @description Versioned data-driven quest definitions (config rollback friendly).
+         */
+        get: operations["getQuestCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply trusted quest progress event
+         * @description Applies a trusted business event to advance quest progress.
+         *     Forbidden client-fakeable types: open_pokedex, safe_explore, page_view, open_map.
+         *     Idempotent on event_id (global unique).
+         */
+        post: operations["applyQuestEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests/compensate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Expire and compensate unclaimed quests
+         * @description Marks active expired progress as expired; for completed-but-expired unclaimed
+         *     quests, grants half gold via wallet ledger (source_type=compensate) once.
+         */
+        post: operations["compensateQuests"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests/{quest_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one quest with progress */
+        get: operations["getQuest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quests/{quest_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim quest reward (idempotent)
+         * @description Claims rewards for a completed quest period. Credits wallet ledger once via
+         *     stable operation_id. Concurrent claims return one create + idempotent replays.
+         */
+        post: operations["claimQuest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/commerce/orders/refund": {
         parameters: {
             query?: never;
@@ -1557,8 +1852,93 @@ export interface paths {
         /**
          * Report PvP result (server-authoritative)
          * @description Requires FEATURE_PVP=true. Disabled or not-ready returns 501/503 feature_unavailable.
+         *     When command_log includes players/enemies/commands (AP-102), server re-simulates and rejects winner mismatch.
          */
         post: operations["pvpResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/battle/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Battle design catalog (skills, roles, statuses, archetypes)
+         * @description AP-102 authoritative design data. Always available when authenticated.
+         *     Includes ≥12 skills, ≥6 enemy archetypes, recommended teams, upgrade tiers.
+         */
+        get: operations["battleCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/battle/pve/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start authoritative PvE battle session
+         * @description Server generates battle seed, materializes enemy team from archetype,
+         *     returns pre-battle threats. Team snapshot is frozen for settlement.
+         */
+        post: operations["battlePveStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/battle/pve/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle PvE battle via seed+command log replay
+         * @description Server re-simulates commands against frozen team/enemy snapshots.
+         *     Client claimed_winner must match server result when provided (tamper reject).
+         *     Idempotent for completed sessions.
+         */
+        post: operations["battlePveSettle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/battle/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dry-run deterministic battle simulation
+         * @description Stateless replay helper for clients/tools. Same seed+commands → same result.
+         */
+        post: operations["battleSimulate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2636,7 +3016,7 @@ export interface components {
             request_id?: string;
         };
         SocialTargetUserRequest: {
-            /** @description account_id */
+            /** @description account_id, device_id, or user_key */
             target_user_id?: string;
             user_key?: string;
         };
@@ -2672,6 +3052,131 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
             revoked?: boolean;
+            request_id?: string;
+        };
+        QuestObjective: {
+            id: string;
+            /** @description Trusted event only (capture_success, species_new, battle_complete, dispatch_complete, visit_city, season_checkin, research_note, collection_count) */
+            event: string;
+            /** Format: int64 */
+            target: number;
+            filter?: {
+                [key: string]: string;
+            };
+        };
+        QuestReward: {
+            /** Format: int64 */
+            gold?: number;
+            /** Format: int64 */
+            stamina?: number;
+            items?: {
+                [key: string]: number;
+            };
+        };
+        QuestDefinition: {
+            quest_id?: string;
+            /** @enum {string} */
+            type?: "main" | "research" | "daily" | "weekly" | "city" | "event";
+            title?: string;
+            description?: string;
+            objectives_json?: string;
+            rewards_json?: string;
+            prerequisites_json?: string;
+            /** @enum {string} */
+            reset_policy?: "none" | "daily" | "weekly";
+            free?: boolean;
+            enabled?: boolean;
+            config_version?: string;
+            min_level?: number;
+            sort_order?: number;
+            duration_hours?: number;
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+        };
+        QuestProgress: {
+            quest_id?: string;
+            period_key?: string;
+            progress_json?: string;
+            /** @enum {string} */
+            status?: "active" | "completed" | "claimed" | "expired" | "compensated";
+            config_version?: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: date-time */
+            claimed_at?: string;
+            /** Format: date-time */
+            expires_at?: string;
+        };
+        QuestView: {
+            definition: components["schemas"]["QuestDefinition"];
+            progress?: components["schemas"]["QuestProgress"];
+            objectives: components["schemas"]["QuestObjective"][];
+            rewards: components["schemas"]["QuestReward"];
+            prerequisites?: string[];
+            counters: {
+                [key: string]: number;
+            };
+            claimable: boolean;
+            free: boolean;
+        };
+        QuestListResponse: {
+            quests: components["schemas"]["QuestView"][];
+            config_version?: string;
+            request_id?: string;
+        };
+        QuestCatalogResponse: {
+            definitions: components["schemas"]["QuestDefinition"][];
+            config_version?: string;
+            count: number;
+            request_id?: string;
+        };
+        QuestEventRequest: {
+            /** @description Global unique idempotency key for this event */
+            event_id: string;
+            /** @description Trusted business event type */
+            event_type: string;
+            /**
+             * Format: int64
+             * @default 1
+             */
+            delta: number;
+            /** @description Optional JSON string (e.g. city/species filters) */
+            payload?: string;
+        };
+        QuestEventResponse: {
+            idempotent: boolean;
+            event_type: string;
+            updated_quest_ids?: string[];
+            request_id?: string;
+        };
+        QuestClaim: {
+            claim_id?: string;
+            operation_id?: string;
+            quest_id?: string;
+            period_key?: string;
+            status?: string;
+            /** Format: int64 */
+            gold_granted?: number;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        QuestClaimResponse: {
+            claim: components["schemas"]["QuestClaim"];
+            idempotent: boolean;
+            /** Format: int64 */
+            gold: number;
+            /** Format: int64 */
+            stamina?: number;
+            balances?: {
+                [key: string]: number;
+            };
+            request_id?: string;
+        };
+        QuestCompensateResponse: {
+            compensated: number;
+            expired: number;
             request_id?: string;
         };
         GrowthCatalogResponse: {
@@ -2827,6 +3332,7 @@ export interface components {
                 created_at?: string;
             };
             request_id?: string;
+        };
         /** @description Client-reported observation metrics (no raw photo bytes). Server re-scores deterministically. */
         PhotoMetrics: {
             stability_rms?: number;
@@ -2933,6 +3439,120 @@ export interface components {
             /** Format: date-time */
             completed_at?: string;
         };
+        BattleFighter: {
+            id?: string;
+            name?: string;
+            species?: string;
+            /** @enum {string} */
+            role?: "tank" | "dps" | "support" | "control";
+            /** @enum {string} */
+            slot?: "front" | "mid" | "back";
+            element?: string;
+            max_hp?: number;
+            hp?: number;
+            atk?: number;
+            def?: number;
+            spd?: number;
+            crit?: number;
+            eva?: number;
+            energy?: number;
+            skill_ids?: string[];
+            skill_levels?: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            side?: "player" | "enemy";
+        };
+        BattleCommand: {
+            actor_id?: string;
+            /** @enum {string} */
+            kind?: "basic" | "skill" | "ultimate" | "pass" | "strategy";
+            skill_id?: string;
+            target_id?: string;
+            /** @enum {string} */
+            strategy?: "aggressive" | "balanced" | "defensive";
+            round?: number;
+        };
+        BattleThreat: {
+            code?: string;
+            /** @enum {string} */
+            severity?: "low" | "medium" | "high";
+            text_zh?: string;
+            text_en?: string;
+            counter?: string;
+        };
+        BattleFailureFactor: {
+            code?: string;
+            weight?: number;
+            text_zh?: string;
+            text_en?: string;
+        };
+        BattleResult: {
+            /** @enum {string} */
+            winner_side?: "player" | "enemy" | "draw";
+            rounds?: number;
+            rule_version?: string;
+            seed?: string;
+            command_hash?: string;
+            ended_by?: string;
+            failure_factors?: components["schemas"]["BattleFailureFactor"][];
+            metrics?: {
+                [key: string]: unknown;
+            };
+            events?: {
+                [key: string]: unknown;
+            }[];
+        };
+        BattleCatalogResponse: {
+            catalog?: {
+                [key: string]: unknown;
+            };
+            source?: string;
+            request_id?: string;
+        };
+        BattlePveStartRequest: {
+            /** @enum {string} */
+            mode?: "pve" | "training";
+            archetype_id?: string;
+            team: components["schemas"]["BattleFighter"][];
+        };
+        BattlePveStartResponse: {
+            session_id?: string;
+            seed?: string;
+            rule_version?: string;
+            archetype_id?: string;
+            mode?: string;
+            status?: string;
+            team?: components["schemas"]["BattleFighter"][];
+            enemies?: components["schemas"]["BattleFighter"][];
+            threats?: components["schemas"]["BattleThreat"][];
+            request_id?: string;
+        };
+        BattlePveSettleRequest: {
+            session_id: string;
+            commands?: components["schemas"]["BattleCommand"][];
+            /** @description Must match server winner_side when set */
+            claimed_winner?: string;
+        };
+        BattlePveSettleResponse: {
+            session_id?: string;
+            status?: string;
+            winner_side?: string;
+            command_hash?: string;
+            result?: components["schemas"]["BattleResult"];
+            failure_factors?: components["schemas"]["BattleFailureFactor"][];
+            request_id?: string;
+        };
+        BattleSimulateRequest: {
+            seed: string;
+            team: components["schemas"]["BattleFighter"][];
+            enemies: components["schemas"]["BattleFighter"][];
+            commands?: components["schemas"]["BattleCommand"][];
+        };
+        BattleSimulateResponse: {
+            result?: components["schemas"]["BattleResult"];
+            request_id?: string;
+        };
     };
     responses: {
         /** @description Bad request */
@@ -3025,7 +3645,6 @@ export interface components {
             };
         };
         /** @description Feature not implemented or not enabled (HTTP 501) */
-        /** @description Feature not implemented or disabled (HTTP 501) */
         NotImplemented: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestID"];
@@ -3033,7 +3652,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
-                "application/json": components["schemas"]["FeatureUnavailableError"];
             };
         };
     };
@@ -3916,6 +4534,12 @@ export interface operations {
                         class?: string;
                         element?: string;
                         narrative?: string;
+                        /** @description Always true — fictional vignette only (AP-131) */
+                        fiction?: boolean;
+                        disclaimer?: string;
+                        /** @description fictional_vignette */
+                        layer?: string;
+                        policy_version?: string;
                         config_version?: string;
                         seed_id?: string;
                         factors?: {
@@ -5354,6 +5978,435 @@ export interface operations {
             };
         };
     };
+    narrativeCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalog meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeGetNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Node payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeProgress: {
+        parameters: {
+            query?: {
+                chapter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativePullAllProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Progress records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeSubmitChoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    chapter_id: string;
+                    choice_id: string;
+                    operation_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Applied */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeListSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Seen narrative nodes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeMarkSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    node_id: string;
+                    summary?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Seen state recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeFailForward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fail-forward node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeObservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlocked fragments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeListClues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Clues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeUpdateClue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    narrativeEndingSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ending choice summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listQuests: {
+        parameters: {
+            query?: {
+                /** @description When true/1, only free (zero-stamina) quests */
+                free?: "1" | "true" | "0" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quest list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getQuestCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestCatalogResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    applyQuestEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestEventResponse"];
+                };
+            };
+            /** @description Event applied */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestEventResponse"];
+                };
+            };
+            /** @description Forbidden or untrusted event (reason_code quest_event_forbidden|quest_event_untrusted) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    compensateQuests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compensation summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestCompensateResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getQuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quest_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quest detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        quest: components["schemas"]["QuestView"];
+                        request_id?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Not found (reason_code quest_not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    claimQuest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quest_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Idempotent replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestClaimResponse"];
+                };
+            };
+            /** @description Claimed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestClaimResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Quest not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not claimable or expired (reason_code quest_not_claimable|quest_expired) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     adminRefundOrder: {
         parameters: {
             query?: never;
@@ -5624,6 +6677,124 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             501: components["responses"]["FeatureUnavailable"];
             503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    battleCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalog payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BattleCatalogResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    battlePveStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BattlePveStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Open session with seed, enemies, threats */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BattlePveStartResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    battlePveSettle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BattlePveSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative result + failure factors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BattlePveSettleResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description not owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    battleSimulate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BattleSimulateRequest"];
+            };
+        };
+        responses: {
+            /** @description Simulation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BattleSimulateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     socialFriends: {

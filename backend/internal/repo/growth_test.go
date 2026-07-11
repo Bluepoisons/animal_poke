@@ -35,17 +35,17 @@ func seedAnimal(t *testing.T, db *gorm.DB, deviceID, accountID string) string {
 	t.Helper()
 	id := uuid.NewString()
 	a := &models.Animal{
-		UUID:      id,
-		DeviceID:  deviceID,
-		AccountID: accountID,
-		Species:   "cat",
-		Breed:     "tabby",
-		Rarity:    2,
-		HP:        100,
-		ATK:       20,
-		DEF:       15,
-		SPD:       10,
-		GeneratedAt: time.Now().UTC(),
+		UUID:          id,
+		DeviceID:      deviceID,
+		AccountID:     accountID,
+		Species:       "cat",
+		Breed:         "tabby",
+		Rarity:        2,
+		HP:            100,
+		ATK:           20,
+		DEF:           15,
+		SPD:           10,
+		GeneratedAt:   time.Now().UTC(),
 		ServerVersion: 1,
 	}
 	require.NoError(t, db.Create(a).Error)

@@ -77,29 +77,11 @@ func TestBattleRepo_StartSettleReplayAndTamper(t *testing.T) {
 	assert.Equal(t, sess1.WinnerSide, sess2.WinnerSide)
 	assert.Equal(t, res1.CommandHash, res2.CommandHash)
 
-	// new session — claimed winner tamper
-	start2, err := r.Start(repo.StartRequest{
-		OwnerKey: "acc:tester", ArchetypeID: "glass_cannon", Team: testTeam(),
-	})
-	require.NoError(t, err)
-	// first get real winner
-	_, real, err := r.Settle(repo.SettleRequest{
-		OwnerKey: "acc:tester", SessionID: start2.Session.SessionID, Commands: nil,
-	})
-	require.NoError(t, err)
-
+	// A different owner cannot settle a session.
 	start3, err := r.Start(repo.StartRequest{
 		OwnerKey: "acc:tester", ArchetypeID: "swarmer", Team: testTeam(),
 	})
 	require.NoError(t, err)
-	wrong := "player"
-	if real.WinnerSide == "player" {
-		wrong = "enemy"
-	}
-	_, _, err = r.Settle(repo.SettleRequest{
-		OwnerKey: "acc:tester", SessionID: start3.Session.SessionID, Commands: nil, ClaimedWinner: wrong,
-	})
-	// may pass if AI random makes claimed correct; force mismatch by claiming impossible
 	_, _, err = r.Settle(repo.SettleRequest{
 		OwnerKey: "acc:other", SessionID: start3.Session.SessionID, Commands: nil,
 	})
@@ -156,8 +138,6 @@ func TestPvP_FullLogAuthoritative(t *testing.T) {
 	wrong := m.PlayerA
 	if trueRes.WinnerSide == "player" {
 		wrong = m.PlayerB
-	} else {
-		wrong = m.PlayerA
 	}
 	// if draw, skip mismatch case
 	if trueRes.WinnerSide != "draw" {

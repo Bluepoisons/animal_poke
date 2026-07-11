@@ -108,17 +108,17 @@ type loginRequest struct {
 }
 
 type accountAuthResponse struct {
-	Token                 string           `json:"token"`
-	ExpiresAt             string           `json:"expires_at"`
-	TokenType             string           `json:"token_type"`
-	AccountID             string           `json:"account_id,omitempty"`
-	RefreshToken          string           `json:"refresh_token,omitempty"` // 仅返回一次；服务端只存哈希
-	Merge                 *repo.MergeStats `json:"merge,omitempty"`
-	Guest                 bool             `json:"guest"`
-	OperationID           string           `json:"operation_id,omitempty"` // 合并/链接操作唯一 ID（AP-076）
-	EmailVerified         *bool            `json:"email_verified,omitempty"`
-	VerificationRequired  bool             `json:"verification_required,omitempty"`
-	DebugSecurityToken    string           `json:"debug_security_token,omitempty"` // 非 production
+	Token                string           `json:"token"`
+	ExpiresAt            string           `json:"expires_at"`
+	TokenType            string           `json:"token_type"`
+	AccountID            string           `json:"account_id,omitempty"`
+	RefreshToken         string           `json:"refresh_token,omitempty"` // 仅返回一次；服务端只存哈希
+	Merge                *repo.MergeStats `json:"merge,omitempty"`
+	Guest                bool             `json:"guest"`
+	OperationID          string           `json:"operation_id,omitempty"` // 合并/链接操作唯一 ID（AP-076）
+	EmailVerified        *bool            `json:"email_verified,omitempty"`
+	VerificationRequired bool             `json:"verification_required,omitempty"`
+	DebugSecurityToken   string           `json:"debug_security_token,omitempty"` // 非 production
 }
 
 type revokeDeviceRequest struct {

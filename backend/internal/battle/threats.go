@@ -65,8 +65,8 @@ func AnalyzeThreats(players []Fighter, archetypeID string) []Threat {
 			if mul > 1.0 {
 				threats = append(threats, Threat{
 					Code: fmt.Sprintf("elem_%s_vs_%s", m.Element, pe), Severity: "medium",
-					TextZH: fmt.Sprintf("敌方 %s 元素克制你的 %s", m.Element, pe),
-					TextEN: fmt.Sprintf("Enemy %s beats your %s", m.Element, pe),
+					TextZH:  fmt.Sprintf("敌方 %s 元素克制你的 %s", m.Element, pe),
+					TextEN:  fmt.Sprintf("Enemy %s beats your %s", m.Element, pe),
 					Counter: "换克制元素技能或提高防御",
 				})
 			}

@@ -753,38 +753,6 @@ func extractJSON(s string) string {
 	return strings.TrimSpace(s)
 }
 
-func clampValueResult(v *ValueResult) {
-	if v.Rarity < 1 {
-		v.Rarity = 1
-	}
-	if v.Rarity > 5 {
-		v.Rarity = 5
-	}
-	v.HP = clampInt(v.HP, 10, 100)
-	v.ATK = clampInt(v.ATK, 5, 50)
-	v.DEF = clampInt(v.DEF, 5, 50)
-	v.SPD = clampInt(v.SPD, 5, 50)
-	if v.Class == "" {
-		v.Class = "Ranger"
-	}
-	if v.Element == "" {
-		v.Element = "Wind"
-	}
-	if len(v.Narrative) > 2000 {
-		v.Narrative = v.Narrative[:2000]
-	}
-}
-
-func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

@@ -77,6 +77,9 @@ export interface ValueResult {
   class: string
   element: string
   narrative: string
+  fiction?: boolean
+  disclaimer?: string
+  layer?: string
   /** 生成依据（拍摄质量/完整度/物种规则/有限随机） */
   factors?: ValueFactors
   config_version?: string
@@ -212,6 +215,9 @@ export function validateValue(raw: unknown): ValueResult {
     class: petClass,
     element,
     narrative: asString(o.narrative, 'A mysterious companion found in the wild.'),
+    fiction: typeof o.fiction === 'boolean' ? o.fiction : undefined,
+    disclaimer: asString(o.disclaimer, '') || undefined,
+    layer: asString(o.layer, '') || undefined,
     factors: parseFactors(o.factors),
     config_version: asString(o.config_version ?? o.configVersion, '') || undefined,
     seed_id: asString(o.seed_id ?? o.seedId, '') || undefined,

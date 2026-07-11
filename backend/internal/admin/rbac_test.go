@@ -163,7 +163,7 @@ func TestConcurrentRevokeAllForActor(t *testing.T) {
 func TestActionAuditor_IntegrityTamperDetect(t *testing.T) {
 	aud := NewActionAuditor(nil, "audit-hmac-secret")
 	row, err := aud.Record(ActionInput{
-		Actor: Actor{ActorID: "eve", Subject: "eve", Role: RoleSuper, SessionID: "s1", AuthMode: "jwt", Env: "test"},
+		Actor:  Actor{ActorID: "eve", Subject: "eve", Role: RoleSuper, SessionID: "s1", AuthMode: "jwt", Env: "test"},
 		Action: PermCommerceRefund, Resource: "order:1", Reason: "chargeback",
 		RequestID: "rid-1", Outcome: "ok",
 	})

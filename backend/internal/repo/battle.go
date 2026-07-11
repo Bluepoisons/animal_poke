@@ -18,13 +18,13 @@ import (
 )
 
 var (
-	ErrBattleNotFound      = errors.New("battle_not_found")
-	ErrBattleNotOwner      = errors.New("battle_not_owner")
-	ErrBattleAlreadyDone   = errors.New("battle_already_settled")
-	ErrBattleInvalidTeam   = errors.New("battle_invalid_team")
-	ErrBattleInvalidLog    = errors.New("battle_invalid_log")
-	ErrBattleTamper        = errors.New("battle_command_tamper")
-	ErrBattleUnknownArch   = errors.New("battle_unknown_archetype")
+	ErrBattleNotFound    = errors.New("battle_not_found")
+	ErrBattleNotOwner    = errors.New("battle_not_owner")
+	ErrBattleAlreadyDone = errors.New("battle_already_settled")
+	ErrBattleInvalidTeam = errors.New("battle_invalid_team")
+	ErrBattleInvalidLog  = errors.New("battle_invalid_log")
+	ErrBattleTamper      = errors.New("battle_command_tamper")
+	ErrBattleUnknownArch = errors.New("battle_unknown_archetype")
 )
 
 // BattleRepo persists authoritative PvE sessions (AP-102).
@@ -113,9 +113,9 @@ func (r *BattleRepo) Start(req StartRequest) (*StartResponse, error) {
 
 // SettleRequest carries client command log for authoritative replay.
 type SettleRequest struct {
-	OwnerKey    string
-	SessionID   string
-	Commands    []battle.Command
+	OwnerKey  string
+	SessionID string
+	Commands  []battle.Command
 	// Optional client-claimed winner — must match server if provided.
 	ClaimedWinner string
 }

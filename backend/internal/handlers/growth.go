@@ -70,10 +70,10 @@ func (h *GrowthHandler) GetResearcher(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"owner_key":       repo.OwnerKey(accountID, deviceID),
-		"config_version":  models.GrowthConfigVersion,
-		"tracks":          tracks,
-		"request_id":      middleware.GetRequestID(c),
+		"owner_key":      repo.OwnerKey(accountID, deviceID),
+		"config_version": models.GrowthConfigVersion,
+		"tracks":         tracks,
+		"request_id":     middleware.GetRequestID(c),
 	})
 }
 
@@ -209,13 +209,13 @@ func (h *GrowthHandler) GetCompanion(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"companion":       comp,
-		"nodes":           nodes,
-		"visible_nodes":   visible,
-		"unlocked_nodes":  unlocked,
-		"min_visible":     3,
+		"companion":        comp,
+		"nodes":            nodes,
+		"visible_nodes":    visible,
+		"unlocked_nodes":   unlocked,
+		"min_visible":      3,
 		"combat_unchanged": true,
-		"request_id":      middleware.GetRequestID(c),
+		"request_id":       middleware.GetRequestID(c),
 	})
 }
 

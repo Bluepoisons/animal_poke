@@ -421,4 +421,3 @@ func TestSocial_CursorPaginationFriends(t *testing.T) {
 		}
 	}
 }
-

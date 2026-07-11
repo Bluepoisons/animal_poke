@@ -118,7 +118,6 @@ func deviceAuthFull(t *testing.T, r *gin.Engine, deviceID string) (token, instal
 	return tok, sec
 }
 
-
 func verifyEmailFromBind(t *testing.T, r *gin.Engine, bindBody []byte) {
 	t.Helper()
 	var resp map[string]any

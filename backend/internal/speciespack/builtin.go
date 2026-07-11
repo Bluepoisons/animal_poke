@@ -17,7 +17,7 @@ func builtinPacks() []*Pack {
 			Protection:      Protection{Status: "none"},
 			Assets:          Assets{Emoji: "🐱", ThrowItemEmoji: "🥫"},
 			Gameplay: Gameplay{
-				ThrowItem: Localized{"zh-CN": "观察贴纸", "en": "Observe sticker"},
+				ThrowItem:        Localized{"zh-CN": "观察贴纸", "en": "Observe sticker"},
 				CaptureMechanics: Localized{"zh-CN": "标准抛物线"}, ChargeRate: 2, OptimalRange: []float64{40, 80},
 				ChargeSpeed: 1.15, DetectThreshold: 0.85,
 				StatModifiers: &StatModifiers{HP: 0.8, ATK: 0.9, DEF: 0.9, SPD: 1.3, Crit: 10, Eva: 5},
@@ -40,7 +40,7 @@ func builtinPacks() []*Pack {
 			Protection:      Protection{Status: "none"},
 			Assets:          Assets{Emoji: "🐶", ThrowItemEmoji: "🦴"},
 			Gameplay: Gameplay{
-				ThrowItem: Localized{"zh-CN": "镜头信号", "en": "Lens signal"},
+				ThrowItem:        Localized{"zh-CN": "镜头信号", "en": "Lens signal"},
 				CaptureMechanics: Localized{"zh-CN": "下落更快"}, ChargeRate: 1.5, OptimalRange: []float64{45, 85},
 				ChargeSpeed: 1.0, DetectThreshold: 0.85,
 				StatModifiers: &StatModifiers{HP: 1.3, ATK: 1.2, DEF: 1.0, SPD: 0.8, Crit: 3, Eva: 2},
@@ -64,7 +64,7 @@ func builtinPacks() []*Pack {
 			Protection:      Protection{Status: "none"},
 			Assets:          Assets{Emoji: "🪿", ThrowItemEmoji: "🍞"},
 			Gameplay: Gameplay{
-				ThrowItem: Localized{"zh-CN": "友好光点", "en": "Friendly spark"},
+				ThrowItem:        Localized{"zh-CN": "友好光点", "en": "Friendly spark"},
 				CaptureMechanics: Localized{"zh-CN": "弹跳略强"}, ChargeRate: 2.5, OptimalRange: []float64{35, 75},
 				ChargeSpeed: 0.9, DetectThreshold: 0.75,
 				StatModifiers: &StatModifiers{HP: 1.0, ATK: 0.8, DEF: 1.4, SPD: 0.9, Crit: 2, Eva: 8},

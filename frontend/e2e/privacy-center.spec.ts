@@ -82,7 +82,7 @@ test.describe('AP-068 privacy center', () => {
 
     // Failed account delete without password should not claim success
     await page.getByTestId('privacy-delete-account').click()
-    await expect(page.getByText(/密码|password|reauth/i)).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('status').filter({ hasText: /密码|password|reauth/i })).toBeVisible({ timeout: 5_000 })
     expect(deleteHits).toBe(0)
   })
 })

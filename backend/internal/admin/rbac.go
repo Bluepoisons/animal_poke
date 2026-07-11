@@ -18,15 +18,15 @@ const (
 
 // 权限点。
 const (
-	PermAuditLogsRead         = "audit.logs.read"
-	PermAuditLogsAck          = "audit.logs.ack"
-	PermCommerceRefund        = "commerce.refund"
-	PermConfigWrite           = "config.write"
-	PermSecurityReportMeta    = "security.report.read_meta"
-	PermSecurityReportBody    = "security.report.read_body"
-	PermSessionRevoke         = "session.revoke"
-	PermAdminTokenIssue       = "admin.token.issue"
-	PermAdminActionAuditRead  = "admin.action.audit.read"
+	PermAuditLogsRead        = "audit.logs.read"
+	PermAuditLogsAck         = "audit.logs.ack"
+	PermCommerceRefund       = "commerce.refund"
+	PermConfigWrite          = "config.write"
+	PermSecurityReportMeta   = "security.report.read_meta"
+	PermSecurityReportBody   = "security.report.read_body"
+	PermSessionRevoke        = "session.revoke"
+	PermAdminTokenIssue      = "admin.token.issue"
+	PermAdminActionAuditRead = "admin.action.audit.read"
 )
 
 // Actor 已认证的管理端身份。

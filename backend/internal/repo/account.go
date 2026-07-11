@@ -833,16 +833,10 @@ func (r *AccountRepo) LoginLinkAndMerge(deviceID, accountID string, proof LoginM
 		result.ProofType = proofType
 
 		// 写唯一 operation + 审计
-		animals := 0
-		ents := 0
-		orders := 0
-		merged := false
-		if mergeStats != nil {
-			animals = mergeStats.AnimalsMoved
-			ents = mergeStats.EntitlementsMoved + mergeStats.EntitlementsMerged
-			orders = mergeStats.OrdersMoved
-			merged = animals+ents+orders > 0
-		}
+		animals := mergeStats.AnimalsMoved
+		ents := mergeStats.EntitlementsMoved + mergeStats.EntitlementsMerged
+		orders := mergeStats.OrdersMoved
+		merged := animals+ents+orders > 0
 		op := &models.AccountMergeOperation{
 			OperationID:    operationID,
 			AccountID:      accountID,

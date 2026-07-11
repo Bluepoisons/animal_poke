@@ -34,13 +34,13 @@ func TestAliasConflict(t *testing.T) {
 	err := r.RegisterAll(
 		&Pack{
 			ID: "a", Version: "1", ContentID: "species.a", Status: StatusCatalogOnly,
-			Names: Names{Common: Localized{"en": "A"}, Aliases: []string{"shared"}},
+			Names:   Names{Common: Localized{"en": "A"}, Aliases: []string{"shared"}},
 			Welfare: Welfare{Level: "unknown"}, Protection: Protection{Status: "none"},
 			Assets: Assets{Emoji: "A"},
 		},
 		&Pack{
 			ID: "b", Version: "1", ContentID: "species.b", Status: StatusCatalogOnly,
-			Names: Names{Common: Localized{"en": "B"}, Aliases: []string{"shared"}},
+			Names:   Names{Common: Localized{"en": "B"}, Aliases: []string{"shared"}},
 			Welfare: Welfare{Level: "unknown"}, Protection: Protection{Status: "none"},
 			Assets: Assets{Emoji: "B"},
 		},
