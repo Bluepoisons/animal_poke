@@ -5,6 +5,7 @@ import BattleLog from '../components/BattleLog'
 import { useBattle } from '../../../battle/useBattle'
 import type { CardEntry, SpeciesType } from '../../../types'
 import type { StrategyType } from '../../../battle/types'
+import { BATTLE_ARCHETYPES, RECOMMENDED_TEAMS } from '../../../battle/designCatalog'
 
 const strategies: { id: StrategyType; label: string }[] = [
   { id: 'aggressive', label: '激进' },
@@ -80,7 +81,7 @@ export default function BattleArenaScreen() {
     <div className="ap-screen">
       <PageTitle
         title="BATTLE"
-        subtitle="ARENA · BattleContext 权威结算"
+        subtitle="ARENA · 队伍技能与权威结算 (AP-102)"
         rightText={phaseLabel}
         rightTone="blue"
       />
@@ -131,6 +132,17 @@ export default function BattleArenaScreen() {
       </div>
 
       <BattleLog lines={logLines.length ? logLines : ['等待战斗…']} />
+
+      <div className="ap-map-chip-row" style={{ flexWrap: 'wrap', gap: 6, padding: '8px 0' }} aria-label="推荐构筑">
+        {RECOMMENDED_TEAMS.map((t) => (
+          <span key={t.id} className="ap-map-chip" title={t.description}>
+            {t.nameZh}
+          </span>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.8, padding: '0 4px 8px' }}>
+        战前威胁示例：{BATTLE_ARCHETYPES[3]?.nameZh} — {BATTLE_ARCHETYPES[3]?.counterHint}
+      </div>
 
       {state.phase === 'result' && (
         <div style={{ padding: 12, display: 'flex', gap: 8 }}>

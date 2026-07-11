@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"animalpoke/backend/internal/battle"
 	"animalpoke/backend/internal/models"
 
 	"github.com/google/uuid"
@@ -127,6 +128,36 @@ func (r *PvPRepo) SubmitResult(ownerKey, matchID, winner string, commandLog map[
 		if seed, _ := commandLog["seed"].(string); seed != "" && seed != m.Seed {
 			return ErrPvPInvalidLog
 		}
+		// AP-102: when full fighters+commands present, re-simulate and derive winner.
+		if verified, ok, verr := verifyPvPBattleLog(m.Seed, commandLog); verr != nil {
+			return ErrPvPInvalidLog
+		} else if ok {
+			derived := ""
+			switch verified.WinnerSide {
+			case "player", "a":
+				derived = m.PlayerA
+			case "enemy", "b":
+				derived = m.PlayerB
+			default:
+				if verified.WinnerSide == m.PlayerA || verified.WinnerSide == m.PlayerB {
+					derived = verified.WinnerSide
+				}
+			}
+			if derived == "" {
+				return ErrPvPInvalidLog
+			}
+			claimed := strings.TrimSpace(winner)
+			if claimed != "" && claimed != derived {
+				return ErrPvPInvalidLog
+			}
+			winner = derived
+			commandLog["server_result"] = map[string]any{
+				"winner_side":  verified.WinnerSide,
+				"command_hash": verified.CommandHash,
+				"rounds":       verified.Rounds,
+				"rule_version": verified.RuleVersion,
+			}
+		}
 		winner = strings.TrimSpace(winner)
 		if winner != m.PlayerA && winner != m.PlayerB {
 			return ErrPvPInvalidLog
@@ -194,4 +225,63 @@ func (r *PvPRepo) GetMatch(matchID string) (*models.PvPMatch, error) {
 // GetRating 查询段位。
 func (r *PvPRepo) GetRating(ownerKey string) (*models.PvPRating, error) {
 	return r.getOrCreateRating(r.db, ownerKey)
+}
+
+// verifyPvPBattleLog replays AP-102 shaped logs: {players|team_a, enemies|team_b, commands}.
+// ok=false means legacy minimal log (winner trusted after basic checks).
+func verifyPvPBattleLog(seed string, commandLog map[string]any) (*battle.Result, bool, error) {
+	if commandLog == nil {
+		return nil, false, nil
+	}
+	rawPlayers, hasP := commandLog["players"]
+	if !hasP {
+		rawPlayers, hasP = commandLog["team_a"]
+	}
+	rawEnemies, hasE := commandLog["enemies"]
+	if !hasE {
+		rawEnemies, hasE = commandLog["team_b"]
+	}
+	rawCmds, hasC := commandLog["commands"]
+	if !hasP || !hasE || !hasC {
+		return nil, false, nil
+	}
+	pj, _ := json.Marshal(rawPlayers)
+	ej, _ := json.Marshal(rawEnemies)
+	cj, _ := json.Marshal(rawCmds)
+	var players []battle.Fighter
+	var enemies []battle.Fighter
+	var commands []battle.Command
+	if err := json.Unmarshal(pj, &players); err != nil {
+		return nil, true, err
+	}
+	if err := json.Unmarshal(ej, &enemies); err != nil {
+		return nil, true, err
+	}
+	if err := json.Unmarshal(cj, &commands); err != nil {
+		return nil, true, err
+	}
+	if len(players) == 0 || len(enemies) == 0 {
+		return nil, true, fmt.Errorf("empty teams")
+	}
+	for i := range players {
+		players[i].Side = "player"
+		if players[i].MaxHP <= 0 {
+			players[i].MaxHP = players[i].HP
+		}
+	}
+	for i := range enemies {
+		enemies[i].Side = "enemy"
+		if enemies[i].MaxHP <= 0 {
+			enemies[i].MaxHP = enemies[i].HP
+		}
+	}
+	useSeed := seed
+	if s, _ := commandLog["seed"].(string); s != "" {
+		useSeed = s
+	}
+	res, err := battle.Simulate(useSeed, players, enemies, commands)
+	if err != nil {
+		return nil, true, err
+	}
+	return &res, true, nil
 }

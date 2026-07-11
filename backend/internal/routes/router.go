@@ -276,6 +276,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPMatch)
 				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			}
+			// AP-102 战斗设计：catalog + 权威 PvE seed/command 结算（无 feature flag，设计数据始终可读）
+			if db != nil {
+				battleH := handlers.NewBattleHandler(db, deviceRepo)
+				auth.GET("/battle/catalog", battleH.Catalog)
+				auth.POST("/battle/pve/start", middleware.BodyLimit(middleware.MaxBodyDefault), battleH.Start)
+				auth.POST("/battle/pve/settle", middleware.BodyLimit(middleware.MaxBodyDefault), battleH.Settle)
+				auth.POST("/battle/simulate", middleware.BodyLimit(middleware.MaxBodyDefault), battleH.Simulate)
+			} else {
+				auth.GET("/battle/catalog", func(c *gin.Context) {
+					c.JSON(http.StatusOK, gin.H{"catalog": handlers.BattleCatalogPayload(), "source": "server", "request_id": middleware.GetRequestID(c)})
+				})
+				auth.POST("/battle/pve/start", unavailable("db_unavailable"))
+				auth.POST("/battle/pve/settle", unavailable("db_unavailable"))
+				auth.POST("/battle/simulate", unavailable("db_unavailable"))
+			}
 			// AP-083 社交：有 DB 时挂载完整图谱；否则保留 product 骨架（flag 关 501 / 无库 503）
 			if db != nil && animalRepo != nil {
 				socialH := handlers.NewSocialHandler(handlers.SocialOptions{
