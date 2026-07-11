@@ -878,7 +878,7 @@ type PhotoThemeProgress struct {
 }
 
 // TableName 明确表名。
-func (QuestProgress) TableName() string { return "quest_progress" }
+func (PhotoThemeProgress) TableName() string { return "photo_theme_progress" }
 
 // QuestClaim 领取记录；operation_id 与钱包流水一致，保证奖励恰好一次。
 type QuestClaim struct {
