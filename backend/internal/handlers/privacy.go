@@ -50,11 +50,12 @@ type consentRequest struct {
 	Revoke  bool   `json:"revoke"`
 }
 
-// deleteDataRequest AP-077：scope=device（默认）|account；账号级需 reauth_password 或 reauth_token。
+// deleteDataRequest AP-077：scope=device（默认）|account；账号级需 reauth_password 或 reauth_token（AP-079）。
 type deleteDataRequest struct {
 	Scope          string `json:"scope"` // device|account
 	ReauthPassword string `json:"reauth_password"`
-	Confirm        string `json:"confirm"` // account 删除需 "DELETE"
+	ReauthToken    string `json:"reauth_token"` // 短期 reauth 令牌（AP-079）
+	Confirm        string `json:"confirm"`      // account 删除需 "DELETE"
 }
 
 // exportDataRequest AP-077 可选 scope。
@@ -428,24 +429,31 @@ func (h *PrivacyHandler) deleteAccountScope(c *gin.Context, deviceID string, req
 	if strings.TrimSpace(req.Confirm) != "DELETE" {
 		return errPrivacy("confirm must be DELETE")
 	}
-	if strings.TrimSpace(req.ReauthPassword) == "" {
-		return errPrivacy("reauth_password required")
-	}
 	dev, err := h.deviceRepo.Find(deviceID)
 	if err != nil || dev.AccountID == "" {
 		return errPrivacy("account required")
 	}
 	accountID := dev.AccountID
-	// re-auth: verify any email binding password
-	bindings, err := h.accountRepo.ListBindings(accountID)
-	if err != nil {
-		return err
-	}
+	// re-auth: 已验证邮箱密码 或 短期 reauth_token（AP-079）
 	ok := false
-	for _, b := range bindings {
-		if b.Provider == "email" && h.accountRepo.VerifyBindingCredential(&b, req.ReauthPassword) {
+	if strings.TrimSpace(req.ReauthToken) != "" {
+		if _, perr := h.accountRepo.PeekSecurityToken(strings.TrimSpace(req.ReauthToken), models.SecurityPurposeReauth, accountID); perr == nil {
 			ok = true
-			break
+		}
+	}
+	if !ok {
+		if strings.TrimSpace(req.ReauthPassword) == "" {
+			return errPrivacy("reauth_password required")
+		}
+		bindings, err := h.accountRepo.ListBindings(accountID)
+		if err != nil {
+			return err
+		}
+		for _, b := range bindings {
+			if b.Provider == "email" && b.Verified && h.accountRepo.VerifyBindingCredential(&b, req.ReauthPassword) {
+				ok = true
+				break
+			}
 		}
 	}
 	if !ok {

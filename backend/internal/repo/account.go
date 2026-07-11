@@ -140,7 +140,8 @@ func (r *AccountRepo) FindBinding(provider, subject string) (*models.AccountBind
 }
 
 // UpsertBinding 创建或更新绑定（同一 account）。
-func (r *AccountRepo) UpsertBinding(accountID, provider, subject, credentialHash string) (*models.AccountBinding, error) {
+// verified 控制是否立即视为已验证；email 新建应传 false，OAuth 传 true（AP-079）。
+func (r *AccountRepo) UpsertBinding(accountID, provider, subject, credentialHash string, verified bool) (*models.AccountBinding, error) {
 	var existing models.AccountBinding
 	err := r.db.Where("provider = ? AND provider_subject = ?", provider, subject).First(&existing).Error
 	if err == nil {
@@ -148,7 +149,12 @@ func (r *AccountRepo) UpsertBinding(accountID, provider, subject, credentialHash
 			return nil, ErrBindingConflict
 		}
 		existing.CredentialHash = credentialHash
-		existing.Verified = true
+		// 已验证绑定不降级；未验证可保持/按参数提升
+		if verified && !existing.Verified {
+			now := time.Now().UTC()
+			existing.Verified = true
+			existing.VerifiedAt = &now
+		}
 		if err := r.db.Save(&existing).Error; err != nil {
 			return nil, err
 		}
@@ -162,7 +168,11 @@ func (r *AccountRepo) UpsertBinding(accountID, provider, subject, credentialHash
 		Provider:        provider,
 		ProviderSubject: subject,
 		CredentialHash:  credentialHash,
-		Verified:        true,
+		Verified:        verified,
+	}
+	if verified {
+		now := time.Now().UTC()
+		b.VerifiedAt = &now
 	}
 	if err := r.db.Create(b).Error; err != nil {
 		return nil, err
