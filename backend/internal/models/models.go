@@ -325,3 +325,71 @@ type AccountMergeOperation struct {
 
 // TableName 明确表名。
 func (AccountMergeOperation) TableName() string { return "account_merge_operations" }
+
+// ---------- AP-082 Wallet / Inventory / Reward Ledger ----------
+
+// 支持的货币类型。
+const (
+	CurrencyGold    = "gold"
+	CurrencyStamina = "stamina"
+)
+
+// 流水资产类型。
+const (
+	LedgerKindCurrency = "currency"
+	LedgerKindItem     = "item"
+)
+
+// WalletBalance 余额快照（按 owner_key + currency 唯一）。
+// owner_key = "acc:<account_id>" 或 "dev:<device_id>"，跨设备账号共享余额。
+type WalletBalance struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey  string    `gorm:"uniqueIndex:idx_wallet_owner_currency,priority:1;size:68;not null" json:"owner_key"`
+	Currency  string    `gorm:"uniqueIndex:idx_wallet_owner_currency,priority:2;size:32;not null" json:"currency"` // gold|stamina
+	DeviceID  string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Balance   int64     `gorm:"not null;default:0" json:"balance"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (WalletBalance) TableName() string { return "wallet_balances" }
+
+// WalletLedgerEntry 不可变奖励/消费流水。
+// operation_id 全局唯一，保证同一奖励来源只入账一次；可从流水重建余额。
+type WalletLedgerEntry struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	EntryID      string    `gorm:"uniqueIndex;size:36;not null" json:"entry_id"`
+	OperationID  string    `gorm:"uniqueIndex;size:128;not null" json:"operation_id"`
+	OwnerKey     string    `gorm:"index:idx_ledger_owner_time,priority:1;size:68;not null" json:"owner_key"`
+	DeviceID     string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID    string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Kind         string    `gorm:"size:16;not null" json:"kind"`     // currency|item
+	Currency     string    `gorm:"size:64;not null" json:"currency"` // gold|stamina 或 item_id
+	Delta        int64     `gorm:"not null" json:"delta"`            // 正入账 / 负出账
+	Amount       int64     `gorm:"not null" json:"amount"`           // 绝对值
+	BalanceAfter int64     `gorm:"not null" json:"balance_after"`
+	SourceType   string    `gorm:"size:32;not null" json:"source_type"` // checkin|task|battle|capture|shop|admin|compensate|reward|system|dispatch|level_up
+	SourceID     string    `gorm:"size:128" json:"source_id,omitempty"`
+	Metadata     string    `gorm:"type:text" json:"metadata,omitempty"`
+	CreatedAt    time.Time `gorm:"index:idx_ledger_owner_time,priority:2" json:"created_at"`
+}
+
+// TableName 明确表名。
+func (WalletLedgerEntry) TableName() string { return "wallet_ledger_entries" }
+
+// InventoryItem 道具库存快照（按 owner_key + item_id 唯一）。
+type InventoryItem struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey  string    `gorm:"uniqueIndex:idx_inv_owner_item,priority:1;size:68;not null" json:"owner_key"`
+	ItemID    string    `gorm:"uniqueIndex:idx_inv_owner_item,priority:2;size:64;not null" json:"item_id"`
+	DeviceID  string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Quantity  int64     `gorm:"not null;default:0" json:"quantity"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (InventoryItem) TableName() string { return "inventory_items" }
