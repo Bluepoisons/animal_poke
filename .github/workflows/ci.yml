@@ -179,12 +179,23 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
       - name: Validate OpenAPI 3.1
         run: npx --yes @redocly/cli@1 lint docs/openapi.yaml
       - name: Bidirectional Gin ↔ OpenAPI contract gate (AP-033)
         run: |
           # Fails when /api/v1 METHOD+path sets diverge between router.go and openapi.yaml
           node scripts/openapi-contract-gate.mjs
+      - name: API test matrix inventory gate (AP-091)
+        run: |
+          # Full operation inventory + matrix + contract_matrix_test.go coverage (49 ops)
+          node scripts/api-test-matrix-gate.mjs
+      - name: Contract matrix unit tests (AP-091)
+        run: |
+          cd backend && go test ./internal/routes -run TestContractMatrix -count=1
       - name: Require committed schema.d.ts matches OpenAPI
         run: |
           set -euo pipefail
