@@ -40,6 +40,10 @@ export interface AnimalSyncPayload {
   generated_at: string
   inference_request_id?: string
   narrative?: string
+  /** AP-131: always fictional vignette when from value API */
+  fiction?: boolean
+  disclaimer?: string
+  layer?: string
 }
 
 /** IndexedDB 同步队列项 */

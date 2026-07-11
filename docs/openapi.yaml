@@ -896,6 +896,10 @@ paths:
                   class: { type: string }
                   element: { type: string }
                   narrative: { type: string }
+                  fiction: { type: boolean, description: Always true — fictional vignette only (AP-131) }
+                  disclaimer: { type: string }
+                  layer: { type: string, description: fictional_vignette }
+                  policy_version: { type: string }
                   config_version: { type: string }
                   seed_id: { type: string }
                   factors:
