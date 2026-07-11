@@ -3655,6 +3655,22 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/analytics/delete:
+    post:
+      operationId: analyticsDeleteOwner
+      tags: [Analytics]
+      summary: Privacy delete/anonymize analytics for current device
+      security: [{bearerAuth: []}]
+      responses:
+        "200": { description: Deleted count }
+  /api/v1/ops/analytics/dictionary:
+    get:
+      operationId: analyticsDictionary
+      tags: [Analytics]
+      summary: Metric dictionary and experiment stop rules
+      security: [{bearerAuth: []}]
+      responses:
+        "200": { description: Dictionary }
   /api/v1/analytics/events:
     post:
       tags: [Analytics]

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"animalpoke/backend/internal/analytics"
 	"net/http"
 	"strings"
 	"time"
@@ -135,11 +136,26 @@ func (h *ProductHandler) OpsMetrics(c *gin.Context) {
 		middleware.WriteError(c, http.StatusForbidden, "ops_forbidden", "ops access denied", false, nil)
 		return
 	}
+	sum := analytics.Default().Summarize(time.Time{}, 24*time.Hour)
 	c.JSON(http.StatusOK, gin.H{
-		"dau":        0,
-		"captures":   0,
-		"source":     "server",
-		"request_id": middleware.GetRequestID(c),
+		"dau":               sum.DAU,
+		"captures":          sum.Captures,
+		"capture_success":   sum.CaptureSuccess,
+		"detect_ok":         sum.DetectOK,
+		"sync_failures":     sum.SyncFailures,
+		"funnel":            sum.Funnel,
+		"d1_retention":      sum.D1Retention,
+		"d7_retention":      sum.D7Retention,
+		"by_experiment":     sum.ByExperiment,
+		"by_region":         sum.ByRegion,
+		"by_version":        sum.ByVersion,
+		"event_count":       sum.EventCount,
+		"max_event_age_sec": sum.MaxEventAgeSec,
+		"latency_bound_sec": sum.LatencyBoundSec,
+		"dictionary_owner":  sum.DictionaryOwner,
+		"computed_at":       sum.ComputedAt,
+		"source":            sum.Source,
+		"request_id":        middleware.GetRequestID(c),
 	})
 }
 

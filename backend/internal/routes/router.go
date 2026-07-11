@@ -236,6 +236,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 			// Analytics funnel ingest (privacy-safe; no photos/tokens/precise coords)
 			analyticsHandler := handlers.NewAnalyticsHandler()
+			auth.GET("/ops/analytics/dictionary", analyticsHandler.Dictionary)
+			auth.POST("/analytics/delete", middleware.BodyLimit(middleware.MaxBodyDefault), analyticsHandler.DeleteOwner)
 			auth.POST("/analytics/events", middleware.BodyLimit(middleware.MaxBodyDefault), analyticsHandler.Ingest)
 
 			// 账号绑定 / 设备管理 / 安全（AP-079）
