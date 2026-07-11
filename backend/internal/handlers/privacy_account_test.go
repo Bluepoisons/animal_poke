@@ -26,7 +26,7 @@ func setupPrivacyAccount(t *testing.T) (*gin.Engine, *gorm.DB, *repo.AccountRepo
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DataRequest{}, &models.SecurityReport{}, &models.Inference{},
-		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{},
+		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.RefreshToken{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")

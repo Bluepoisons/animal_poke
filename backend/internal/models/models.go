@@ -291,6 +291,30 @@ type DeviceAccount struct {
 // TableName 明确表名。
 func (DeviceAccount) TableName() string { return "device_accounts" }
 
+// RefreshToken 刷新令牌族（AP-078）：rotate-on-use + 重用检测。
+// 明文仅签发时返回一次；库中仅存 peppered SHA-256 哈希。
+// 同一 family 内轮换；若已 rotated 的令牌被再次使用，则撤销整族。
+type RefreshToken struct {
+	ID                uint       `gorm:"primaryKey" json:"id"`
+	TokenID           string     `gorm:"uniqueIndex;size:36;not null" json:"token_id"`
+	FamilyID          string     `gorm:"index;size:36;not null" json:"family_id"`
+	AccountID         string     `gorm:"index;size:36;not null" json:"account_id"`
+	DeviceID          string     `gorm:"index;size:64;not null" json:"device_id"`
+	TokenHash         string     `gorm:"uniqueIndex;size:128;not null" json:"-"`
+	ParentTokenID     string     `gorm:"index;size:36" json:"parent_token_id,omitempty"`
+	Status            string     `gorm:"size:16;not null;default:active;index" json:"status"` // active|rotated|revoked
+	AbsoluteExpiresAt time.Time  `gorm:"not null;index" json:"absolute_expires_at"`
+	IdleExpiresAt     time.Time  `gorm:"not null;index" json:"idle_expires_at"`
+	RotatedAt         *time.Time `json:"rotated_at,omitempty"`
+	RevokedAt         *time.Time `json:"revoked_at,omitempty"`
+	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
+func (RefreshToken) TableName() string { return "refresh_tokens" }
+
 // DeviceMigrationTicket 一次性设备资产迁移票据（AP-076）。
 // 明文仅签发时返回；库中仅存 peppered/sha256 哈希，防止仅凭 device_id 认领游客资产。
 type DeviceMigrationTicket struct {

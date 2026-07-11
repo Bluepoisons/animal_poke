@@ -156,13 +156,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				deviceRepo, accountRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTIssuer, cfg.JWTAudience,
 				cfg.AuthMockOAuthEnabled,
 			)
+			accountHandler.SetRefreshPolicy(cfg.JWTRefreshAbsoluteTTL, cfg.JWTRefreshIdleTTL)
 			api.POST("/auth/login",
 				middleware.RateLimitByIP(ipLimiter),
 				middleware.BodyLimit(middleware.MaxBodyDefault),
 				accountHandler.Login,
 			)
+			// AP-078: refresh 无需 access JWT；独立限流
+			api.POST("/auth/refresh",
+				middleware.RateLimitByIP(ipLimiter),
+				middleware.BodyLimit(middleware.MaxBodyDefault),
+				accountHandler.Refresh,
+			)
 		} else {
 			api.POST("/auth/login", unavailable("db_unavailable"))
+			api.POST("/auth/refresh", unavailable("db_unavailable"))
 		}
 
 		// JWT

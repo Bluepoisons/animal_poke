@@ -18,28 +18,44 @@ import (
 
 // AccountHandler 账号绑定与设备迁移。
 type AccountHandler struct {
-	deviceRepo     *repo.DeviceRepo
-	accountRepo    *repo.AccountRepo
-	jwtSecret      string
-	jwtTTL         time.Duration
-	refreshTTL     time.Duration
-	issuer         string
-	audience       string
-	allowMockOAuth bool // 仅 development/test 可开启；production 必须 false（AP-063）
+	deviceRepo         *repo.DeviceRepo
+	accountRepo        *repo.AccountRepo
+	jwtSecret          string
+	jwtTTL             time.Duration
+	refreshAbsoluteTTL time.Duration
+	refreshIdleTTL     time.Duration
+	issuer             string
+	audience           string
+	allowMockOAuth     bool // 仅 development/test 可开启；production 必须 false（AP-063）
 }
 
 // NewAccountHandler 构造。allowMockOAuth 控制 mock_oauth provider；production 必须传 false。
 func NewAccountHandler(deviceRepo *repo.DeviceRepo, accountRepo *repo.AccountRepo, jwtSecret string, jwtTTL time.Duration, issuer, audience string, allowMockOAuth bool) *AccountHandler {
 	return &AccountHandler{
-		deviceRepo:     deviceRepo,
-		accountRepo:    accountRepo,
-		jwtSecret:      jwtSecret,
-		jwtTTL:         jwtTTL,
-		refreshTTL:     30 * 24 * time.Hour,
-		issuer:         issuer,
-		audience:       audience,
-		allowMockOAuth: allowMockOAuth,
+		deviceRepo:         deviceRepo,
+		accountRepo:        accountRepo,
+		jwtSecret:          jwtSecret,
+		jwtTTL:             jwtTTL,
+		refreshAbsoluteTTL: repo.DefaultRefreshAbsoluteTTL,
+		refreshIdleTTL:     repo.DefaultRefreshIdleTTL,
+		issuer:             issuer,
+		audience:           audience,
+		allowMockOAuth:     allowMockOAuth,
 	}
+}
+
+// SetRefreshPolicy 配置 refresh 绝对/空闲过期（AP-078）。
+func (h *AccountHandler) SetRefreshPolicy(absolute, idle time.Duration) {
+	if absolute > 0 {
+		h.refreshAbsoluteTTL = absolute
+	}
+	if idle > 0 {
+		h.refreshIdleTTL = idle
+	}
+}
+
+func (h *AccountHandler) refreshPolicy() repo.RefreshPolicy {
+	return repo.RefreshPolicy{AbsoluteTTL: h.refreshAbsoluteTTL, IdleTTL: h.refreshIdleTTL}
 }
 
 type bindRequest struct {
@@ -179,7 +195,7 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		return
 	}
 
-	_, refresh, err := h.accountRepo.LinkDevice(deviceID, accountID, "", h.refreshTTL)
+	_, refresh, err := h.accountRepo.LinkDevice(deviceID, accountID, "", h.refreshAbsoluteTTL)
 	if err != nil {
 		if err == repo.ErrAlreadyBound {
 			middleware.WriteError(c, http.StatusConflict, "device_bound", "device already bound", false, nil)
@@ -250,7 +266,7 @@ func (h *AccountHandler) Login(c *gin.Context) {
 	result, err := h.accountRepo.LoginLinkAndMerge(req.DeviceID, acc.AccountID, repo.LoginMergeProof{
 		InstallationSecret: req.InstallationSecret,
 		MigrationTicket:    req.MigrationTicket,
-	}, h.refreshTTL)
+	}, h.refreshAbsoluteTTL)
 	if err != nil {
 		switch err {
 		case repo.ErrDeviceOwnership, repo.ErrInvalidMergeProof:
@@ -297,6 +313,115 @@ func (h *AccountHandler) Login(c *gin.Context) {
 		Merge:        result.Merge,
 		Guest:        false,
 		OperationID:  result.OperationID,
+	})
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+	DeviceID     string `json:"device_id"` // 可选：校验绑定设备
+}
+
+// Refresh POST /auth/refresh — rotate-on-use；重用已 rotated 令牌则吊销整族（AP-078）。
+// 无需 access JWT；成功返回新 access + refresh 对。
+func (h *AccountHandler) Refresh(c *gin.Context) {
+	var req refreshRequest
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
+		return
+	}
+	req.RefreshToken = strings.TrimSpace(req.RefreshToken)
+	if req.RefreshToken == "" {
+		middleware.AbortBadRequest(c, "refresh_token_required", "refresh_token required", nil)
+		return
+	}
+
+	rotated, err := h.accountRepo.RotateRefresh(req.RefreshToken, h.refreshPolicy())
+	if err != nil {
+		switch err {
+		case repo.ErrRefreshConflict:
+			// 并发抢占失败：可判定，不整族吊销
+			c.JSON(http.StatusConflict, gin.H{
+				"error":       "refresh token conflict",
+				"reason_code": "refresh_conflict",
+				"request_id":  middleware.GetRequestID(c),
+				"retryable":   true,
+			})
+			return
+		case repo.ErrRefreshReused:
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":       "refresh token reused; family revoked",
+				"reason_code": "refresh_token_reused",
+				"request_id":  middleware.GetRequestID(c),
+				"retryable":   false,
+			})
+			return
+		case repo.ErrRefreshExpired:
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":       "refresh token expired",
+				"reason_code": "refresh_token_expired",
+				"request_id":  middleware.GetRequestID(c),
+				"retryable":   false,
+			})
+			return
+		case repo.ErrRefreshRevoked, repo.ErrDeviceRevoked, repo.ErrDeviceDisabled:
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":       "refresh token revoked",
+				"reason_code": "refresh_token_revoked",
+				"request_id":  middleware.GetRequestID(c),
+				"retryable":   false,
+			})
+			return
+		case repo.ErrAccountDisabled:
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":       "account disabled",
+				"reason_code": "account_disabled",
+				"request_id":  middleware.GetRequestID(c),
+			})
+			return
+		default:
+			// invalid / not found
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":       "invalid refresh token",
+				"reason_code": "refresh_token_invalid",
+				"request_id":  middleware.GetRequestID(c),
+				"retryable":   false,
+			})
+			return
+		}
+	}
+
+	// 可选 device_id 绑定校验（防跨设备误用泄露的 refresh）
+	if req.DeviceID != "" && req.DeviceID != rotated.DeviceID {
+		_ = h.accountRepo.RevokeRefreshFamiliesForDevice(rotated.DeviceID)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":       "refresh device mismatch",
+			"reason_code": "refresh_device_mismatch",
+			"request_id":  middleware.GetRequestID(c),
+		})
+		return
+	}
+
+	dev, err := h.deviceRepo.Find(rotated.DeviceID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":       "device not found",
+			"reason_code": "refresh_token_invalid",
+			"request_id":  middleware.GetRequestID(c),
+		})
+		return
+	}
+	token, exp, err := h.issueToken(rotated.DeviceID, rotated.AccountID, dev.TokenVersion)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+		return
+	}
+	c.JSON(http.StatusOK, accountAuthResponse{
+		Token:        token,
+		ExpiresAt:    exp.Format(time.RFC3339),
+		TokenType:    "Bearer",
+		AccountID:    rotated.AccountID,
+		RefreshToken: rotated.Plain,
+		Guest:        false,
 	})
 }
 

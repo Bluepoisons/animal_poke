@@ -292,13 +292,65 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/Error"
         "409":
           description: Migration ticket replay or device bound to another account
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token and issue new access token
+      description: |
+        Rotate-on-use refresh (AP-078). Server stores only peppered hashes.
+        Concurrent refresh of the same token: exactly one succeeds; others return
+        `refresh_conflict` (409) within the grace window.
+        Reuse of an already-rotated token outside the grace window revokes the
+        entire token family (`refresh_token_reused`) and bumps device token_version.
+        Absolute and idle expiry are enforced. Device revoke / logout / privacy delete
+        invalidate refresh families.
+      operationId: authRefresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRefreshRequest"
+      responses:
+        "200":
+          description: New access + refresh pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid, expired, revoked, or reused refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Account disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Concurrent refresh race (reason_code=refresh_conflict)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -2233,6 +2285,17 @@ components:
         migration_ticket:
           type: string
           description: One-time migration ticket alternative to installation_secret; replay is rejected
+    AuthRefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          description: Opaque refresh token returned once from bind/login/refresh
+        device_id:
+          type: string
+          description: Optional binding check; mismatch revokes the family
+
     AuthAccountResponse:
       type: object
       required: [token, expires_at, token_type]

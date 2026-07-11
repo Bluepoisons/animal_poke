@@ -201,6 +201,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate refresh token and issue new access token
+         * @description Rotate-on-use refresh (AP-078). Server stores only peppered hashes.
+         *     Concurrent refresh of the same token: exactly one succeeds; others return
+         *     `refresh_conflict` (409) within the grace window.
+         *     Reuse of an already-rotated token outside the grace window revokes the
+         *     entire token family (`refresh_token_reused`) and bumps device token_version.
+         *     Absolute and idle expiry are enforced. Device revoke / logout / privacy delete
+         *     invalidate refresh families.
+         */
+        post: operations["authRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1092,6 +1118,15 @@ export interface components {
             installation_secret?: string;
             /** @description One-time migration ticket alternative to installation_secret; replay is rejected */
             migration_ticket?: string;
+<<<<<<< Updated upstream
+=======
+        };
+        AuthRefreshRequest: {
+            /** @description Opaque refresh token returned once from bind/login/refresh */
+            refresh_token: string;
+            /** @description Optional binding check; mismatch revokes the family */
+            device_id?: string;
+>>>>>>> Stashed changes
         };
         AuthAccountResponse: {
             token: string;
@@ -1683,7 +1718,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< Updated upstream
                     "application/json": components["schemas"]["ErrorResponse"];
+=======
+                    "application/json": components["schemas"]["Error"];
+>>>>>>> Stashed changes
                 };
             };
             /** @description Migration ticket replay or device bound to another account */
@@ -1692,9 +1731,69 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< Updated upstream
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+=======
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    authRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description New access + refresh pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAccountResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid, expired, revoked, or reused refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Concurrent refresh race (reason_code=refresh_conflict) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+>>>>>>> Stashed changes
             503: components["responses"]["ServiceUnavailable"];
         };
     };
