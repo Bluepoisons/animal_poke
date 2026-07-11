@@ -26,14 +26,20 @@ type PrivacyHandler struct {
 	animalRepo     *repo.AnimalRepo
 	inferenceRepo  *repo.InferenceRepo
 	auditRepo      *repo.AuditLogRepo
+	accountRepo    *repo.AccountRepo
 	db             *gorm.DB
 	consentVersion string
 }
 
 // NewPrivacyHandler 构造。
 func NewPrivacyHandler(db *gorm.DB, device *repo.DeviceRepo, animal *repo.AnimalRepo, inf *repo.InferenceRepo, audit *repo.AuditLogRepo) *PrivacyHandler {
+	return NewPrivacyHandlerFull(db, device, animal, inf, audit, nil)
+}
+
+// NewPrivacyHandlerFull 构造（含账号级删除/导出所需 AccountRepo）。
+func NewPrivacyHandlerFull(db *gorm.DB, device *repo.DeviceRepo, animal *repo.AnimalRepo, inf *repo.InferenceRepo, audit *repo.AuditLogRepo, account *repo.AccountRepo) *PrivacyHandler {
 	return &PrivacyHandler{
-		deviceRepo: device, animalRepo: animal, inferenceRepo: inf, auditRepo: audit, db: db,
+		deviceRepo: device, animalRepo: animal, inferenceRepo: inf, auditRepo: audit, accountRepo: account, db: db,
 		consentVersion: "v1",
 	}
 }
@@ -42,6 +48,18 @@ type consentRequest struct {
 	Version string `json:"version" binding:"required"`
 	Scope   string `json:"scope"`
 	Revoke  bool   `json:"revoke"`
+}
+
+// deleteDataRequest AP-077：scope=device（默认）|account；账号级需 reauth_password 或 reauth_token。
+type deleteDataRequest struct {
+	Scope          string `json:"scope"` // device|account
+	ReauthPassword string `json:"reauth_password"`
+	Confirm        string `json:"confirm"` // account 删除需 "DELETE"
+}
+
+// exportDataRequest AP-077 可选 scope。
+type exportDataRequest struct {
+	Scope string `json:"scope"` // device|account
 }
 
 var allowedConsentScopes = map[string]struct{}{
@@ -270,26 +288,76 @@ func (h *PrivacyHandler) collectExportAnimals(deviceID string, afterID uint, pag
 }
 
 // DeleteData POST /privacy/delete
-// 事务内：软删动物（tombstone 版本提升）、删推理与安全报告、清空历史导出 payload、
-// 权益失效、撤销授权、吊销 Token。订单依法保留不硬删。
+// scope=device（默认）：仅本设备数据。
+// scope=account：注销整个账号（AP-077），要求已绑定账号 + reauth_password + confirm=DELETE；
+// 覆盖账号下所有设备、绑定、收藏、报告；订单法律保留并匿名化 account/device 关联；完成后撤销全设备 token。
 func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
+	var req deleteDataRequest
+	_ = c.ShouldBindJSON(&req) // body optional for backward compat
+	scope := strings.ToLower(strings.TrimSpace(req.Scope))
+	if scope == "" {
+		scope = "device"
+	}
+	if scope != "device" && scope != "account" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope", "reason_code": "bad_request", "request_id": middleware.GetRequestID(c)})
+		return
+	}
+
 	reqID := uuid.NewString()
 	dr := models.DataRequest{
 		RequestID: reqID, DeviceID: deviceID, Type: "delete", Status: "processing",
 		RequestedAt: time.Now().UTC(),
 	}
 	if err := h.db.Create(&dr).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed", "reason_code": "db_error", "request_id": middleware.GetRequestID(c)})
 		return
 	}
 
-	err := h.db.Transaction(func(tx *gorm.DB) error {
+	var err error
+	if scope == "account" {
+		err = h.deleteAccountScope(c, deviceID, req)
+	} else {
+		err = h.deleteDeviceScope(deviceID)
+	}
+
+	now := time.Now().UTC()
+	status := "completed"
+	errMsg := ""
+	if err != nil {
+		status = "failed"
+		errMsg = err.Error()
+		slog.Error("删除失败", "err", err, "scope", scope)
+	}
+	updates := map[string]interface{}{"status": status, "completed_at": now}
+	if errMsg != "" {
+		updates["error_msg"] = errMsg
+	}
+	_ = h.db.Model(&dr).Updates(updates)
+
+	if err != nil {
+		// map known errors
+		msg := err.Error()
+		code := http.StatusInternalServerError
+		reason := "delete_failed"
+		if strings.Contains(msg, "reauth") || strings.Contains(msg, "confirm") || strings.Contains(msg, "account required") {
+			code = http.StatusForbidden
+			reason = "reauth_required"
+		}
+		if status == "failed" && code == http.StatusForbidden {
+			c.JSON(code, gin.H{"request_id": reqID, "status": status, "error": msg, "reason_code": reason})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"request_id": reqID, "status": status, "scope": scope})
+}
+
+func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
+	return h.db.Transaction(func(tx *gorm.DB) error {
 		ar := h.animalRepo.WithTx(tx)
 		if err := ar.SoftDeleteByDevice(deviceID); err != nil {
 			return err
 		}
-		// 清理已过期精确坐标（维护钩子；软删时亦已清空该设备精确字段）
 		if err := ar.ClearExpiredPreciseLocation(time.Now().UTC()); err != nil {
 			return err
 		}
@@ -298,52 +366,118 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 				return err
 			}
 		}
-		// 安全报告：删除设备侧诊断数据
 		if err := tx.Where("device_id = ?", deviceID).Delete(&models.SecurityReport{}).Error; err != nil {
 			return err
 		}
-		// 清空历史导出 payload（避免删除后仍可从旧 data_requests 恢复内容）
+		if err := tx.Where("device_id = ?", deviceID).Delete(&models.ModerationReport{}).Error; err != nil {
+			// table may be empty / ok
+			_ = err
+		}
 		if err := tx.Model(&models.DataRequest{}).
 			Where("device_id = ? AND type = ?", deviceID, "export").
 			Updates(map[string]interface{}{"payload": ""}).Error; err != nil {
 			return err
 		}
-		// 权益标记失效
 		if err := tx.Model(&models.Entitlement{}).
 			Where("device_id = ?", deviceID).
 			Update("active", false).Error; err != nil {
 			return err
 		}
-		// 订单依法保留：不硬删。device_id 保留用于财务/审计对账；用户权益已失效。
-		// 若监管要求匿名化链路，可后续将 device_id 替换为 hash 标记并保留 order_id 维度。
-
 		drRepo := h.deviceRepo.WithTx(tx)
-		// 撤销授权
 		if err := drRepo.UpdateConsent(deviceID, "", "", true); err != nil {
 			return err
 		}
-		// 吊销已有 Token（使旧 JWT 失效）；不 Disable 设备以便用户可重新授权注册。
 		if err := drRepo.BumpTokenVersion(deviceID); err != nil {
 			return err
 		}
 		return nil
 	})
-
-	now := time.Now().UTC()
-	status := "completed"
-	errMsg := ""
-	if err != nil {
-		status = "failed"
-		errMsg = err.Error()
-		slog.Error("删除失败", "err", err)
-	}
-	updates := map[string]interface{}{"status": status, "completed_at": now}
-	if errMsg != "" {
-		updates["error_msg"] = errMsg
-	}
-	_ = h.db.Model(&dr).Updates(updates)
-	c.JSON(http.StatusOK, gin.H{"request_id": reqID, "status": status})
 }
+
+func (h *PrivacyHandler) deleteAccountScope(c *gin.Context, deviceID string, req deleteDataRequest) error {
+	if h.accountRepo == nil {
+		return errPrivacy("account repo unavailable")
+	}
+	if strings.TrimSpace(req.Confirm) != "DELETE" {
+		return errPrivacy("confirm must be DELETE")
+	}
+	if strings.TrimSpace(req.ReauthPassword) == "" {
+		return errPrivacy("reauth_password required")
+	}
+	dev, err := h.deviceRepo.Find(deviceID)
+	if err != nil || dev.AccountID == "" {
+		return errPrivacy("account required")
+	}
+	accountID := dev.AccountID
+	// re-auth: verify any email binding password
+	bindings, err := h.accountRepo.ListBindings(accountID)
+	if err != nil {
+		return err
+	}
+	ok := false
+	for _, b := range bindings {
+		if b.Provider == "email" && h.accountRepo.VerifyBindingCredential(&b, req.ReauthPassword) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return errPrivacy("reauth failed")
+	}
+
+	return h.db.Transaction(func(tx *gorm.DB) error {
+		ar := h.accountRepo.WithTx(tx)
+		// list devices under account
+		devs, err := ar.ListDevices(accountID)
+		if err != nil {
+			return err
+		}
+		animalRepo := h.animalRepo.WithTx(tx)
+		for _, d := range devs {
+			if err := animalRepo.SoftDeleteByDevice(d.DeviceID); err != nil {
+				return err
+			}
+			if h.inferenceRepo != nil {
+				if err := h.inferenceRepo.WithTx(tx).SoftDeleteByDevice(d.DeviceID); err != nil {
+					return err
+				}
+			}
+			_ = tx.Where("device_id = ?", d.DeviceID).Delete(&models.SecurityReport{}).Error
+			_ = tx.Where("device_id = ?", d.DeviceID).Delete(&models.ModerationReport{}).Error
+			_ = tx.Model(&models.DataRequest{}).Where("device_id = ? AND type = ?", d.DeviceID, "export").
+				Updates(map[string]interface{}{"payload": ""}).Error
+			_ = tx.Model(&models.Entitlement{}).Where("device_id = ?", d.DeviceID).Update("active", false).Error
+			// also entitlements by account
+			_ = tx.Model(&models.Entitlement{}).Where("account_id = ?", accountID).Update("active", false).Error
+			// revoke device
+			if err := ar.RevokeDevice(accountID, d.DeviceID); err != nil {
+				// continue best-effort for already revoked
+				_ = err
+			}
+			dr := h.deviceRepo.WithTx(tx)
+			_ = dr.UpdateConsent(d.DeviceID, "", "", true)
+			_ = dr.BumpTokenVersion(d.DeviceID)
+			_ = dr.Disable(d.DeviceID)
+		}
+		if err := animalRepo.SoftDeleteByAccount(accountID); err != nil {
+			return err
+		}
+		// anonymize orders (legal retain)
+		anon := "anon:" + accountID[:8]
+		_ = tx.Model(&models.Order{}).Where("account_id = ?", accountID).
+			Updates(map[string]interface{}{"account_id": anon, "device_id": anon}).Error
+		// disable account + remove bindings
+		_ = tx.Model(&models.Account{}).Where("account_id = ?", accountID).Update("status", "deleted").Error
+		_ = tx.Where("account_id = ?", accountID).Delete(&models.AccountBinding{}).Error
+		_ = tx.Where("account_id = ?", accountID).Delete(&models.DeviceAccount{}).Error
+		return nil
+	})
+}
+
+type privacyError string
+
+func (e privacyError) Error() string { return string(e) }
+func errPrivacy(msg string) error    { return privacyError(msg) }
 
 // GetDataRequest GET /privacy/requests/:id
 func (h *PrivacyHandler) GetDataRequest(c *gin.Context) {

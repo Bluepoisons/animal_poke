@@ -104,6 +104,24 @@ func (r *AnimalRepo) SoftDeleteByDevice(deviceID string) error {
 		}).Error
 }
 
+// SoftDeleteByAccount 软删除账号归属的全部动物（AP-077）。
+func (r *AnimalRepo) SoftDeleteByAccount(accountID string) error {
+	if accountID == "" {
+		return nil
+	}
+	now := time.Now().UTC()
+	base := now.UnixNano()
+	return r.db.Model(&models.Animal{}).
+		Where("account_id = ? AND deleted_at IS NULL", accountID).
+		Updates(map[string]interface{}{
+			"deleted_at":         now,
+			"server_version":     gorm.Expr("? + id", base),
+			"precise_lat":        nil,
+			"precise_lng":        nil,
+			"precise_expires_at": nil,
+		}).Error
+}
+
 // ClearExpiredPreciseLocation 物理清理已过期的精确坐标字段。
 // 保留策略：精确经纬度仅短期保存（PreciseExpiresAt，默认同步时 24h）；
 // 到期后置空，粗精度 city/geohash 可保留至用户发起删除；删除时一并清除精确字段。
