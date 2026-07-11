@@ -58,7 +58,13 @@ export default function CaptureScreen({
 }: CaptureScreenProps) {
   const { state: staminaState, consumeStamina } = useStamina()
   const currentStamina = staminaState.currentStamina
-  const profile = SPECIES_THROW_PROFILES[species]
+  const profile = SPECIES_THROW_PROFILES[species] ?? {
+    species,
+    chargeSpeed: 1,
+    bestMin: 40,
+    bestMax: 80,
+    label: '标准',
+  }
   const lbs = useLbs()
   const weather = useWeather()
   const [enc, setEnc] = useState<EncounterState>(() => createEncounter(species, 3))

@@ -1,0 +1,48 @@
+{
+  "id": "rabbit",
+  "version": "1.0.0",
+  "content_id": "species.rabbit",
+  "status": "catalog_only",
+  "names": {
+    "common": { "zh-CN": "兔", "en": "Rabbit" },
+    "scientific": "Oryctolagus cuniculus",
+    "aliases": ["bunny", "hare", "leveret"],
+    "contains": ["兔", "rabbit", "bunny"]
+  },
+  "habitat": {
+    "zh-CN": "草地、灌丛与公园边缘",
+    "en": "Grassland, scrub, and park edges"
+  },
+  "observation_tips": {
+    "zh-CN": "黎明黄昏更易遇见；保持安静，勿追逐",
+    "en": "More active at dawn and dusk; stay quiet and do not chase"
+  },
+  "welfare": {
+    "level": "wildlife",
+    "notes": {
+      "zh-CN": "试点百科物种：未通过识别黄金集认证前不可捕获或发奖",
+      "en": "Pilot encyclopedia species: not capturable or rewardable until recognition-certified"
+    }
+  },
+  "protection": {
+    "status": "none"
+  },
+  "assets": {
+    "emoji": "🐰",
+    "icon": "species/rabbit.png",
+    "placeholder_tone": "muted"
+  },
+  "gameplay": {
+    "detect_threshold": 0.85
+  },
+  "i18n": {
+    "zh-CN": {
+      "blurb": "第四物种试点：仅百科展示",
+      "certification_note": "待黄金集认证后方可开放识别捕获"
+    },
+    "en": {
+      "blurb": "Fourth-species pilot: encyclopedia only",
+      "certification_note": "Capture unlocks only after golden-set certification"
+    }
+  }
+}

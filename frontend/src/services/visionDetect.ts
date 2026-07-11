@@ -1,4 +1,5 @@
 import type { SpeciesType } from '../types'
+import { capturableSpeciesIds, getDetectThreshold } from '../species'
 import { authedRequest } from '../auth/deviceAuth'
 
 // ===== 检测结果类型 =====
@@ -35,23 +36,21 @@ export interface VisionDetector {
 
 // ===== 物种差异化置信度阈值 =====
 
-/** 物种差异化 VLM 置信度阈值：鹅容易与鸭/天鹅混淆，阈值降为 0.75 */
-export const SPECIES_THRESHOLDS: Record<SpeciesType, number> = {
-  cat: 0.85,
-  goose: 0.75,
-  dog: 0.85,
-}
+/** 物种差异化 VLM 置信度阈值（内容包 detect_threshold） */
+export const SPECIES_THRESHOLDS: Record<string, number> = Object.fromEntries(
+  capturableSpeciesIds().map((id) => [id, getDetectThreshold(id)]),
+)
 
 /** 获取指定物种的置信度阈值 */
 export function getSpeciesThreshold(species: SpeciesType): number {
-  return SPECIES_THRESHOLDS[species]
+  return SPECIES_THRESHOLDS[species] ?? getDetectThreshold(species)
 }
 
 // ===== Mock 实现 =====
 
 const MOCK_LATENCY: [number, number] = [300, 1200]
 const MOCK_CONFIDENCE: [number, number] = [0.7, 0.98]
-const SPECIES_POOL: SpeciesType[] = ['cat', 'goose', 'dog']
+const SPECIES_POOL: SpeciesType[] = capturableSpeciesIds()
 
 function randomBoundingBox(): [number, number, number, number] {
   const x = 0.15 + Math.random() * 0.2

@@ -9,11 +9,10 @@ import (
 	"animalpoke/backend/internal/taxonomy"
 )
 
-// CapturableClasses are the classes scored for precision/recall.
-var CapturableClasses = []string{
-	taxonomy.SpeciesCat,
-	taxonomy.SpeciesDog,
-	taxonomy.SpeciesGoose,
+// CapturableClasses 返回当前内容包中可捕获物种（与 taxonomy/speciespack 对齐）。
+// 每次调用实时读取，避免与内容版本脱节。
+func CapturableClasses() []string {
+	return taxonomy.CapturableSpecies()
 }
 
 // Evaluate runs the golden set against detector and produces a metrics report.
@@ -32,7 +31,7 @@ func Evaluate(ctx context.Context, m *Manifest, detector Detector, mode string) 
 	tp := map[string]int{}
 	fp := map[string]int{}
 	fn := map[string]int{}
-	for _, c := range CapturableClasses {
+	for _, c := range CapturableClasses() {
 		tp[c], fp[c], fn[c] = 0, 0, 0
 	}
 
@@ -168,7 +167,7 @@ func Evaluate(ctx context.Context, m *Manifest, detector Detector, mode string) 
 	perClass := map[string]ClassMetrics{}
 	var precSum, recSum float64
 	nClass := 0
-	for _, c := range CapturableClasses {
+	for _, c := range CapturableClasses() {
 		cm := buildClassMetrics(tp[c], fp[c], fn[c])
 		perClass[c] = cm
 		precSum += cm.Precision
@@ -275,7 +274,7 @@ func ValidateMetricsReportStructure(m MetricsReport) error {
 	if m.PerClass == nil {
 		return fmt.Errorf("per_class required")
 	}
-	for _, c := range CapturableClasses {
+	for _, c := range CapturableClasses() {
 		cm, ok := m.PerClass[c]
 		if !ok {
 			return fmt.Errorf("per_class missing %s", c)

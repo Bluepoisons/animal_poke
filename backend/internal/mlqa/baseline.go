@@ -74,7 +74,7 @@ func DiffAgainstBaseline(current MetricsReport, baseline MetricsReport, th Thres
 	}
 
 	// Per-class floors and drops
-	for _, c := range CapturableClasses {
+	for _, c := range CapturableClasses() {
 		cur, okC := current.PerClass[c]
 		base, okB := baseline.PerClass[c]
 		if !okC {

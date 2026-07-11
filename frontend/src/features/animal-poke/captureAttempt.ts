@@ -4,6 +4,7 @@
  */
 import type { SpeciesType } from '../../types'
 import { BEST_MAX, BEST_MIN, successProbability } from '../../capture/session'
+import { capturableSpeciesIds, getChargeSpeed, getSpeciesDef } from '../../species'
 
 export type AttemptPhase = 'ready' | 'charging' | 'thrown' | 'settled_success' | 'settled_fail' | 'locked'
 
@@ -17,29 +18,22 @@ export interface SpeciesThrowProfile {
   label: string
 }
 
-export const SPECIES_THROW_PROFILES: Record<SpeciesType, SpeciesThrowProfile> = {
-  cat: {
-    species: 'cat',
-    chargeSpeed: 1.15,
-    bestMin: BEST_MIN + 5,
-    bestMax: BEST_MAX - 5,
-    label: '敏捷 · 最佳区间略窄',
-  },
-  dog: {
-    species: 'dog',
-    chargeSpeed: 1.0,
-    bestMin: BEST_MIN,
-    bestMax: BEST_MAX,
-    label: '稳健 · 标准区间',
-  },
-  goose: {
-    species: 'goose',
-    chargeSpeed: 0.9,
-    bestMin: BEST_MIN - 5,
-    bestMax: BEST_MAX + 5,
-    label: '警戒 · 区间更宽但蓄力慢',
-  },
+function buildThrowProfile(id: string): SpeciesThrowProfile {
+  const def = getSpeciesDef(id)
+  const [lo, hi] = def.optimalRange
+  return {
+    species: id,
+    chargeSpeed: getChargeSpeed(id),
+    bestMin: lo ?? BEST_MIN,
+    bestMax: hi ?? BEST_MAX,
+    label: def.captureMechanics || '标准',
+  }
 }
+
+/** 投掷手感：由内容包 optimal_range / charge_speed 投影 */
+export const SPECIES_THROW_PROFILES: Record<string, SpeciesThrowProfile> = Object.fromEntries(
+  capturableSpeciesIds().map((id) => [id, buildThrowProfile(id)]),
+)
 
 export interface CaptureAttempt {
   id: string
@@ -158,7 +152,7 @@ export function settleAttempt(
     }
     staminaSpent = true
   }
-  const profile = SPECIES_THROW_PROFILES[enc.species]
+  const profile = SPECIES_THROW_PROFILES[enc.species] ?? buildThrowProfile(enc.species)
   // 使用物种区间微调概率：落在 best 内用标准曲线
   const p = successProbability(att.power)
   const roll = (opts.rng || Math.random)()

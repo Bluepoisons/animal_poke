@@ -43,12 +43,12 @@ describe('rollSpecies', () => {
     expect(rollSpecies(0.0)).toBe('cat')
   })
 
-  it('#7 rand=0.4 → goose (中间值)', () => {
-    expect(rollSpecies(0.4)).toBe('goose')
+  it('#7 rand=0.4 → dog (中间值；池顺序 cat/dog/goose)', () => {
+    expect(rollSpecies(0.4)).toBe('dog')
   })
 
-  it('#8 rand=0.8 → dog', () => {
-    expect(rollSpecies(0.8)).toBe('dog')
+  it('#8 rand=0.8 → goose', () => {
+    expect(rollSpecies(0.8)).toBe('goose')
   })
 })
 

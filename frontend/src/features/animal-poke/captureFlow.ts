@@ -5,6 +5,7 @@
 import type { SpeciesType } from '../../types'
 import type { DetectionResult } from '../../services/visionDetect'
 import { getSpeciesThreshold } from '../../services/visionDetect'
+import { capturableSpeciesIds, isCapturableSpecies } from '../../species'
 
 export type CaptureFlowPhase =
   | 'idle'
@@ -56,7 +57,7 @@ export type CaptureFlowEvent =
   | { type: 'FAIL'; code: string; message?: string }
   | { type: 'RESET' }
 
-export const SUPPORTED_SPECIES: readonly SpeciesType[] = ['cat', 'dog', 'goose']
+export const SUPPORTED_SPECIES: readonly SpeciesType[] = capturableSpeciesIds()
 
 export function createInitialCaptureFlow(): CaptureFlowState {
   return {
@@ -74,7 +75,7 @@ export function createInitialCaptureFlow(): CaptureFlowState {
 }
 
 export function isSupportedSpecies(species: string): species is SpeciesType {
-  return (SUPPORTED_SPECIES as readonly string[]).includes(species)
+  return isCapturableSpecies(species)
 }
 
 /** 过滤：受支持物种 + 达到阈值 */

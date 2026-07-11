@@ -1,5 +1,5 @@
-import type { RarityTier, SpeciesType, CardEntry, getCardSpecies } from '../types'
-import { SPECIES_DEFS } from '../types'
+import type { RarityTier, SpeciesType, CardEntry } from '../types'
+import { resolveSpeciesDef } from '../types'
 import type { ElementType, StrategyType, WeatherType, BattleStats, BattlePet, BattleLogEntry, BattleResult, BattleRewards } from './types'
 import {
   RARITY_BASE_STATS,
@@ -48,7 +48,7 @@ export function pickElement(seed: number): ElementType {
 /** 计算六维属性（稀有度基础 × 物种修正 × 个体浮动） */
 export function computeBattleStats(rarity: RarityTier, species: SpeciesType, seed: number): BattleStats {
   const base = RARITY_BASE_STATS[rarity]
-  const mod = SPECIES_STAT_MODIFIERS[species]
+  const mod = SPECIES_STAT_MODIFIERS[species] ?? { hp: 1, atk: 1, def: 1, spd: 1, crit: 0, eva: 0 }
 
   return {
     hp:   Math.round(base.hp   * mod.hp   * seedVariance(seed, 1)),
@@ -290,7 +290,7 @@ export function scaleStats(stats: BattleStats, multiplier: number): BattleStats 
 /** 生成对手名称 */
 export function generateEnemyName(species: SpeciesType): string {
   const prefix = ENEMY_NAME_PREFIXES[Math.floor(Math.random() * ENEMY_NAME_PREFIXES.length)]
-  const speciesName = SPECIES_DEFS[species].name
+  const speciesName = resolveSpeciesDef(species).name
   return `${prefix}·${speciesName}`
 }
 
@@ -324,7 +324,7 @@ export function generateEnemy(playerLevel: number): BattlePet {
   return {
     id: 'enemy_' + Date.now(),
     name: generateEnemyName(species),
-    emoji: SPECIES_DEFS[species].emoji,
+    emoji: resolveSpeciesDef(species).emoji,
     species,
     rarity,
     element,
@@ -372,8 +372,8 @@ export function cardEntryToBattlePet(entry: CardEntry, weather: WeatherType): Ba
 
   return {
     id: entry.id,
-    name: SPECIES_DEFS[species].name,
-    emoji: SPECIES_DEFS[species].emoji,
+    name: resolveSpeciesDef(species).name,
+    emoji: resolveSpeciesDef(species).emoji,
     species,
     rarity: entry.rarity,
     element,
