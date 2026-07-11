@@ -34,21 +34,19 @@ func NewNarrativeRepo(db *gorm.DB) *NarrativeRepo { return &NarrativeRepo{db: db
 // SeedContent 幂等写入 authored 内容。
 func (r *NarrativeRepo) SeedContent() error {
 	for _, n := range narrativecatalog.SeedNodes() {
-		var existing models.NarrativeNode
-		err := r.db.Where("node_id = ?", n.NodeID).First(&existing).Error
-		if err == nil {
-			continue
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
+		now := time.Now().UTC()
 		row := models.NarrativeNode{
 			NodeID: n.NodeID, ChapterID: n.ChapterID, Title: n.Title, Body: n.Body,
 			Kind: n.Kind, ContentVersion: narrativecatalog.ContentVersion, Priority: n.Priority,
 			Active: true, SafeFallback: n.SafeFallback, TagsJSON: narrativecatalog.MustJSON(n.Tags),
-			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			CreatedAt: now, UpdatedAt: now,
 		}
-		if err := r.db.Create(&row).Error; err != nil {
+		if err := r.db.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "node_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"chapter_id", "title", "body", "kind", "content_version", "priority", "safe_fallback", "tags_json", "updated_at",
+			}),
+		}).Create(&row).Error; err != nil {
 			return err
 		}
 	}
