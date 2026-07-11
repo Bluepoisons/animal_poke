@@ -41,6 +41,8 @@ tags:
     description: Wallet balances, immutable reward ledger and inventory
   - name: Quest
     description: Data-driven quests, trusted progress events and idempotent reward claims
+  - name: Photo
+    description: Photography quality skill — calibration, scoring, personal best, daily themes (AP-098)
   - name: Admin
     description: Admin audit APIs
   - name: Observability
@@ -908,6 +910,211 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+
+
+  /api/v1/photo/calibration:
+    get:
+      tags: [Photo]
+      summary: Get device photography calibration
+      description: |
+        Returns per-owner sensor baseline used to normalize stability/lighting scores.
+        Uncalibrated devices receive neutral defaults.
+      operationId: photoGetCalibration
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current calibration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoCalibrationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/photo/calibrate:
+    post:
+      tags: [Photo]
+      summary: Submit device calibration samples
+      description: |
+        Idle-hold stability RMS samples and optional lighting offsets.
+        Server blends into owner baseline (EMA). Bad samples are filtered.
+      operationId: photoCalibrate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stability_samples]
+              properties:
+                stability_samples:
+                  type: array
+                  items: { type: number }
+                  maxItems: 200
+                lighting_offsets:
+                  type: array
+                  items: { type: number }
+                device_model: { type: string }
+      responses:
+        "200":
+          description: Updated calibration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoCalibrationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/photo/score:
+    post:
+      tags: [Photo]
+      summary: Score observation quality (server-authoritative)
+      description: |
+        Deterministic six-dimension skill score: stability, subject completeness,
+        lighting, occlusion, composition, safe distance.
+        Results are HMAC-signed. Closer/chase never improves rarity contribution.
+        Daily cap and metrics-digest dedupe prevent farming.
+      operationId: photoScore
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [metrics]
+              properties:
+                metrics:
+                  $ref: "#/components/schemas/PhotoMetrics"
+                theme_id: { type: string }
+                a11y_completed: { type: boolean }
+                persist: { type: boolean, description: "false = dry-run without consuming daily cap" }
+      responses:
+        "200":
+          description: Score result with signature and optional personal best
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoScoreResponse"
+        "400":
+          description: Bad sensor input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Duplicate metrics fingerprint today
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Daily score cap reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/photo/personal-best:
+    get:
+      tags: [Photo]
+      summary: Get photography personal best scores
+      operationId: photoPersonalBest
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Personal best dimensions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  personal_best:
+                    $ref: "#/components/schemas/PhotoPersonalBest"
+                  config_version: { type: string }
+                  request_id: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/photo/theme/daily:
+    get:
+      tags: [Photo]
+      summary: Get daily photography theme with accessibility alternative
+      description: |
+        Every daily challenge includes a non-visual / reduced-motion alternative goal.
+      operationId: photoDailyTheme
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Theme and progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  theme:
+                    $ref: "#/components/schemas/PhotoDailyTheme"
+                  progress:
+                    $ref: "#/components/schemas/PhotoThemeProgress"
+                  config_version: { type: string }
+                  request_id: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/photo/theme/progress:
+    post:
+      tags: [Photo]
+      summary: Mark accessibility alternative complete for today's theme
+      operationId: photoThemeProgress
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme_id: { type: string }
+                a11y_completed: { type: boolean }
+      responses:
+        "200":
+          description: Updated theme progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  theme:
+                    $ref: "#/components/schemas/PhotoDailyTheme"
+                  progress:
+                    $ref: "#/components/schemas/PhotoThemeProgress"
+                  config_version: { type: string }
+                  request_id: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
   /api/v1/sync/animal:
     post:
@@ -3399,6 +3606,16 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
 
+    NotImplemented:
+      description: Feature not implemented or disabled (HTTP 501)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/FeatureUnavailableError"
+
   schemas:
     GameConfig:
       type: object
@@ -4704,3 +4921,124 @@ components:
             snapshot_json: { type: string }
             created_at: { type: string, format: date-time }
         request_id: { type: string }
+
+    PhotoMetrics:
+      type: object
+      description: Client-reported observation metrics (no raw photo bytes). Server re-scores deterministically.
+      properties:
+        stability_rms: { type: number, minimum: 0, maximum: 5 }
+        subject_fill_ratio: { type: number, minimum: 0, maximum: 1 }
+        subject_center_offset: { type: number, minimum: 0, maximum: 1.5 }
+        lighting_score: { type: number, minimum: 0, maximum: 1 }
+        occlusion_ratio: { type: number, minimum: 0, maximum: 1 }
+        subject_completeness: { type: number, minimum: 0, maximum: 1 }
+        estimated_distance_m: { type: number, minimum: 0, maximum: 5000 }
+        sensor_samples: { type: integer, minimum: 0, maximum: 10000 }
+        device_model: { type: string }
+    PhotoDimensionScores:
+      type: object
+      properties:
+        stability: { type: number }
+        subject_completeness: { type: number }
+        lighting: { type: number }
+        occlusion: { type: number, description: Higher means clearer (less occlusion) }
+        composition: { type: number }
+        safe_distance: { type: number, description: Peaks at respectful mid-range; closer never better }
+    PhotoScoreResult:
+      type: object
+      properties:
+        overall: { type: number }
+        band: { type: string, enum: [excellent, good, fair, poor] }
+        dimensions:
+          $ref: "#/components/schemas/PhotoDimensionScores"
+        tips:
+          type: array
+          items: { type: string }
+        welfare_flags:
+          type: array
+          items: { type: string }
+        research_bonus: { type: number }
+        chase_penalty: { type: boolean }
+        config_version: { type: string }
+        metrics_digest: { type: string }
+        signature: { type: string, description: HMAC-SHA256 of score payload }
+        rarity_eligible: { type: boolean }
+    PhotoCalibration:
+      type: object
+      properties:
+        baseline_stability_rms: { type: number }
+        lighting_offset: { type: number }
+        sample_count: { type: integer }
+        calibrated: { type: boolean }
+        config_version: { type: string }
+    PhotoCalibrationResponse:
+      type: object
+      properties:
+        calibration:
+          $ref: "#/components/schemas/PhotoCalibration"
+        device_model: { type: string }
+        updated_at: { type: string, format: date-time }
+        config_version: { type: string }
+        request_id: { type: string }
+    PhotoScoreResponse:
+      type: object
+      properties:
+        score:
+          $ref: "#/components/schemas/PhotoScoreResult"
+        rarity_quality_factor:
+          type: number
+          description: Factor for rarity mapping; chase/too-close is capped and never boosted
+        theme:
+          $ref: "#/components/schemas/PhotoDailyTheme"
+        theme_met: { type: boolean }
+        persisted: { type: boolean }
+        score_id: { type: string }
+        personal_best:
+          $ref: "#/components/schemas/PhotoPersonalBest"
+        config_version: { type: string }
+        request_id: { type: string }
+    PhotoPersonalBest:
+      type: object
+      properties:
+        owner_key: { type: string }
+        overall: { type: number }
+        stability: { type: number }
+        subject_completeness: { type: number }
+        lighting: { type: number }
+        occlusion: { type: number }
+        composition: { type: number }
+        safe_distance: { type: number }
+        best_score_id: { type: string }
+        updated_at: { type: string, format: date-time }
+    PhotoA11yGoal:
+      type: object
+      description: Accessibility alternative for the daily photography challenge
+      properties:
+        goal_id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        mode:
+          type: string
+          enum: [timer_hold, high_contrast_frame, voice_guided, static_upload]
+    PhotoDailyTheme:
+      type: object
+      properties:
+        date: { type: string, description: YYYY-MM-DD UTC }
+        theme_id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        target_dimension: { type: string }
+        target_score: { type: number }
+        accessibility_alternative:
+          $ref: "#/components/schemas/PhotoA11yGoal"
+        config_version: { type: string }
+    PhotoThemeProgress:
+      type: object
+      properties:
+        owner_key: { type: string }
+        day_key: { type: string }
+        theme_id: { type: string }
+        completed: { type: boolean }
+        a11y_completed: { type: boolean }
+        best_dim_score: { type: number }
+        completed_at: { type: string, format: date-time }

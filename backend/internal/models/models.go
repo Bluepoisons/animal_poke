@@ -788,6 +788,77 @@ type QuestProgress struct {
 }
 
 // TableName 明确表名。
+
+// TableName 明确表名。
+func (PhotoDeviceCalibration) TableName() string { return "photo_device_calibrations" }
+
+// PhotoScoreRecord persists a scored observation attempt (anti-farm + personal best).
+type PhotoScoreRecord struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ScoreID        string    `gorm:"uniqueIndex;size:36;not null" json:"score_id"`
+	OwnerKey       string    `gorm:"index:idx_photo_score_owner_day,priority:1;size:68;not null" json:"owner_key"`
+	DeviceID       string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID      string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	DayKey         string    `gorm:"index:idx_photo_score_owner_day,priority:2;size:10;not null" json:"day_key"` // YYYY-MM-DD UTC
+	Overall        float64   `gorm:"not null" json:"overall"`
+	Band           string    `gorm:"size:16;not null" json:"band"`
+	Stability      float64   `gorm:"not null" json:"stability"`
+	Completeness   float64   `gorm:"not null" json:"subject_completeness"`
+	Lighting       float64   `gorm:"not null" json:"lighting"`
+	Occlusion      float64   `gorm:"not null" json:"occlusion"`
+	Composition    float64   `gorm:"not null" json:"composition"`
+	SafeDistance   float64   `gorm:"not null" json:"safe_distance"`
+	ChasePenalty   bool      `gorm:"not null;default:false" json:"chase_penalty"`
+	RarityEligible bool      `gorm:"not null;default:true" json:"rarity_eligible"`
+	MetricsDigest  string    `gorm:"index;size:32;not null" json:"metrics_digest"`
+	Signature      string    `gorm:"size:128;not null" json:"signature"`
+	ConfigVersion  string    `gorm:"size:32;not null" json:"config_version"`
+	ThemeID        string    `gorm:"size:32" json:"theme_id,omitempty"`
+	A11yCompleted  bool      `gorm:"not null;default:false" json:"a11y_completed"`
+	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+}
+
+// TableName 明确表名。
+func (PhotoScoreRecord) TableName() string { return "photo_score_records" }
+
+// PhotoPersonalBest tracks best overall and per-dimension scores.
+type PhotoPersonalBest struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	OwnerKey     string    `gorm:"uniqueIndex;size:68;not null" json:"owner_key"`
+	DeviceID     string    `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID    string    `gorm:"index;size:36" json:"account_id,omitempty"`
+	Overall      float64   `gorm:"not null;default:0" json:"overall"`
+	Stability    float64   `gorm:"not null;default:0" json:"stability"`
+	Completeness float64   `gorm:"not null;default:0" json:"subject_completeness"`
+	Lighting     float64   `gorm:"not null;default:0" json:"lighting"`
+	Occlusion    float64   `gorm:"not null;default:0" json:"occlusion"`
+	Composition  float64   `gorm:"not null;default:0" json:"composition"`
+	SafeDistance float64   `gorm:"not null;default:0" json:"safe_distance"`
+	BestScoreID  string    `gorm:"size:36" json:"best_score_id,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// TableName 明确表名。
+func (PhotoPersonalBest) TableName() string { return "photo_personal_bests" }
+
+// PhotoThemeProgress daily photography theme / a11y alternative progress.
+type PhotoThemeProgress struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	OwnerKey      string     `gorm:"uniqueIndex:idx_photo_theme,priority:1;size:68;not null" json:"owner_key"`
+	DayKey        string     `gorm:"uniqueIndex:idx_photo_theme,priority:2;size:10;not null" json:"day_key"`
+	ThemeID       string     `gorm:"size:32;not null" json:"theme_id"`
+	DeviceID      string     `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID     string     `gorm:"index;size:36" json:"account_id,omitempty"`
+	Completed     bool       `gorm:"not null;default:false" json:"completed"`
+	A11yCompleted bool       `gorm:"not null;default:false" json:"a11y_completed"`
+	BestDimScore  float64    `gorm:"not null;default:0" json:"best_dim_score"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// TableName 明确表名。
 func (QuestProgress) TableName() string { return "quest_progress" }
 
 // QuestClaim 领取记录；operation_id 与钱包流水一致，保证奖励恰好一次。
@@ -941,4 +1012,5 @@ type GrowthResetAudit struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func (GrowthResetAudit) TableName() string { return "growth_reset_audits" }
+func (GrowthResetAudit) TableName() string   { return "growth_reset_audits" }
+func (PhotoThemeProgress) TableName() string { return "photo_theme_progress" }
