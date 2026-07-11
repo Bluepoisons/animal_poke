@@ -43,28 +43,16 @@ func (h *ProductHandler) GameConfigPut(c *gin.Context) {
 		return
 	}
 	if !h.opsAuthorized(c) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":       "ops access denied",
-			"reason_code": "ops_forbidden",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusForbidden, "ops_forbidden", "ops access denied", false, nil)
 		return
 	}
 	var body services.GameConfig
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "invalid body",
-			"reason_code": "invalid_request",
-			"request_id":  middleware.GetRequestID(c),
-		})
+	if err := middleware.BindStrictJSON(c, &body); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if err := getGameConfigStore().Put(body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       err.Error(),
-			"reason_code": "config_invalid",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusBadRequest, "config_invalid", err.Error(), false, nil)
 		return
 	}
 	cfg := getGameConfigStore().Get()
@@ -83,20 +71,12 @@ func (h *ProductHandler) GameConfigRollback(c *gin.Context) {
 		return
 	}
 	if !h.opsAuthorized(c) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":       "ops access denied",
-			"reason_code": "ops_forbidden",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusForbidden, "ops_forbidden", "ops access denied", false, nil)
 		return
 	}
 	cfg, err := getGameConfigStore().Rollback()
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":       err.Error(),
-			"reason_code": "no_previous_config",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusConflict, "no_previous_config", err.Error(), false, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

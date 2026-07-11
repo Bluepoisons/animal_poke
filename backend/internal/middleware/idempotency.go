@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -65,7 +64,7 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 			return
 		}
 		if len(key) > 128 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key too long", "reason_code": "idempotency_key_invalid"})
+			AbortBadRequest(c, "idempotency_key_invalid", "Idempotency-Key too long", nil)
 			return
 		}
 		deviceID := GetDeviceID(c)
@@ -83,17 +82,14 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 
 		rec, created, err := store.BeginOrGet(deviceID, route, key, reqHash, DefaultIdempotencyTTL)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "idempotency store failed"})
+			AbortInternal(c, "idempotency_store_failed", "idempotency store failed")
 			return
 		}
 
 		if !created {
 			// 已有记录
 			if rec.RequestHash != reqHash {
-				c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-					"error":       "idempotency key reuse with different request",
-					"reason_code": "idempotency_conflict",
-				})
+				AbortConflict(c, "idempotency_conflict", "idempotency key reuse with different request", nil)
 				return
 			}
 			switch rec.Status {
@@ -109,7 +105,7 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 				// fallthrough to re-create
 				rec, created, err = store.BeginOrGet(deviceID, route, key, reqHash, DefaultIdempotencyTTL)
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "idempotency store failed"})
+					AbortInternal(c, "idempotency_store_failed", "idempotency store failed")
 					return
 				}
 				if !created && rec.Status == "completed" {
@@ -121,10 +117,7 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 				if !created && rec.Status == "processing" {
 					// still processing by another
 					if time.Since(rec.UpdatedAt) < ProcessingTimeout {
-						c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-							"error":       "request in progress",
-							"reason_code": "idempotency_in_progress",
-						})
+						AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
 						return
 					}
 					_ = store.Delete(deviceID, route, key)
@@ -132,10 +125,7 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 				}
 			case "processing":
 				if time.Since(rec.UpdatedAt) < ProcessingTimeout {
-					c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-						"error":       "request in progress",
-						"reason_code": "idempotency_in_progress",
-					})
+					AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
 					return
 				}
 				// 超时：允许接管

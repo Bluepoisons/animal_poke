@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -33,6 +34,8 @@ var (
 	ErrTrailingJSON = errors.New("trailing data after JSON value")
 	// ErrEmptyBody 请求体为空。
 	ErrEmptyBody = errors.New("empty request body")
+	// ErrDuplicateJSONKey 对象内出现重复 key。
+	ErrDuplicateJSONKey = errors.New("duplicate JSON object key")
 )
 
 // BodyLimit 将 c.Request.Body 包装为 MaxBytesReader。
@@ -61,6 +64,7 @@ func GlobalBodyLimit(maxBytes int64) gin.HandlerFunc {
 // BindStrictJSON 严格 JSON 绑定：
 // - DisallowUnknownFields
 // - 拒绝 trailing junk（EOF 后不得再有 token）
+// - 拒绝对象内重复 key
 // - 依赖上游 MaxBytesReader 做 body 上限
 // - 若目标带 binding tag，走 gin validator
 func BindStrictJSON(c *gin.Context, dst any) error {
@@ -76,6 +80,11 @@ func BindStrictJSON(c *gin.Context, dst any) error {
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return ErrEmptyBody
+	}
+
+	// 先扫描重复 key（encoding/json 默认 last-wins，不报错）。
+	if err := detectDuplicateJSONKeys(raw); err != nil {
+		return err
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -113,6 +122,15 @@ func WriteBindError(c *gin.Context, err error) {
 	}
 	if errors.Is(err, ErrEmptyBody) {
 		AbortBadRequest(c, "empty_body", "request body is required", nil)
+		return
+	}
+	if errors.Is(err, ErrDuplicateJSONKey) {
+		field := extractDuplicateField(err)
+		details := map[string]any{}
+		if field != "" {
+			details["field"] = field
+		}
+		AbortBadRequest(c, "duplicate_field", "duplicate field in JSON body", details)
 		return
 	}
 	if isUnknownFieldError(err) {
@@ -174,4 +192,65 @@ func isJSONSyntaxError(err error) bool {
 	var se *json.SyntaxError
 	var te *json.UnmarshalTypeError
 	return errors.As(err, &se) || errors.As(err, &te)
+}
+
+// detectDuplicateJSONKeys 用 Token 扫描检测对象内重复 key（含嵌套）。
+func detectDuplicateJSONKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	return walkJSONDupKeys(dec)
+}
+
+func walkJSONDupKeys(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		// 语法问题交由正式 Decode 分类
+		return nil
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := make(map[string]struct{})
+		for dec.More() {
+			keyTok, err := dec.Token()
+			if err != nil {
+				return nil
+			}
+			key, ok := keyTok.(string)
+			if !ok {
+				return nil
+			}
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("%w: %s", ErrDuplicateJSONKey, key)
+			}
+			seen[key] = struct{}{}
+			if err := walkJSONDupKeys(dec); err != nil {
+				return err
+			}
+		}
+		// 消费 '}'
+		_, _ = dec.Token()
+	case '[':
+		for dec.More() {
+			if err := walkJSONDupKeys(dec); err != nil {
+				return err
+			}
+		}
+		_, _ = dec.Token()
+	}
+	return nil
+}
+
+func extractDuplicateField(err error) string {
+	if err == nil {
+		return ""
+	}
+	const p = "duplicate JSON object key: "
+	s := err.Error()
+	if strings.HasPrefix(s, p) {
+		return s[len(p):]
+	}
+	return ""
 }

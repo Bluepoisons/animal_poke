@@ -521,12 +521,16 @@ func writeSyncOutcome(c *gin.Context, out syncOutcome) {
 			"error":       out.Error,
 			"uuid":        out.UUID,
 			"reason_code": out.ReasonCode,
+			"request_id":  middleware.GetRequestID(c),
+			"retryable":   false,
 		}
 		c.JSON(out.HTTPStatus, body)
 	default:
 		body := gin.H{
 			"error":       out.Error,
 			"reason_code": out.ReasonCode,
+			"request_id":  middleware.GetRequestID(c),
+			"retryable":   out.HTTPStatus >= 500,
 		}
 		if out.UUID != "" {
 			body["uuid"] = out.UUID
@@ -546,7 +550,7 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	var since int64
 	if v := c.Query("since_version"); v != "" {
 		if _, err := parseInt64(v, &since); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid since_version", "reason_code": "invalid_request"})
+			middleware.WriteError(c, http.StatusBadRequest, "invalid_request", "invalid since_version", false, nil)
 			return
 		}
 	}
@@ -562,7 +566,7 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 	}
 	items, err := h.animalRepo.ListSinceVersionScoped(deviceID, accountID, since, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "pull failed", "reason_code": "sync_failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "sync_failed", "pull failed", true, nil)
 		return
 	}
 	// 二次脱敏：活跃行精确坐标；软删已在 repo 裁剪为 tombstone。

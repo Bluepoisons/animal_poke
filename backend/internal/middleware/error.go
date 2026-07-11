@@ -73,6 +73,28 @@ func AbortBadRequest(c *gin.Context, reason, message string, details map[string]
 	AbortJSON(c, http.StatusBadRequest, reason, message, false, details)
 }
 
+// AbortNotFound 404。
+func AbortNotFound(c *gin.Context, reason, message string) {
+	if reason == "" {
+		reason = "not_found"
+	}
+	if message == "" {
+		message = "not found"
+	}
+	AbortJSON(c, http.StatusNotFound, reason, message, false, nil)
+}
+
+// AbortConflict 409。
+func AbortConflict(c *gin.Context, reason, message string, details map[string]any) {
+	if reason == "" {
+		reason = "conflict"
+	}
+	if message == "" {
+		message = "conflict"
+	}
+	AbortJSON(c, http.StatusConflict, reason, message, false, details)
+}
+
 // AbortTooLarge 413。
 func AbortTooLarge(c *gin.Context, reason, message string) {
 	if reason == "" {

@@ -40,6 +40,7 @@ func featureUnavailable(c *gin.Context, feature string) {
 		"reason_code": "feature_unavailable",
 		"feature":     feature,
 		"request_id":  middleware.GetRequestID(c),
+		"retryable":   false,
 	})
 }
 
@@ -75,6 +76,7 @@ func (h *ProductHandler) PvPMatch(c *gin.Context) {
 		"reason_code": "feature_unavailable",
 		"feature":     "pvp",
 		"request_id":  middleware.GetRequestID(c),
+		"retryable":   true,
 	})
 }
 
@@ -89,6 +91,7 @@ func (h *ProductHandler) PvPReport(c *gin.Context) {
 		"reason_code": "feature_unavailable",
 		"feature":     "pvp",
 		"request_id":  middleware.GetRequestID(c),
+		"retryable":   true,
 	})
 }
 
@@ -117,6 +120,7 @@ func (h *ProductHandler) ShareCreate(c *gin.Context) {
 		"reason_code": "feature_unavailable",
 		"feature":     "social",
 		"request_id":  middleware.GetRequestID(c),
+		"retryable":   true,
 	})
 }
 
@@ -128,11 +132,7 @@ func (h *ProductHandler) OpsMetrics(c *gin.Context) {
 		return
 	}
 	if !h.opsAuthorized(c) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":       "ops access denied",
-			"reason_code": "ops_forbidden",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusForbidden, "ops_forbidden", "ops access denied", false, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

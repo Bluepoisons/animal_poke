@@ -122,7 +122,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 	if h.requireConsent && h.deviceRepo != nil {
 		ok, err := h.deviceRepo.HasValidConsent(deviceID, h.consentVer)
 		if err != nil || !ok {
-			c.JSON(http.StatusForbidden, gin.H{"error": "consent required", "reason_code": "consent_missing"})
+			middleware.WriteError(c, http.StatusForbidden, "consent_missing", "consent required", false, nil)
 			return
 		}
 	}
@@ -135,10 +135,10 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "image too large", "code": 413})
+			middleware.WriteError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "image too large", false, nil)
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "image file is required"})
+		middleware.WriteError(c, http.StatusBadRequest, "image_required", "image file is required", false, nil)
 		return
 	}
 	defer file.Close()
@@ -146,11 +146,11 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 	limited := io.LimitReader(file, h.maxBytes+1)
 	imageData, err := io.ReadAll(limited)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read image"})
+		middleware.WriteError(c, http.StatusBadRequest, "image_read_failed", "failed to read image", false, nil)
 		return
 	}
 	if int64(len(imageData)) > h.maxBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "image too large", "code": 413})
+		middleware.WriteError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "image too large", false, nil)
 		return
 	}
 
@@ -158,7 +158,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 	if kind == "analyze" {
 		crop, err = parseOptionalCrop(c)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": 400})
+			middleware.WriteError(c, http.StatusBadRequest, "invalid_crop", err.Error(), false, nil)
 			return
 		}
 	}
@@ -167,11 +167,13 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 	minimized, width, height, err := minimizeForProvider(imageData, h.maxPixels, crop)
 	if err != nil {
 		status := http.StatusBadRequest
+		reason := "invalid_image"
 		msg := err.Error()
 		if strings.Contains(msg, "unsupported") {
 			status = http.StatusUnsupportedMediaType
+			reason = "unsupported_media_type"
 		}
-		c.JSON(status, gin.H{"error": msg, "code": status})
+		middleware.WriteError(c, status, reason, msg, false, nil)
 		return
 	}
 	// Drop raw upload ASAP; only minimized JPEG proceeds to provider.
@@ -224,7 +226,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r, err := h.aiService.DetectContext(c.Request.Context(), minimized, providerName)
 		if err != nil {
 			slog.Error("AI 检测失败", "device_id", deviceID, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "detection failed", "reason_code": "detect_failed"})
+			WriteProviderError(c, err, "detection failed")
 			return
 		}
 		model, pver = r.Model, r.PromptVersion
@@ -271,32 +273,32 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		claimedSpecies := strings.TrimSpace(c.PostForm("species"))
 		box, boxOK, boxErr := parseOptionalBox(c)
 		if boxErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": boxErr.Error(), "reason_code": "invalid_box"})
+			middleware.WriteError(c, http.StatusBadRequest, "invalid_box", boxErr.Error(), false, nil)
 			return
 		}
 
 		var locked *services.DetectBox
 		if h.inferenceRepo != nil {
 			if detectInfID == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "detect_inference_id required", "reason_code": "detect_inference_required"})
+				middleware.WriteError(c, http.StatusBadRequest, "detect_inference_required", "detect_inference_id required", false, nil)
 				return
 			}
 			if targetID == "" && !boxOK {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "target_id or box required", "reason_code": "target_required"})
+				middleware.WriteError(c, http.StatusBadRequest, "target_required", "target_id or box required", false, nil)
 				return
 			}
 			parent, err := h.inferenceRepo.FindForDevice(detectInfID, deviceID)
 			if err != nil || parent.Kind != "detect" || (parent.Status != "success" && parent.Status != "consumed") {
-				c.JSON(http.StatusConflict, gin.H{"error": "invalid detect inference", "reason_code": "detect_inference_invalid"})
+				middleware.WriteError(c, http.StatusConflict, "detect_inference_invalid", "invalid detect inference", false, nil)
 				return
 			}
 			if parent.ExpiresAt != nil && !parent.ExpiresAt.IsZero() && time.Now().UTC().After(*parent.ExpiresAt) {
-				c.JSON(http.StatusConflict, gin.H{"error": "detect inference expired", "reason_code": "detect_inference_expired"})
+				middleware.WriteError(c, http.StatusConflict, "detect_inference_expired", "detect inference expired", false, nil)
 				return
 			}
 			targets, err := parseDetectTargets(parent.ResultJSON)
 			if err != nil || len(targets) == 0 {
-				c.JSON(http.StatusConflict, gin.H{"error": "detect has no targets", "reason_code": "detect_targets_missing"})
+				middleware.WriteError(c, http.StatusConflict, "detect_targets_missing", "detect has no targets", false, nil)
 				return
 			}
 			var boxPtr *services.BoundingBox
@@ -305,17 +307,15 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			}
 			locked, err = services.FindTarget(targets, targetID, boxPtr)
 			if err != nil {
-				c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "reason_code": "target_mismatch"})
+				middleware.WriteError(c, http.StatusConflict, "target_mismatch", err.Error(), false, nil)
 				return
 			}
 			if claimedSpecies != "" {
 				norm, _ := taxonomy.Normalize(claimedSpecies)
 				if norm != locked.Species {
-					c.JSON(http.StatusConflict, gin.H{
-						"error":       "species does not match selected target",
-						"reason_code": "target_mismatch",
-						"expected":    locked.Species,
-						"got":         norm,
+					middleware.WriteError(c, http.StatusConflict, "target_mismatch", "species does not match selected target", false, map[string]any{
+						"expected": locked.Species,
+						"got":      norm,
 					})
 					return
 				}
@@ -324,7 +324,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			// 无 inference 仓储时仅规范化声明物种（测试/降级）
 			norm, _ := taxonomy.Normalize(claimedSpecies)
 			if !taxonomy.Capturable(norm) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "species not capturable", "reason_code": "species_unsupported"})
+				middleware.WriteError(c, http.StatusBadRequest, "species_unsupported", "species not capturable", false, nil)
 				return
 			}
 			locked = &services.DetectBox{Species: norm, TargetID: targetID}
@@ -344,10 +344,12 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			msg := err.Error()
 			if strings.Contains(msg, "out of range") || strings.Contains(msg, "missing") ||
 				strings.Contains(msg, "json") || strings.Contains(msg, "markdown") || strings.Contains(msg, "multiple") {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid analysis output", "reason_code": "analysis_invalid", "detail": msg})
+				middleware.WriteError(c, http.StatusUnprocessableEntity, "analysis_invalid", "invalid analysis output", false, map[string]any{
+					"detail": msg,
+				})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "analysis failed", "reason_code": "analyze_failed"})
+			WriteProviderError(c, err, "analysis failed")
 			return
 		}
 		if locked != nil {

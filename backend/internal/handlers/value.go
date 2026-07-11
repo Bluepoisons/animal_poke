@@ -83,7 +83,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		SeedID:              seedID,
 	}
 	if err := input.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_value_input", err.Error(), false, nil)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *ValueHandler) Generate(c *gin.Context) {
 		if parent != "" {
 			p, err := h.inferenceRepo.FindForDevice(parent, deviceID)
 			if err != nil || (p.Kind != "analyze" && p.Kind != "detect") || (p.Status != "success" && p.Status != "consumed") {
-				c.JSON(http.StatusConflict, gin.H{"error": "invalid parent inference", "reason_code": "lineage_invalid"})
+				middleware.WriteError(c, http.StatusConflict, "lineage_invalid", "invalid parent inference", false, nil)
 				return
 			}
 		}

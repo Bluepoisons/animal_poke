@@ -11,7 +11,6 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"time"
 
@@ -185,12 +184,7 @@ func RateLimitByAccount(rl *RateLimiter) gin.HandlerFunc {
 		}
 		if !rl.allow(RateKeyAccount(id)) {
 			ObserveRateLimit()
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-				"reason_code": "rate_limit_account",
-			})
+			AbortTooMany(c, "rate_limit_account", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()
@@ -207,12 +201,7 @@ func RateLimitByDigest(rl *RateLimiter) gin.HandlerFunc {
 		}
 		if !rl.allow(RateKeyDigest(digest)) {
 			ObserveRateLimit()
-			c.Header("Retry-After", "1")
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": 1,
-				"reason_code": "rate_limit_digest",
-			})
+			AbortTooMany(c, "rate_limit_digest", "rate limit exceeded", 1, nil)
 			return
 		}
 		c.Next()
@@ -229,12 +218,7 @@ func RateLimitMulti(rl *RateLimiter, keyFn func(*gin.Context) []string) gin.Hand
 			}
 			if !rl.allow(key) {
 				ObserveRateLimit()
-				c.Header("Retry-After", "1")
-				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-					"error":       "rate limit exceeded",
-					"retry_after": 1,
-					"reason_code": "rate_limit_multi",
-				})
+				AbortTooMany(c, "rate_limit_multi", "rate limit exceeded", 1, nil)
 				return
 			}
 		}
