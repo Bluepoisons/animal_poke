@@ -315,16 +315,32 @@ function main() {
     if (!liveIds.has(id)) die(`matrix has stale operationId ${id}`);
   }
 
-  // Contract test must mention every operationId
+  // Contract test must load inventory-driven matrix (AP-091 dynamic coverage).
   if (!fs.existsSync(CONTRACT_TEST)) {
     die(`missing ${path.relative(ROOT, CONTRACT_TEST)}`);
   }
   const contractSrc = read(CONTRACT_TEST);
+  if (!contractSrc.includes("TestContractMatrix")) {
+    die("contract_matrix_test.go missing TestContractMatrix");
+  }
+  if (
+    !contractSrc.includes("api-operations.inventory.json") &&
+    !contractSrc.includes("loadInventoryOps")
+  ) {
+    die(
+      "contract_matrix_test.go must load docs/api-operations.inventory.json (loadInventoryOps)",
+    );
+  }
+  // Each matrix row points at TestContractMatrix/<op>/{success,failure}
   for (const op of inventory.operations) {
-    if (!contractSrc.includes(`"${op.operationId}"`)) {
-      die(
-        `contract_matrix_test.go missing operationId "${op.operationId}" — add success/failure cases`,
-      );
+    const row = matrixById.get(op.operationId);
+    const needSuccess = `TestContractMatrix/${op.operationId}/success`;
+    const needFailure = `TestContractMatrix/${op.operationId}/failure`;
+    if (!row.success_tests.includes(needSuccess)) {
+      die(`matrix ${op.operationId} success_tests must include ${needSuccess}`);
+    }
+    if (!row.failure_tests.includes(needFailure)) {
+      die(`matrix ${op.operationId} failure_tests must include ${needFailure}`);
     }
   }
 

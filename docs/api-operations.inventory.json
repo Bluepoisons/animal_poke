@@ -2,8 +2,20 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 49,
+  "count": 130,
   "operations": [
+    {
+      "method": "DELETE",
+      "path": "/api/v1/collection/{uuid}",
+      "operationId": "deleteCollectionAnimal",
+      "key": "DELETE /api/v1/collection/{uuid}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/sync/animals/{uuid}",
+      "operationId": "deleteAnimal",
+      "key": "DELETE /api/v1/sync/animals/{uuid}"
+    },
     {
       "method": "GET",
       "path": "/api/v1/account/defaults",
@@ -18,6 +30,12 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/security/reports/{id}",
+      "operationId": "adminGetSecurityReport",
+      "key": "GET /api/v1/admin/security/reports/{id}"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/auth/account",
       "operationId": "authAccount",
       "key": "GET /api/v1/auth/account"
@@ -27,6 +45,18 @@
       "path": "/api/v1/auth/devices",
       "operationId": "authListDevices",
       "key": "GET /api/v1/auth/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/battle/catalog",
+      "operationId": "battleCatalog",
+      "key": "GET /api/v1/battle/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/collection/{uuid}",
+      "operationId": "getCollectionAnimal",
+      "key": "GET /api/v1/collection/{uuid}"
     },
     {
       "method": "GET",
@@ -54,9 +84,105 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/growth/catalog",
+      "operationId": "getGrowthCatalog",
+      "key": "GET /api/v1/growth/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/growth/companions",
+      "operationId": "listGrowthCompanions",
+      "key": "GET /api/v1/growth/companions"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/growth/companions/{animal_uuid}",
+      "operationId": "getGrowthCompanion",
+      "key": "GET /api/v1/growth/companions/{animal_uuid}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/growth/events",
+      "operationId": "listGrowthEvents",
+      "key": "GET /api/v1/growth/events"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/growth/researcher",
+      "operationId": "getResearcherGrowth",
+      "key": "GET /api/v1/growth/researcher"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory",
+      "operationId": "listInventory",
+      "key": "GET /api/v1/inventory"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/catalog",
+      "operationId": "narrativeCatalog",
+      "key": "GET /api/v1/narrative/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/clues",
+      "operationId": "narrativeListClues",
+      "key": "GET /api/v1/narrative/clues"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/ending-summary",
+      "operationId": "narrativeEndingSummary",
+      "key": "GET /api/v1/narrative/ending-summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/nodes/{node_id}",
+      "operationId": "narrativeGetNode",
+      "key": "GET /api/v1/narrative/nodes/{node_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/progress",
+      "operationId": "narrativeProgress",
+      "key": "GET /api/v1/narrative/progress"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/progress/all",
+      "operationId": "narrativePullAllProgress",
+      "key": "GET /api/v1/narrative/progress/all"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/narrative/seen",
+      "operationId": "narrativeListSeen",
+      "key": "GET /api/v1/narrative/seen"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/ops/metrics-summary",
       "operationId": "opsMetricsSummary",
       "key": "GET /api/v1/ops/metrics-summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/photo/calibration",
+      "operationId": "photoGetCalibration",
+      "key": "GET /api/v1/photo/calibration"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/photo/personal-best",
+      "operationId": "photoPersonalBest",
+      "key": "GET /api/v1/photo/personal-best"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/photo/theme/daily",
+      "operationId": "photoDailyTheme",
+      "key": "GET /api/v1/photo/theme/daily"
     },
     {
       "method": "GET",
@@ -72,9 +198,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/quests",
+      "operationId": "listQuests",
+      "key": "GET /api/v1/quests"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/quests/{quest_id}",
+      "operationId": "getQuest",
+      "key": "GET /api/v1/quests/{quest_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/quests/catalog",
+      "operationId": "getQuestCatalog",
+      "key": "GET /api/v1/quests/catalog"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/ranking/daily",
       "operationId": "rankingDaily",
       "key": "GET /api/v1/ranking/daily"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/social/blocks",
+      "operationId": "socialBlocksList",
+      "key": "GET /api/v1/social/blocks"
     },
     {
       "method": "GET",
@@ -84,15 +234,57 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/social/friends/requests",
+      "operationId": "socialFriendRequests",
+      "key": "GET /api/v1/social/friends/requests"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/social/search",
+      "operationId": "socialSearch",
+      "key": "GET /api/v1/social/search"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/social/settings",
+      "operationId": "socialSettingsGet",
+      "key": "GET /api/v1/social/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/social/share/{token}",
+      "operationId": "socialShareGet",
+      "key": "GET /api/v1/social/share/{token}"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/sync/animals",
       "operationId": "pullAnimals",
       "key": "GET /api/v1/sync/animals"
     },
     {
       "method": "GET",
+      "path": "/api/v1/sync/animals/{uuid}",
+      "operationId": "getAnimalDetail",
+      "key": "GET /api/v1/sync/animals/{uuid}"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/time",
       "operationId": "getTime",
       "key": "GET /api/v1/time"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/wallet",
+      "operationId": "getWallet",
+      "key": "GET /api/v1/wallet"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/wallet/ledger",
+      "operationId": "listWalletLedger",
+      "key": "GET /api/v1/wallet/ledger"
     },
     {
       "method": "GET",
@@ -131,10 +323,34 @@
       "key": "GET /readyz"
     },
     {
+      "method": "PATCH",
+      "path": "/api/v1/collection/{uuid}",
+      "operationId": "patchCollectionAnimal",
+      "key": "PATCH /api/v1/collection/{uuid}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/social/settings",
+      "operationId": "socialSettingsPatch",
+      "key": "PATCH /api/v1/social/settings"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/sync/animals/{uuid}",
+      "operationId": "patchAnimal",
+      "key": "PATCH /api/v1/sync/animals/{uuid}"
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/audit/logs/{id}/ack",
       "operationId": "ackAuditLog",
       "key": "POST /api/v1/admin/audit/logs/{id}/ack"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/auth/token",
+      "operationId": "adminIssueToken",
+      "key": "POST /api/v1/admin/auth/token"
     },
     {
       "method": "POST",
@@ -147,6 +363,12 @@
       "path": "/api/v1/admin/commerce/webhooks/refund",
       "operationId": "webhookRefundOrder",
       "key": "POST /api/v1/admin/commerce/webhooks/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sessions/revoke",
+      "operationId": "adminRevokeSession",
+      "key": "POST /api/v1/admin/sessions/revoke"
     },
     {
       "method": "POST",
@@ -174,6 +396,18 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/auth/email/verify",
+      "operationId": "authEmailVerify",
+      "key": "POST /api/v1/auth/email/verify"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/email/verify/request",
+      "operationId": "authEmailVerifyRequest",
+      "key": "POST /api/v1/auth/email/verify/request"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/auth/login",
       "operationId": "authLogin",
       "key": "POST /api/v1/auth/login"
@@ -183,6 +417,60 @@
       "path": "/api/v1/auth/logout",
       "operationId": "authLogout",
       "key": "POST /api/v1/auth/logout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/change",
+      "operationId": "authPasswordChange",
+      "key": "POST /api/v1/auth/password/change"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/forgot",
+      "operationId": "authPasswordForgot",
+      "key": "POST /api/v1/auth/password/forgot"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/reset",
+      "operationId": "authPasswordReset",
+      "key": "POST /api/v1/auth/password/reset"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/reauth",
+      "operationId": "authReauth",
+      "key": "POST /api/v1/auth/reauth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "operationId": "authRefresh",
+      "key": "POST /api/v1/auth/refresh"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/unbind",
+      "operationId": "authUnbind",
+      "key": "POST /api/v1/auth/unbind"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/battle/pve/settle",
+      "operationId": "battlePveSettle",
+      "key": "POST /api/v1/battle/pve/settle"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/battle/pve/start",
+      "operationId": "battlePveStart",
+      "key": "POST /api/v1/battle/pve/start"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/battle/simulate",
+      "operationId": "battleSimulate",
+      "key": "POST /api/v1/battle/simulate"
     },
     {
       "method": "POST",
@@ -210,9 +498,81 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/growth/events",
+      "operationId": "postGrowthEvent",
+      "key": "POST /api/v1/growth/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/growth/reset",
+      "operationId": "resetGrowth",
+      "key": "POST /api/v1/growth/reset"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/consume",
+      "operationId": "consumeInventory",
+      "key": "POST /api/v1/inventory/consume"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/grant",
+      "operationId": "grantInventory",
+      "key": "POST /api/v1/inventory/grant"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/narrative/choices",
+      "operationId": "narrativeSubmitChoice",
+      "key": "POST /api/v1/narrative/choices"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/narrative/clues",
+      "operationId": "narrativeUpdateClue",
+      "key": "POST /api/v1/narrative/clues"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/narrative/fail-forward",
+      "operationId": "narrativeFailForward",
+      "key": "POST /api/v1/narrative/fail-forward"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/narrative/observation",
+      "operationId": "narrativeObservation",
+      "key": "POST /api/v1/narrative/observation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/narrative/seen",
+      "operationId": "narrativeMarkSeen",
+      "key": "POST /api/v1/narrative/seen"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/ops/game-config/rollback",
       "operationId": "rollbackGameConfig",
       "key": "POST /api/v1/ops/game-config/rollback"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/photo/calibrate",
+      "operationId": "photoCalibrate",
+      "key": "POST /api/v1/photo/calibrate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/photo/score",
+      "operationId": "photoScore",
+      "key": "POST /api/v1/photo/score"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/photo/theme/progress",
+      "operationId": "photoThemeProgress",
+      "key": "POST /api/v1/photo/theme/progress"
     },
     {
       "method": "POST",
@@ -234,6 +594,12 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/pvp/cancel",
+      "operationId": "pvpCancel",
+      "key": "POST /api/v1/pvp/cancel"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/pvp/match",
       "operationId": "pvpMatch",
       "key": "POST /api/v1/pvp/match"
@@ -243,6 +609,36 @@
       "path": "/api/v1/pvp/result",
       "operationId": "pvpResult",
       "key": "POST /api/v1/pvp/result"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/quests/{quest_id}/claim",
+      "operationId": "claimQuest",
+      "key": "POST /api/v1/quests/{quest_id}/claim"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/quests/compensate",
+      "operationId": "compensateQuests",
+      "key": "POST /api/v1/quests/compensate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/quests/events",
+      "operationId": "applyQuestEvent",
+      "key": "POST /api/v1/quests/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ranking/score",
+      "operationId": "rankingScore",
+      "key": "POST /api/v1/ranking/score"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ranking/settle",
+      "operationId": "rankingSettle",
+      "key": "POST /api/v1/ranking/settle"
     },
     {
       "method": "POST",
@@ -258,9 +654,75 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/social/block",
+      "operationId": "socialBlock",
+      "key": "POST /api/v1/social/block"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/friends/accept",
+      "operationId": "socialFriendRequestAccept",
+      "key": "POST /api/v1/social/friends/accept"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/friends/cancel",
+      "operationId": "socialFriendRequestCancel",
+      "key": "POST /api/v1/social/friends/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/friends/reject",
+      "operationId": "socialFriendRequestReject",
+      "key": "POST /api/v1/social/friends/reject"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/friends/remove",
+      "operationId": "socialFriendRemove",
+      "key": "POST /api/v1/social/friends/remove"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/friends/request",
+      "operationId": "socialFriendRequestCreate",
+      "key": "POST /api/v1/social/friends/request"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/mute",
+      "operationId": "socialMute",
+      "key": "POST /api/v1/social/mute"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/report",
+      "operationId": "socialReportUser",
+      "key": "POST /api/v1/social/report"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/social/share",
-      "operationId": "socialShare",
+      "operationId": "socialShareCreate",
       "key": "POST /api/v1/social/share"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/share/{token}/revoke",
+      "operationId": "socialShareRevoke",
+      "key": "POST /api/v1/social/share/{token}/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/unblock",
+      "operationId": "socialUnblock",
+      "key": "POST /api/v1/social/unblock"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/social/unmute",
+      "operationId": "socialUnmute",
+      "key": "POST /api/v1/social/unmute"
     },
     {
       "method": "POST",
@@ -291,6 +753,30 @@
       "path": "/api/v1/vision/detect",
       "operationId": "visionDetect",
       "key": "POST /api/v1/vision/detect"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wallet/credit",
+      "operationId": "creditWallet",
+      "key": "POST /api/v1/wallet/credit"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wallet/debit",
+      "operationId": "debitWallet",
+      "key": "POST /api/v1/wallet/debit"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wallet/reconcile",
+      "operationId": "reconcileWallet",
+      "key": "POST /api/v1/wallet/reconcile"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/config/game",
+      "operationId": "adminWriteGameConfig",
+      "key": "PUT /api/v1/admin/config/game"
     },
     {
       "method": "PUT",
