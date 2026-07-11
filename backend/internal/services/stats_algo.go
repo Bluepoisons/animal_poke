@@ -152,18 +152,20 @@ func ComputeDeterministicValue(input ValueInput, seedID, secret, configVersion s
 
 // narrativeFallback 无 LLM 时的确定性叙事模板（不含随机）。
 func narrativeFallback(input ValueInput, v *ValueResult) string {
-	breed := input.Breed
+	// 确定性虚构花絮模板（非真实传记）
+	sp := strings.TrimSpace(input.Species)
+	if sp == "" {
+		sp = "animal"
+	}
+	breed := strings.TrimSpace(input.Breed)
 	if breed == "" {
-		breed = "wild"
+		breed = sp
 	}
-	color := input.Color
+	color := strings.TrimSpace(input.Color)
 	if color == "" {
-		color = "natural"
+		color = "soft-toned"
 	}
-	return fmt.Sprintf(
-		"A %s %s discovered in the wild. Its %s coat gleams with potential. Classed as %s/%s with ★%d power.",
-		breed, input.Species, color, v.Class, v.Element, v.Rarity,
-	)
+	return "【虚构花絮】手账里的" + color + " " + breed + "只是想象的注脚，不是对真实个体的断言。雨檐与巷口是纸上的布景。"
 }
 
 func inputDigest(input ValueInput) string {

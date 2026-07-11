@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0023_battle_design"
+const CurrentVersion = "0024_narrative_schema"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -89,6 +89,7 @@ func allMigrations() []migrationSpec {
 		{"0021_growth_companion", migrate0021},
 		{"0022_photo_quality", migrate0022},
 		{"0023_battle_design", migrate0023},
+		{"0024_narrative_schema", migrate0024},
 	}
 }
 
@@ -329,4 +330,18 @@ func migrate0022(db *gorm.DB) error {
 // migrate0023 战斗队伍/技能/状态权威结算（AP-102）。
 func migrate0023(db *gorm.DB) error {
 	return db.AutoMigrate(&models.BattleSession{})
+}
+
+// migrate0024 剧情节点/选择/进度/已读/碎片（AP-132/118）。
+func migrate0024(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.NarrativeNode{},
+		&models.NarrativeChoice{},
+		&models.NarrativeProgress{},
+		&models.NarrativeSeenState{},
+		&models.NarrativeChoiceLog{},
+		&models.StoryFragment{},
+		&models.StoryFragmentUnlock{},
+		&models.ClueState{},
+	)
 }

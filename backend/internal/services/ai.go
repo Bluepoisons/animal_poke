@@ -104,7 +104,11 @@ type ValueResult struct {
 	SPD           int           `json:"spd"`       // 5-50
 	Class         string        `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
 	Element       string        `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
-	Narrative     string        `json:"narrative"` // 2-3 句叙事
+	Narrative     string        `json:"narrative"` // 虚构手账花絮（非事实）
+	Fiction       bool          `json:"fiction"`   // 恒为 true：LLM/模板输出均为虚构
+	Disclaimer    string        `json:"disclaimer,omitempty"`
+	Layer         string        `json:"layer,omitempty"` // fictional_vignette | authored_canon
+	PolicyVersion string        `json:"policy_version,omitempty"`
 	Factors       *ValueFactors `json:"factors,omitempty"`
 	ConfigVersion string        `json:"config_version,omitempty"`
 	SeedID        string        `json:"seed_id,omitempty"`
@@ -309,6 +313,10 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 
 	result := ComputeDeterministicValue(input, input.SeedID, s.statsSecret, StatsConfigVersion)
 	result.PromptVersion = prompts.ValuePromptVersion
+	result.Fiction = true
+	result.Disclaimer = "fictional vignette; not a real animal biography"
+	result.Layer = "fictional_vignette"
+	result.PolicyVersion = prompts.NarrativePolicyVersion
 
 	// LLM 仅叙事；未配置时用确定性模板
 	if !s.cfg.LLMConfigured() {
@@ -354,7 +362,9 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 		return result, nil
 	}
 	var llmOut struct {
-		Narrative string `json:"narrative"`
+		Narrative  string `json:"narrative"`
+		Fiction    *bool  `json:"fiction"`
+		Disclaimer string `json:"disclaimer"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &llmOut); err != nil || strings.TrimSpace(llmOut.Narrative) == "" {
 		// 兼容旧模型仍返回完整 value JSON：只取 narrative，忽略 rarity/stats
@@ -368,9 +378,25 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 		}
 	} else {
 		result.Narrative = llmOut.Narrative
+		if llmOut.Disclaimer != "" {
+			result.Disclaimer = llmOut.Disclaimer
+		}
 	}
+	// 无论 LLM 是否返回 fiction 字段，服务端强制虚构层
+	result.Fiction = true
+	result.Layer = "fictional_vignette"
 	if len(result.Narrative) > 2000 {
 		result.Narrative = result.Narrative[:2000]
+	}
+	// 敏感断言粗过滤
+	low := strings.ToLower(result.Narrative)
+	for _, bad := range []string{"diagnosed", "owned by", "lives at", "gps", "address", "病历", "主人是", "家住"} {
+		if strings.Contains(low, bad) {
+			result.Narrative = narrativeFallback(input, result)
+			result.Degraded = true
+			result.ReasonCode = "narrative_policy_blocked"
+			break
+		}
 	}
 	result.Source = "algo"
 	result.Model = model

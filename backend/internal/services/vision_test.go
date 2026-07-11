@@ -77,7 +77,8 @@ func TestRenderValuePrompt_Complete(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Contains(t, p, "cat")
-	assert.Contains(t, p, "completeness=8")
+	assert.Contains(t, p, "FICTIONAL")
+	assert.Contains(t, p, "cat")
 	assert.NotContains(t, p, "{{")
 }
 
