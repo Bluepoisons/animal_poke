@@ -170,6 +170,15 @@ jobs:
           CI: true
           VITE_API_BASE_URL: ""
           VITE_VISION_MOCK: "0"
+      - name: Upload E2E trace (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
 
   openapi:
     name: OpenAPI

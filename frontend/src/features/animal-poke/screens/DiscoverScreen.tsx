@@ -250,7 +250,7 @@ export default function DiscoverScreen({
   }
 
   return (
-    <div className="ap-screen">
+    <div className="ap-screen" data-testid="discover-screen">
       <TopResourceBar city={city || t('discover.city_loading')} weather={weather} energy={energy} coins={coins} />
 
       <div className="ap-discover__hero">
