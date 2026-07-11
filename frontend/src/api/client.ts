@@ -4,6 +4,8 @@
 
 export type { paths, components, operations } from './generated/schema'
 
+declare const __APP_VERSION__: string
+
 import { getApiBaseUrl as getConfigBase } from '../config/publicConfig'
 import { fetchWithRetry, FetchTimeoutError } from '../services/fetchWithRetry'
 

@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 130,
+  "count": 131,
   "operations": [
     {
       "method": "DELETE",
@@ -273,6 +273,12 @@
       "path": "/api/v1/time",
       "operationId": "getTime",
       "key": "GET /api/v1/time"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/version",
+      "operationId": "getClientVersion",
+      "key": "GET /api/v1/version"
     },
     {
       "method": "GET",

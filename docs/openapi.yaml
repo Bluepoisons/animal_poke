@@ -208,6 +208,48 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /api/v1/version:
+    get:
+      operationId: getClientVersion
+      tags: [System]
+      summary: Client version negotiation (AP-089)
+      description: |
+        Returns min/current client version metadata and optional deprecation headers.
+        Clients SHOULD send `X-Client-Version` on subsequent requests.
+      parameters:
+        - name: X-Client-Version
+          in: header
+          required: false
+          schema: { type: string }
+          description: Client semantic version or build id
+      responses:
+        '200':
+          description: Version negotiation payload
+          headers:
+            Deprecation:
+              schema: { type: string }
+            Sunset:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  min_client_version: { type: string }
+                  current_api_version: { type: string }
+                  recommended_client_version: { type: string }
+                  deprecated: { type: boolean }
+                  sunset_at: { type: string, format: date-time, nullable: true }
+                  capabilities:
+                    type: object
+                    additionalProperties: true
+        '426':
+          description: Client below minimum supported version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v1/auth/device:
     post:
       tags: [Auth]

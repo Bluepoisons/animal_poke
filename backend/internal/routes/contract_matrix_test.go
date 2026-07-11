@@ -161,7 +161,7 @@ func loadInventoryOps(t *testing.T) []contractOp {
 
 		switch {
 		case p == "/health" || p == "/livez" || p == "/ready" || p == "/readyz" || p == "/metrics" ||
-			p == "/api/v1/ping" || p == "/api/v1/time":
+			p == "/api/v1/ping" || p == "/api/v1/time" || p == "/api/v1/version":
 			op.successStatuses = publicSuccess
 			if id == "getMetrics" {
 				op.successStatuses = []int{200, 404}
