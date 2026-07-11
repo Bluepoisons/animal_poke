@@ -81,8 +81,8 @@ const (
 type SkillKind string
 
 const (
-	SkillKindActive SkillKind = "active"
-	SkillKindEnergy SkillKind = "energy" // requires full energy bar
+	SkillKindActive  SkillKind = "active"
+	SkillKindEnergy  SkillKind = "energy" // requires full energy bar
 	SkillKindPassive SkillKind = "passive"
 )
 
@@ -90,10 +90,10 @@ const (
 type EffectKind string
 
 const (
-	EffectDamage EffectKind = "damage"
-	EffectHeal   EffectKind = "heal"
-	EffectStatus EffectKind = "status"
-	EffectShield EffectKind = "shield"
+	EffectDamage  EffectKind = "damage"
+	EffectHeal    EffectKind = "heal"
+	EffectStatus  EffectKind = "status"
+	EffectShield  EffectKind = "shield"
 	EffectCleanse EffectKind = "cleanse"
 )
 
@@ -119,15 +119,15 @@ const (
 
 // RoleDef describes a team role.
 type RoleDef struct {
-	ID          RoleID  `json:"id"`
-	NameZH      string  `json:"name_zh"`
-	NameEN      string  `json:"name_en"`
-	PreferredSlot SlotID `json:"preferred_slot"`
-	HPMod       float64 `json:"hp_mod"`
-	ATKMod      float64 `json:"atk_mod"`
-	DEFMod      float64 `json:"def_mod"`
-	SPDMod      float64 `json:"spd_mod"`
-	Description string  `json:"description"`
+	ID            RoleID  `json:"id"`
+	NameZH        string  `json:"name_zh"`
+	NameEN        string  `json:"name_en"`
+	PreferredSlot SlotID  `json:"preferred_slot"`
+	HPMod         float64 `json:"hp_mod"`
+	ATKMod        float64 `json:"atk_mod"`
+	DEFMod        float64 `json:"def_mod"`
+	SPDMod        float64 `json:"spd_mod"`
+	Description   string  `json:"description"`
 }
 
 // StatusDef is a catalog status definition.
@@ -163,7 +163,7 @@ type SkillDef struct {
 	Kind        SkillKind     `json:"kind"`
 	Element     ElementID     `json:"element,omitempty"`
 	Roles       []RoleID      `json:"roles"`
-	Cooldown     int           `json:"cooldown"`
+	Cooldown    int           `json:"cooldown"`
 	EnergyCost  int           `json:"energy_cost"`
 	BasePower   float64       `json:"base_power"`
 	Effects     []SkillEffect `json:"effects"`
@@ -176,33 +176,33 @@ type SkillDef struct {
 type UpgradeDef struct {
 	Level       int     `json:"level"`
 	PowerBonus  float64 `json:"power_bonus"`
-	CooldownCut  int     `json:"cooldown_cut"`
+	CooldownCut int     `json:"cooldown_cut"`
 	Description string  `json:"description"`
 }
 
 // ArchetypeDef is an enemy team template.
 type ArchetypeDef struct {
-	ID          string     `json:"id"`
-	NameZH      string     `json:"name_zh"`
-	NameEN      string     `json:"name_en"`
-	ThreatTags  []string   `json:"threat_tags"`
+	ID          string       `json:"id"`
+	NameZH      string       `json:"name_zh"`
+	NameEN      string       `json:"name_en"`
+	ThreatTags  []string     `json:"threat_tags"`
 	Members     []ArchMember `json:"members"`
-	CounterHint string     `json:"counter_hint"`
-	Difficulty  int        `json:"difficulty"` // 1-5
+	CounterHint string       `json:"counter_hint"`
+	Difficulty  int          `json:"difficulty"` // 1-5
 }
 
 // ArchMember is one enemy fighter template.
 type ArchMember struct {
-	Name     string   `json:"name"`
-	Species  string   `json:"species"`
-	Role     RoleID   `json:"role"`
-	Slot     SlotID   `json:"slot"`
+	Name     string    `json:"name"`
+	Species  string    `json:"species"`
+	Role     RoleID    `json:"role"`
+	Slot     SlotID    `json:"slot"`
 	Element  ElementID `json:"element"`
-	HP       int      `json:"hp"`
-	ATK      int      `json:"atk"`
-	DEF      int      `json:"def"`
-	SPD      int      `json:"spd"`
-	SkillIDs []string `json:"skill_ids"`
+	HP       int       `json:"hp"`
+	ATK      int       `json:"atk"`
+	DEF      int       `json:"def"`
+	SPD      int       `json:"spd"`
+	SkillIDs []string  `json:"skill_ids"`
 }
 
 // TeamBuild is a recommended formation.
@@ -219,21 +219,21 @@ type TeamBuild struct {
 
 // Fighter is a runtime combatant snapshot (server authoritative).
 type Fighter struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Species  string   `json:"species"`
-	Role     RoleID   `json:"role"`
-	Slot     SlotID   `json:"slot"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Species  string    `json:"species"`
+	Role     RoleID    `json:"role"`
+	Slot     SlotID    `json:"slot"`
 	Element  ElementID `json:"element"`
-	MaxHP    int      `json:"max_hp"`
-	HP       int      `json:"hp"`
-	ATK      int      `json:"atk"`
-	DEF      int      `json:"def"`
-	SPD      int      `json:"spd"`
-	CRIT     int      `json:"crit"` // percent 0-100
-	EVA      int      `json:"eva"`  // percent 0-100
-	Energy   int      `json:"energy"`
-	SkillIDs []string `json:"skill_ids"`
+	MaxHP    int       `json:"max_hp"`
+	HP       int       `json:"hp"`
+	ATK      int       `json:"atk"`
+	DEF      int       `json:"def"`
+	SPD      int       `json:"spd"`
+	CRIT     int       `json:"crit"` // percent 0-100
+	EVA      int       `json:"eva"`  // percent 0-100
+	Energy   int       `json:"energy"`
+	SkillIDs []string  `json:"skill_ids"`
 	// SkillLevels maps skill id → 1..3
 	SkillLevels map[string]int `json:"skill_levels,omitempty"`
 	Side        string         `json:"side"` // "player" | "enemy"
@@ -297,28 +297,28 @@ type FailureFactor struct {
 
 // Result is the authoritative settlement output.
 type Result struct {
-	WinnerSide      string          `json:"winner_side"` // player|enemy|draw
-	Rounds          int             `json:"rounds"`
-	Events          []Event         `json:"events"`
-	PlayerAlive     int             `json:"player_alive"`
-	EnemyAlive      int             `json:"enemy_alive"`
-	FailureFactors  []FailureFactor `json:"failure_factors,omitempty"`
-	RuleVersion     string          `json:"rule_version"`
-	Seed            string          `json:"seed"`
-	CommandHash     string          `json:"command_hash"`
-	EndedBy         string          `json:"ended_by"` // ko|timeout|softlock_break
-	Metrics         ResultMetrics   `json:"metrics"`
+	WinnerSide     string          `json:"winner_side"` // player|enemy|draw
+	Rounds         int             `json:"rounds"`
+	Events         []Event         `json:"events"`
+	PlayerAlive    int             `json:"player_alive"`
+	EnemyAlive     int             `json:"enemy_alive"`
+	FailureFactors []FailureFactor `json:"failure_factors,omitempty"`
+	RuleVersion    string          `json:"rule_version"`
+	Seed           string          `json:"seed"`
+	CommandHash    string          `json:"command_hash"`
+	EndedBy        string          `json:"ended_by"` // ko|timeout|softlock_break
+	Metrics        ResultMetrics   `json:"metrics"`
 }
 
 // ResultMetrics supports balance tests and post-battle UI.
 type ResultMetrics struct {
-	PlayerDamageDealt int `json:"player_damage_dealt"`
-	EnemyDamageDealt  int `json:"enemy_damage_dealt"`
-	ControlTurnsEnemy int `json:"control_turns_enemy"`
+	PlayerDamageDealt  int `json:"player_damage_dealt"`
+	EnemyDamageDealt   int `json:"enemy_damage_dealt"`
+	ControlTurnsEnemy  int `json:"control_turns_enemy"`
 	ControlTurnsPlayer int `json:"control_turns_player"`
-	HealingDone       int `json:"healing_done"`
-	ZeroDamageBreaks  int `json:"zero_damage_breaks"`
-	ElementDisadvHits int `json:"element_disadv_hits"`
+	HealingDone        int `json:"healing_done"`
+	ZeroDamageBreaks   int `json:"zero_damage_breaks"`
+	ElementDisadvHits  int `json:"element_disadv_hits"`
 }
 
 // Catalog is the full design payload for clients.

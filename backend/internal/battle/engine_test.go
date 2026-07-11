@@ -20,7 +20,7 @@ func samplePlayer() []battle.Fighter {
 		{
 			ID: "p-dps", Name: "输出猫", Species: "cat", Role: battle.RoleDPS, Slot: battle.SlotBack,
 			Element: battle.ElementFire, MaxHP: 95, HP: 95, ATK: 48, DEF: 18, SPD: 42,
-			SkillIDs: []string{"claw_strike", "fire_pounce", "energy_burst"},
+			SkillIDs:    []string{"claw_strike", "fire_pounce", "energy_burst"},
 			SkillLevels: map[string]int{"fire_pounce": 2},
 		},
 		{

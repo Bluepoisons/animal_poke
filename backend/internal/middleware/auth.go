@@ -272,4 +272,3 @@ func GetRole(c *gin.Context) string {
 	}
 	return ""
 }
-

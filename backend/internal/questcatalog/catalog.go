@@ -22,9 +22,9 @@ type Objective struct {
 
 // Reward 任务奖励（写入 Wallet ledger）。
 type Reward struct {
-	Gold    int64             `json:"gold,omitempty"`
-	Stamina int64             `json:"stamina,omitempty"`
-	Items   map[string]int64  `json:"items,omitempty"`
+	Gold    int64            `json:"gold,omitempty"`
+	Stamina int64            `json:"stamina,omitempty"`
+	Items   map[string]int64 `json:"items,omitempty"`
 }
 
 // Def 静态任务定义。
@@ -60,15 +60,15 @@ var TrustedEvents = map[string]struct{}{
 
 // ForbiddenEvents 客户端可伪造 / 打开页面类事件，一律拒绝。
 var ForbiddenEvents = map[string]struct{}{
-	"open_pokedex":  {},
-	"safe_explore":  {},
-	"page_view":     {},
-	"open_map":      {},
-	"open_page":     {},
-	"ui_open":       {},
-	"client_tick":   {},
-	"view_goal":     {},
-	"reopen_app":    {},
+	"open_pokedex": {},
+	"safe_explore": {},
+	"page_view":    {},
+	"open_map":     {},
+	"open_page":    {},
+	"ui_open":      {},
+	"client_tick":  {},
+	"view_goal":    {},
+	"reopen_app":   {},
 }
 
 // IsTrustedEvent 是否为可信业务事件。

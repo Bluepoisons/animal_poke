@@ -492,13 +492,6 @@ func (h *VisionHandler) respondSafetyReject(c *gin.Context, kind, deviceID, dige
 	})
 }
 
-func reasonOrEmpty(r *services.DetectResult) string {
-	if r == nil || r.Safety == nil {
-		return ""
-	}
-	return r.Safety.DecisionCode
-}
-
 func parseOptionalCrop(c *gin.Context) (*cropBox, error) {
 	rawX := strings.TrimSpace(c.PostForm("crop_x"))
 	rawY := strings.TrimSpace(c.PostForm("crop_y"))

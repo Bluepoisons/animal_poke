@@ -217,14 +217,14 @@ func (r *QuestRepo) periodEnd(resetPolicy, periodKey string) *time.Time {
 
 // QuestView 列表/详情视图。
 type QuestView struct {
-	Definition    models.QuestDefinition     `json:"definition"`
-	Progress      *models.QuestProgress      `json:"progress,omitempty"`
-	Objectives    []questcatalog.Objective   `json:"objectives"`
-	Rewards       questcatalog.Reward        `json:"rewards"`
-	Prerequisites []string                   `json:"prerequisites,omitempty"`
-	Counters      map[string]int64           `json:"counters"`
-	Claimable     bool                       `json:"claimable"`
-	Free          bool                       `json:"free"`
+	Definition    models.QuestDefinition   `json:"definition"`
+	Progress      *models.QuestProgress    `json:"progress,omitempty"`
+	Objectives    []questcatalog.Objective `json:"objectives"`
+	Rewards       questcatalog.Reward      `json:"rewards"`
+	Prerequisites []string                 `json:"prerequisites,omitempty"`
+	Counters      map[string]int64         `json:"counters"`
+	Claimable     bool                     `json:"claimable"`
+	Free          bool                     `json:"free"`
 }
 
 // ListForOwner 列出任务及当前 period 进度。

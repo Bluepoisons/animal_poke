@@ -268,12 +268,12 @@ func (h *AdminHandler) GetSecurityReport(c *gin.Context) {
 	}
 	bodyAllowed := admin.HasPermission(actor.Role, admin.PermSecurityReportBody)
 	resp := gin.H{
-		"report_id":    report.ReportID,
-		"device_id":    report.DeviceID,
-		"risk_score":   report.RiskScore,
-		"created_at":   report.CreatedAt,
+		"report_id":     report.ReportID,
+		"device_id":     report.DeviceID,
+		"risk_score":    report.RiskScore,
+		"created_at":    report.CreatedAt,
 		"body_redacted": !bodyAllowed,
-		"request_id":   middleware.GetRequestID(c),
+		"request_id":    middleware.GetRequestID(c),
 	}
 	if bodyAllowed {
 		resp["payload"] = report.Payload

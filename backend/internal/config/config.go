@@ -75,8 +75,8 @@ type Config struct {
 	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
 	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
 	AuthMockOAuthEnabled bool
-	RedisURL    string
-	AdminAPIKey string
+	RedisURL             string
+	AdminAPIKey          string
 	// OpsToken 运维内部接口 X-AP-Ops-Token 校验值（可与 AdminAPIKey 相同，但独立配置）。
 	OpsToken string
 	// AdminJWTSecret 管理端短期 JWT 签名密钥（与设备 JWT 独立）。
@@ -282,25 +282,25 @@ func Load() *Config {
 		MetricsAddr: getEnv("METRICS_ADDR", ":9090"),
 		LogLevel:    getEnv("LOG_LEVEL", "INFO"),
 		// 密钥在下方 load* 中按用途填充（AP-087）
-		JWTIssuer:             getEnv("JWT_ISSUER", "animal-poke"),
-		JWTAudience:           getEnv("JWT_AUDIENCE", "animal-poke-client"),
-		JWTAccessTTL:          getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
-		JWTRefreshAbsoluteTTL: getEnvDuration("JWT_REFRESH_ABSOLUTE_TTL", 30*24*time.Hour),
-		JWTRefreshIdleTTL:     getEnvDuration("JWT_REFRESH_IDLE_TTL", 7*24*time.Hour),
-		EmailVerifyTTL:        getEnvDuration("EMAIL_VERIFY_TTL", 24*time.Hour),
-		PasswordResetTTL:      getEnvDuration("PASSWORD_RESET_TTL", time.Hour),
-		ReauthTTL:             getEnvDuration("REAUTH_TTL", 5*time.Minute),
-		AIMockEnabled:         getEnvBool("AI_MOCK_ENABLED", true),
-		RedisURL:              getEnv("REDIS_URL", ""),
-		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),
-		OpsToken:              getEnv("OPS_TOKEN", ""),
-		AdminJWTIssuer:        getEnv("ADMIN_JWT_ISSUER", "animal-poke-admin"),
-		AdminTokenTTL:         getEnvDuration("ADMIN_TOKEN_TTL", 15*time.Minute),
+		JWTIssuer:               getEnv("JWT_ISSUER", "animal-poke"),
+		JWTAudience:             getEnv("JWT_AUDIENCE", "animal-poke-client"),
+		JWTAccessTTL:            getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
+		JWTRefreshAbsoluteTTL:   getEnvDuration("JWT_REFRESH_ABSOLUTE_TTL", 30*24*time.Hour),
+		JWTRefreshIdleTTL:       getEnvDuration("JWT_REFRESH_IDLE_TTL", 7*24*time.Hour),
+		EmailVerifyTTL:          getEnvDuration("EMAIL_VERIFY_TTL", 24*time.Hour),
+		PasswordResetTTL:        getEnvDuration("PASSWORD_RESET_TTL", time.Hour),
+		ReauthTTL:               getEnvDuration("REAUTH_TTL", 5*time.Minute),
+		AIMockEnabled:           getEnvBool("AI_MOCK_ENABLED", true),
+		RedisURL:                getEnv("REDIS_URL", ""),
+		AdminAPIKey:             getEnv("ADMIN_API_KEY", ""),
+		OpsToken:                getEnv("OPS_TOKEN", ""),
+		AdminJWTIssuer:          getEnv("ADMIN_JWT_ISSUER", "animal-poke-admin"),
+		AdminTokenTTL:           getEnvDuration("ADMIN_TOKEN_TTL", 15*time.Minute),
 		AdminSessionRevokeGrace: getEnvDuration("ADMIN_SESSION_REVOKE_GRACE", 0),
-		MaxImageBytes:         int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
-		MaxImagePixels:        getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
-		CORSAllowedOrigins:    splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
-		TrustedProxies:        splitCSV(getEnv("TRUSTED_PROXIES", "")),
+		MaxImageBytes:           int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
+		MaxImagePixels:          getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
+		CORSAllowedOrigins:      splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
+		TrustedProxies:          splitCSV(getEnv("TRUSTED_PROXIES", "")),
 		// 默认开启：未成年人严格默认 + Provider 不训练审计
 		StrictMinorDefaults:   getEnvBool("STRICT_MINOR_DEFAULTS", true),
 		ProviderNoTrainPolicy: getEnvBool("PROVIDER_NO_TRAIN_POLICY", true),

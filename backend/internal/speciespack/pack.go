@@ -74,15 +74,15 @@ type RarityWeight struct {
 
 // Gameplay 捕获/战斗可调参数（内容驱动，业务只读 ID）。
 type Gameplay struct {
-	ThrowItem         Localized      `json:"throw_item,omitempty"`
-	CaptureMechanics  Localized      `json:"capture_mechanics,omitempty"`
-	ChargeRate        float64        `json:"charge_rate,omitempty"`
-	OptimalRange      []float64      `json:"optimal_range,omitempty"` // [min,max] 0-100
-	ChargeSpeed       float64        `json:"charge_speed,omitempty"`
-	DetectThreshold   float64        `json:"detect_threshold,omitempty"`
-	StatModifiers     *StatModifiers `json:"stat_modifiers,omitempty"`
-	RarityWeights     []RarityWeight `json:"rarity_weights,omitempty"`
-	BestRangeOffset   []float64      `json:"best_range_offset,omitempty"` // optional [dMin,dMax]
+	ThrowItem        Localized      `json:"throw_item,omitempty"`
+	CaptureMechanics Localized      `json:"capture_mechanics,omitempty"`
+	ChargeRate       float64        `json:"charge_rate,omitempty"`
+	OptimalRange     []float64      `json:"optimal_range,omitempty"` // [min,max] 0-100
+	ChargeSpeed      float64        `json:"charge_speed,omitempty"`
+	DetectThreshold  float64        `json:"detect_threshold,omitempty"`
+	StatModifiers    *StatModifiers `json:"stat_modifiers,omitempty"`
+	RarityWeights    []RarityWeight `json:"rarity_weights,omitempty"`
+	BestRangeOffset  []float64      `json:"best_range_offset,omitempty"` // optional [dMin,dMax]
 }
 
 // Names 名称与别名。
@@ -110,14 +110,14 @@ type Pack struct {
 	// Certification 黄金集认证；capturable/recognition_certified 应提供。
 	Certification *Certification `json:"certification,omitempty"`
 
-	Names            Names      `json:"names"`
-	Habitat          Localized  `json:"habitat,omitempty"`
-	ObservationTips  Localized  `json:"observation_tips,omitempty"`
-	Welfare          Welfare    `json:"welfare"`
-	Protection       Protection `json:"protection"`
-	Assets           Assets     `json:"assets"`
-	Gameplay         Gameplay   `json:"gameplay,omitempty"`
-	I18n             map[string]Localized `json:"i18n,omitempty"`
+	Names           Names                `json:"names"`
+	Habitat         Localized            `json:"habitat,omitempty"`
+	ObservationTips Localized            `json:"observation_tips,omitempty"`
+	Welfare         Welfare              `json:"welfare"`
+	Protection      Protection           `json:"protection"`
+	Assets          Assets               `json:"assets"`
+	Gameplay        Gameplay             `json:"gameplay,omitempty"`
+	I18n            map[string]Localized `json:"i18n,omitempty"`
 }
 
 // Ref 业务交叉引用：内容 ID + 版本。

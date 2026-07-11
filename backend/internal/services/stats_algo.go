@@ -6,7 +6,6 @@ package services
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -405,16 +404,16 @@ func clampFloat(v, lo, hi float64) float64 {
 	return v
 }
 
-func round3(v float64) float64 {
-	return math.Round(v*1000) / 1000
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
-// seedUint64 保留工具：从 digest 取两个 uint64（测试/扩展用）。
-func seedUint64(digest []byte) (uint64, uint64) {
-	if len(digest) < 16 {
-		padded := make([]byte, 16)
-		copy(padded, digest)
-		digest = padded
-	}
-	return binary.BigEndian.Uint64(digest[0:8]), binary.BigEndian.Uint64(digest[8:16])
+func round3(v float64) float64 {
+	return math.Round(v*1000) / 1000
 }

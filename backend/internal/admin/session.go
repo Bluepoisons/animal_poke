@@ -17,9 +17,9 @@ import (
 
 // SessionStore 管理端会话：签发、查询、撤销（支持并发撤权）。
 type SessionStore struct {
-	mu       sync.RWMutex
-	mem      map[string]*models.AdminSession // session_id → session
-	db       *gorm.DB
+	mu  sync.RWMutex
+	mem map[string]*models.AdminSession // session_id → session
+	db  *gorm.DB
 	// RevokeGrace 撤权后仍可完成的宽限窗口（默认 0：立即失效）。
 	RevokeGrace time.Duration
 }

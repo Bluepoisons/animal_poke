@@ -12,6 +12,14 @@ import {
   isSafeToReplay,
 } from './deviceAuth'
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('deviceAuth', () => {
   beforeEach(() => {
     __resetAuthForTests()
@@ -69,7 +77,7 @@ describe('deviceAuth', () => {
   })
 
   it('singleflight concurrent ensureAuth', async () => {
-    const { promise: jsonPromise, resolve: resolveJson } = Promise.withResolvers<unknown>()
+    const { promise: jsonPromise, resolve: resolveJson } = createDeferred<unknown>()
     const fetchMock = vi.fn().mockImplementation(async () => ({
       ok: true,
       status: 200,
@@ -134,7 +142,7 @@ describe('deviceAuth', () => {
     localStorage.setItem('ap_token_expires_at', new Date(Date.now() - 1000).toISOString())
     persistRefreshToken('refresh-plain-1', 'acct-1')
 
-    const { promise: jsonPromise, resolve: resolveJson } = Promise.withResolvers<unknown>()
+    const { promise: jsonPromise, resolve: resolveJson } = createDeferred<unknown>()
     const fetchMock = vi.fn().mockImplementation(async (url: string) => {
       expect(String(url)).toContain('/auth/refresh')
       return {

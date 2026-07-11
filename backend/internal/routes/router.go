@@ -532,8 +532,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			RequireReasonOnWrite: true,
 		}
 		// 管理端独立限流：IP 30/min + actor 60/min（fail-closed 倾向：burst 小）
-		adminIPLimiter := middleware.NewRateLimiter(30.0/60.0, 10).WithShared(sharedCounter)
-		adminActorLimiter := middleware.NewRateLimiter(60.0/60.0, 20).WithShared(sharedCounter)
+		adminIPLimiter := middleware.NewRateLimiter(0.5, 10).WithShared(sharedCounter)
+		adminActorLimiter := middleware.NewRateLimiter(1, 20).WithShared(sharedCounter)
 
 		adminH := handlers.NewAdminHandler(handlers.AdminHandlerOptions{
 			Tokens:      adminTokens,

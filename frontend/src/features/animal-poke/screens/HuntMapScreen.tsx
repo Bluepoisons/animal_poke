@@ -156,7 +156,7 @@ export default function HuntMapScreen({
           ) : (
             <>
               <h2>
-                {speciesNames[selected.species]} · {selected.distanceMeters}m · {selected.rarity}
+                {speciesNames[selected.species as keyof typeof speciesNames] ?? selected.species} · {selected.distanceMeters}m · {selected.rarity}
               </h2>
               <p>
                 {selected.label}。超出捕获范围时无法开始捕获；服务端权威校验见后续接口。

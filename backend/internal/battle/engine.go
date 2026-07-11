@@ -14,12 +14,12 @@ import (
 // runtimeFighter is mutable combat state.
 type runtimeFighter struct {
 	Fighter
-	statuses       []ActiveStatus
-	cooldowns      map[string]int
-	controlStreak  int
-	shieldHP       int
-	strategy       Strategy
-	alive          bool
+	statuses      []ActiveStatus
+	cooldowns     map[string]int
+	controlStreak int
+	shieldHP      int
+	strategy      Strategy
+	alive         bool
 }
 
 type simState struct {
@@ -1068,7 +1068,6 @@ func HashCommands(cmds []Command) string {
 // seedRNG is a tiny deterministic RNG from seed string (xorshift-ish via sha blocks).
 type seedRNG struct {
 	buf []byte
-	i   int
 	s0  uint64
 	s1  uint64
 }

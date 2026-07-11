@@ -58,11 +58,6 @@ type deleteDataRequest struct {
 	Confirm        string `json:"confirm"`      // account 删除需 "DELETE"
 }
 
-// exportDataRequest AP-077 可选 scope。
-type exportDataRequest struct {
-	Scope string `json:"scope"` // device|account
-}
-
 var allowedConsentScopes = map[string]struct{}{
 	"photo": {}, "location": {}, "precise_location": {},
 }
