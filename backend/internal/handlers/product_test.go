@@ -176,7 +176,7 @@ func TestOpsMetrics_FlagOn_ValidToken(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := decodeJSON(t, w)
-	assert.Equal(t, "server", body["source"])
+	assert.Equal(t, "analytics_store", body["source"])
 }
 
 func TestOpsMetrics_FlagOn_RoleClaim(t *testing.T) {

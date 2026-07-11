@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `161` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `163` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -49,6 +49,7 @@
 | API-narrativeListSeen | `GET` | `/api/v1/narrative/seen` | `narrativeListSeen` | TestContractMatrix/narrativeListSeen/success | TestContractMatrix/narrativeListSeen/failure |
 | API-listNotificationInbox | `GET` | `/api/v1/notifications/inbox` | `listNotificationInbox` | TestContractMatrix/listNotificationInbox/success | TestContractMatrix/listNotificationInbox/failure |
 | API-getNotificationPreferences | `GET` | `/api/v1/notifications/preferences` | `getNotificationPreferences` | TestContractMatrix/getNotificationPreferences/success | TestContractMatrix/getNotificationPreferences/failure |
+| API-analyticsDictionary | `GET` | `/api/v1/ops/analytics/dictionary` | `analyticsDictionary` | TestContractMatrix/analyticsDictionary/success | TestContractMatrix/analyticsDictionary/failure |
 | API-opsMetricsSummary | `GET` | `/api/v1/ops/metrics-summary` | `opsMetricsSummary` | TestContractMatrix/opsMetricsSummary/success | TestContractMatrix/opsMetricsSummary/failure |
 | API-photoGetCalibration | `GET` | `/api/v1/photo/calibration` | `photoGetCalibration` | TestContractMatrix/photoGetCalibration/success | TestContractMatrix/photoGetCalibration/failure |
 | API-photoPersonalBest | `GET` | `/api/v1/photo/personal-best` | `photoPersonalBest` | TestContractMatrix/photoPersonalBest/success | TestContractMatrix/photoPersonalBest/failure |
@@ -89,6 +90,7 @@
 | API-adminRefundOrder | `POST` | `/api/v1/admin/commerce/orders/refund` | `adminRefundOrder` | TestContractMatrix/adminRefundOrder/success | TestContractMatrix/adminRefundOrder/failure |
 | API-webhookRefundOrder | `POST` | `/api/v1/admin/commerce/webhooks/refund` | `webhookRefundOrder` | TestContractMatrix/webhookRefundOrder/success | TestContractMatrix/webhookRefundOrder/failure |
 | API-adminRevokeSession | `POST` | `/api/v1/admin/sessions/revoke` | `adminRevokeSession` | TestContractMatrix/adminRevokeSession/success | TestContractMatrix/adminRevokeSession/failure |
+| API-analyticsDeleteOwner | `POST` | `/api/v1/analytics/delete` | `analyticsDeleteOwner` | TestContractMatrix/analyticsDeleteOwner/success | TestContractMatrix/analyticsDeleteOwner/failure |
 | API-analyticsIngest | `POST` | `/api/v1/analytics/events` | `analyticsIngest` | TestContractMatrix/analyticsIngest/success | TestContractMatrix/analyticsIngest/failure |
 | API-authBind | `POST` | `/api/v1/auth/bind` | `authBind` | TestContractMatrix/authBind/success | TestContractMatrix/authBind/failure |
 | API-authDevice | `POST` | `/api/v1/auth/device` | `authDevice` | TestContractMatrix/authDevice/success | TestContractMatrix/authDevice/failure |

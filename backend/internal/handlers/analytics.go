@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"animalpoke/backend/internal/analytics"
 	"animalpoke/backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +32,8 @@ var allowedAnalyticsEvents = map[string]struct{}{
 	"collection_complete": {},
 	"trade":               {},
 	"battle_end":          {},
+	"app_open":            {},
+	"sync_fail":           {},
 }
 
 // Forbidden payload keys — photos, tokens, precise coordinates.
@@ -138,7 +142,44 @@ func (h *AnalyticsHandler) Ingest(c *gin.Context) {
 			"experiment_id", truncateRunes(ev.ExperimentID, 64),
 			"experiment_variant", truncateRunes(ev.ExperimentVariant, 32),
 		)
-		accepted++
+		// AP-113: persist privacy-safe event for queryable metrics.
+		owner := middleware.GetDeviceID(c)
+		region := ""
+		if coarse != nil {
+			if v, ok := coarse["country"].(string); ok {
+				region = v
+			} else if v, ok := coarse["region"].(string); ok {
+				region = v
+			}
+		}
+		propsJSON := "{}"
+		if props != nil {
+			if b, err := json.Marshal(props); err == nil {
+				propsJSON = string(b)
+			}
+		}
+		ts := time.UnixMilli(ev.TS).UTC()
+		if ev.TS == 0 {
+			ts = time.Now().UTC()
+		}
+		appVer := ""
+		if props != nil {
+			if v, ok := props["app_version"].(string); ok {
+				appVer = v
+			}
+		}
+		a, _, _ := analytics.Default().Ingest([]analytics.Event{{
+			EventID: truncateRunes(ev.EventID, 64), OwnerKey: owner, SessionID: truncateRunes(ev.SessionID, 64),
+			Name: name, TS: ts, SchemaVersion: analyticsSchemaVersion,
+			ExperimentID: truncateRunes(ev.ExperimentID, 64), ExperimentVariant: truncateRunes(ev.ExperimentVariant, 32),
+			AppVersion: truncateRunes(appVer, 32), Region: truncateRunes(region, 32), PropsJSON: propsJSON,
+		}})
+		if a > 0 {
+			accepted++
+		} else {
+			// duplicate counts as accepted for client idempotency
+			accepted++
+		}
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{
@@ -225,4 +266,20 @@ func truncateRunes(s string, n int) string {
 	}
 	r := []rune(s)
 	return string(r[:n]) + "…"
+}
+
+// DeleteOwner POST used by privacy pipeline — anonymize analytics for owner.
+func (h *AnalyticsHandler) DeleteOwner(c *gin.Context) {
+	owner := middleware.GetDeviceID(c)
+	if owner == "" {
+		middleware.WriteError(c, http.StatusUnauthorized, "unauthorized", "device required", false, nil)
+		return
+	}
+	n := analytics.Default().DeleteOwner(owner)
+	c.JSON(http.StatusOK, gin.H{"deleted": n, "request_id": middleware.GetRequestID(c)})
+}
+
+// Dictionary GET /api/v1/ops/analytics/dictionary
+func (h *AnalyticsHandler) Dictionary(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"metrics": analytics.Dictionary(), "request_id": middleware.GetRequestID(c)})
 }

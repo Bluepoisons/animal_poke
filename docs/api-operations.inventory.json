@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 161,
+  "count": 163,
   "operations": [
     {
       "method": "DELETE",
@@ -219,6 +219,12 @@
       "path": "/api/v1/notifications/preferences",
       "operationId": "getNotificationPreferences",
       "key": "GET /api/v1/notifications/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ops/analytics/dictionary",
+      "operationId": "analyticsDictionary",
+      "key": "GET /api/v1/ops/analytics/dictionary"
     },
     {
       "method": "GET",
@@ -459,6 +465,12 @@
       "path": "/api/v1/admin/sessions/revoke",
       "operationId": "adminRevokeSession",
       "key": "POST /api/v1/admin/sessions/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/analytics/delete",
+      "operationId": "analyticsDeleteOwner",
+      "key": "POST /api/v1/analytics/delete"
     },
     {
       "method": "POST",
