@@ -23,7 +23,9 @@
     "check:bundle-budget": "node ./scripts/check-bundle-budget.mjs",
     "economy:gate": "node ./scripts/economy-monte-carlo-gate.mjs",
     "test:economy": "vitest run src/economy/monteCarlo",
-    "sbom": "npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json"
+    "sbom": "npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json",
+    "content:ethics": "node ../scripts/narrative-ethics-gate.mjs",
+    "test:content-ethics": "node --test ../scripts/narrative-ethics-gate.test.mjs"
   },
   "dependencies": {
     "idb": "^8.0.3",

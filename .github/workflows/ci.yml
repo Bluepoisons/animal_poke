@@ -121,6 +121,8 @@ jobs:
           name: frontend-sbom
           path: frontend/sbom.cdx.json
           if-no-files-found: error
+      - name: Narrative ethics content gate (AP-130)
+        run: npm run content:ethics && npm run test:content-ethics
       - name: Typecheck & build
         run: npm run build
         env:

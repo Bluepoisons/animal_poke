@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"animalpoke/backend/internal/ai/prompts"
+	"animalpoke/backend/internal/narrativepolicy"
 	"animalpoke/backend/internal/taxonomy"
 )
 
@@ -318,6 +319,16 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 	result.Layer = "fictional_vignette"
 	result.PolicyVersion = prompts.NarrativePolicyVersion
 
+	// Vision-derived labels are untrusted input. Never let instruction-shaped
+	// fields reach the LLM or be echoed by the deterministic fallback.
+	if err := narrativepolicy.ValidatePromptInput(input.Breed, input.Color, input.BodyType); err != nil {
+		result.Narrative = narrativeFallback(ValueInput{Species: input.Species}, result)
+		result.Source = "algo"
+		result.Degraded = true
+		result.ReasonCode = "narrative_input_policy_blocked"
+		return result, nil
+	}
+
 	// LLM 仅叙事；未配置时用确定性模板
 	if !s.cfg.LLMConfigured() {
 		if !s.mock {
@@ -378,9 +389,6 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 		}
 	} else {
 		result.Narrative = llmOut.Narrative
-		if llmOut.Disclaimer != "" {
-			result.Disclaimer = llmOut.Disclaimer
-		}
 	}
 	// 无论 LLM 是否返回 fiction 字段，服务端强制虚构层
 	result.Fiction = true
@@ -388,15 +396,15 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 	if len(result.Narrative) > 2000 {
 		result.Narrative = result.Narrative[:2000]
 	}
-	// 敏感断言粗过滤
-	low := strings.ToLower(result.Narrative)
-	for _, bad := range []string{"diagnosed", "owned by", "lives at", "gps", "address", "病历", "主人是", "家住"} {
-		if strings.Contains(low, bad) {
-			result.Narrative = narrativeFallback(input, result)
-			result.Degraded = true
-			result.ReasonCode = "narrative_policy_blocked"
-			break
-		}
+	if guidance, sensitive := narrativepolicy.SafetyGuidance(result.Narrative); sensitive {
+		result.Narrative = guidance
+		result.Degraded = true
+		result.ReasonCode = "narrative_safety_guidance"
+	}
+	if err := narrativepolicy.ValidateOutput(result.Narrative); err != nil {
+		result.Narrative = narrativeFallback(ValueInput{Species: input.Species}, result)
+		result.Degraded = true
+		result.ReasonCode = "narrative_policy_blocked"
 	}
 	result.Source = "algo"
 	result.Model = model
