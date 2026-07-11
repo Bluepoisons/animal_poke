@@ -21,6 +21,8 @@ spec:
         app: animal-poke-backend
     spec:
       serviceAccountName: animal-poke-backend
+      # AP-111: allow in-flight writes to finish; pair with preStop below.
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -28,6 +30,29 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      # Spread across zones then nodes so single-zone failure keeps capacity.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: animal-poke-backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: animal-poke-backend
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: animal-poke-backend
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: backend
           # 使用不可变标签：commit SHA 或 release digest，禁止 latest
@@ -154,6 +179,11 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 2
+          # Drain: fail readiness via SIGTERM handling window; sleep so LB de-registers.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
           startupProbe:
             httpGet:
               path: /livez

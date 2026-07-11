@@ -4,6 +4,7 @@ resources:
   - ../../base
   # Production-only backup CronJob (references mysql.production — never include in staging)
   - mysql-backup-cronjob.yaml
+  - network-policy.yaml
 namespace: production
 # Immutable release tag injected by CI / release pipeline:
 #   IMAGE_TAG=$GITHUB_SHA ./deploy/k8s/scripts/assert-manifests.sh
