@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getConsent,
   grantConsentAsync,
@@ -9,6 +9,7 @@ import {
   type ConsentScope,
   SERVER_CONSENT_VERSION,
 } from './index'
+import { useFocusTrap } from '../a11y'
 
 export type ConsentGateMode = 'full' | 'readonly'
 
@@ -29,6 +30,7 @@ export function ConsentGate({
     precise_location: false,
   })
   const [error, setError] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void (async () => {
@@ -50,6 +52,8 @@ export function ConsentGate({
     record.serverSynced &&
     record.scopes.includes('photo') &&
     !isConsentOutdated()
+  const dialogOpen = !isGranted && (!isDenied || !readonlyFallback)
+  useFocusTrap({ containerRef: dialogRef, active: dialogOpen })
 
   if (isGranted) {
     return <>{children}</>
@@ -62,7 +66,7 @@ export function ConsentGate({
 
   if (isDenied && !readonlyFallback) {
     return (
-      <div style={styles.shell} role="dialog" aria-modal="true">
+      <div ref={dialogRef} className="ap-trap-container" style={styles.shell} role="dialog" aria-modal="true">
         <div style={styles.card}>
           <h1 style={styles.title}>仅可浏览</h1>
           <p style={styles.p}>
@@ -118,6 +122,8 @@ export function ConsentGate({
 
   return (
     <div
+      ref={dialogRef}
+      className="ap-trap-container"
       role="dialog"
       aria-modal="true"
       aria-labelledby="consent-title"

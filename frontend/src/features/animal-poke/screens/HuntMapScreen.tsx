@@ -80,7 +80,7 @@ export default function HuntMapScreen({
         rightTone="blue"
       />
 
-      <div className="ap-map-canvas" aria-label="猎取地图">
+      <div className="ap-map-canvas" role="region" aria-label="猎取地图">
         <div className="ap-road ap-road--blue" />
         <div className="ap-road ap-road--olive" />
 
@@ -156,7 +156,7 @@ export default function HuntMapScreen({
           ) : (
             <>
               <h2>
-                {speciesNames[selected.species]} · {selected.distanceMeters}m · {selected.rarity}
+                {speciesNames[selected.species as keyof typeof speciesNames]} · {selected.distanceMeters}m · {selected.rarity}
               </h2>
               <p>
                 {selected.label}。超出捕获范围时无法开始捕获；服务端权威校验见后续接口。
@@ -165,6 +165,20 @@ export default function HuntMapScreen({
           )}
         </div>
       </div>
+      <section className="ap-map-target-list" aria-label="附近可探索目标">
+        <h2>附近可探索目标</h2>
+        {targets.length === 0 ? (
+          <p>当前没有可探索目标。</p>
+        ) : (
+          <ul>
+            {targets.map((target) => (
+              <li key={target.id}>
+                {target.label}：{speciesNames[target.species as keyof typeof speciesNames]}，距离 {target.distanceMeters} 米，{target.rarity}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

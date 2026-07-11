@@ -69,3 +69,18 @@
     transition: none;
   }
 }
+
+@media (forced-colors: active) {
+  .ap-progressbar__track,
+  .ap-progressbar__fill {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+  .ap-progressbar__fill {
+    background: Highlight;
+  }
+  .ap-trap-container:focus-visible,
+  .ap-trap-container *:focus-visible {
+    outline-color: Highlight;
+  }
+}
