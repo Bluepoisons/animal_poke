@@ -9,6 +9,7 @@ import type { AnimalRecord } from '../../../db/types'
 import type { RarityTier, SpeciesType } from '../../../types'
 import AccessibleDialog from '../../../a11y/AccessibleDialog'
 import { useI18n } from '../../../i18n'
+import { LoadingState, EmptyState, ErrorState } from '../../../components/states'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
@@ -36,6 +37,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
   const [entries, setEntries] = useState<AnimalEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<AnimalEntry | null>(null)
   const { t } = useI18n()
 
@@ -48,7 +50,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
         if (cancelled) return
         setEntries(rows.map(mapRecord))
       } catch {
-        if (!cancelled) setEntries([])
+        if (!cancelled) setLoadError(true)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -81,52 +83,63 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
         rightTone="pink"
       />
 
-      <nav className="ap-pokedex-tabs" aria-label={t('pokedex.filter_label')}>
-        {filters.map((item) => (
-          <button
-            key={item}
-            className={filter === item ? 'is-active' : ''}
-            onClick={() => setFilter(item)}
-            type="button"
-          >
-            {item === 'all' ? t('collection.filter.all') : t(`species.${item}`)}
-          </button>
-        ))}
-      </nav>
+      {loading && <LoadingState title={t('state.loading')} />}
 
-      {!loading && entries.length === 0 && (
-        <div role="status" style={{ padding: 24, textAlign: 'center', opacity: 0.8 }}>
-          <p style={{ fontWeight: 700 }}>{t('pokedex.empty_title')}</p>
-          <p style={{ fontSize: 13 }}>{t('pokedex.empty_body')}</p>
-        </div>
+      {loadError && !loading && (
+        <ErrorState
+          title={t('state.error')}
+          body={t('state.error_body')}
+          primary={{ label: t('state.error_retry'), onClick: () => { setLoading(true); setLoadError(false) } }}
+        />
       )}
 
-      <div className="ap-pokedex-grid">
-        {filtered.map((entry) => (
-          <RarityCard key={entry.id} entry={entry} onClick={() => handleCardClick(entry)} />
-        ))}
-      </div>
+      {!loading && !loadError && entries.length === 0 && (
+        <EmptyState title={t('state.empty')} body={t('state.empty_body')} />
+      )}
 
-      {selected && (
-        <AccessibleDialog
-          open={!!selected}
-          onClose={() => setSelected(null)}
-          title={t('pokedex.detail_label')}
-        >
-          <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
-          <p style={{ margin: 0, fontSize: 13 }}>
-            {selected.species} · {selected.rarity}
-            {selected.region ? ` · ${selected.region}` : ''}
-          </p>
-          <button
-            type="button"
-            className="ap-map-chip"
-            style={{ marginTop: 12 }}
-            onClick={() => setSelected(null)}
-          >
-            {t('pokedex.close_detail')}
-          </button>
-        </AccessibleDialog>
+      {!loading && !loadError && (
+        <>
+          <nav className="ap-pokedex-tabs" aria-label={t('pokedex.filter_label')}>
+            {filters.map((item) => (
+              <button
+                key={item}
+                className={filter === item ? 'is-active' : ''}
+                onClick={() => setFilter(item)}
+                type="button"
+              >
+                {item === 'all' ? t('collection.filter.all') : t(`species.${item}`)}
+              </button>
+            ))}
+          </nav>
+
+          <div className="ap-pokedex-grid">
+            {filtered.map((entry) => (
+              <RarityCard key={entry.id} entry={entry} onClick={() => handleCardClick(entry)} />
+            ))}
+          </div>
+
+          {selected && (
+            <AccessibleDialog
+              open={!!selected}
+              onClose={() => setSelected(null)}
+              title={t('pokedex.detail_label')}
+            >
+              <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
+              <p style={{ margin: 0, fontSize: 13 }}>
+                {selected.species} · {selected.rarity}
+                {selected.region ? ` · ${selected.region}` : ''}
+              </p>
+              <button
+                type="button"
+                className="ap-map-chip"
+                style={{ marginTop: 12 }}
+                onClick={() => setSelected(null)}
+              >
+                {t('pokedex.close_detail')}
+              </button>
+            </AccessibleDialog>
+          )}
+        </>
       )}
     </div>
   )
