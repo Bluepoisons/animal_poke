@@ -223,6 +223,7 @@ const progression = useProgression()
         dispatch={dispatch}
         onNavigate={handleNavigateWithProgress}
         onEnterCapture={handleEnterCapture}
+        onOpenAccount={() => setShowAccount(true)}
         city={cityLabel}
         weather={weatherLabel}
       />

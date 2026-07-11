@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ConsentGate } from '../compliance/ConsentGate'
 import { I18nProvider } from '../i18n'
 import { SettingsProvider } from '../settings'
@@ -12,6 +12,7 @@ import { BattleProvider } from '../battle/BattleContext'
 import { DispatchProvider } from '../economy/DispatchContext'
 import { ProgressionProvider } from '../progression'
 import PokedexScreen from '../features/animal-poke/screens/PokedexScreen'
+import SettingsScreen from '../settings/SettingsScreen'
 
 function GameProviders({ children }: { children: ReactNode }) {
   return (
@@ -37,6 +38,8 @@ function GameProviders({ children }: { children: ReactNode }) {
 
 /** 拒绝授权时的只读壳：可浏览图鉴，不可发现/捕获 */
 function ReadOnlyShell() {
+  const [tab, setTab] = useState<'pokedex' | 'privacy'>('pokedex')
+  const [toast, setToast] = useState<string | null>(null)
   return (
     <div className="ap-root" style={{ minHeight: '100vh', background: '#FFF8F0', padding: 16 }}>
       <div
@@ -51,10 +54,34 @@ function ReadOnlyShell() {
           fontSize: 13,
         }}
       >
-        只读模式：未授权照片/定位，无法使用发现与捕获。可浏览本地图鉴。
+        只读模式：未授权照片/定位，无法使用发现与捕获。可浏览本地图鉴或管理隐私。
       </div>
+      <div
+        style={{
+          maxWidth: 420,
+          margin: '0 auto 12px',
+          display: 'flex',
+          gap: 8,
+        }}
+      >
+        <button type="button" data-testid="readonly-tab-pokedex" onClick={() => setTab('pokedex')}>
+          图鉴
+        </button>
+        <button type="button" data-testid="readonly-tab-privacy" onClick={() => setTab('privacy')}>
+          隐私中心
+        </button>
+      </div>
+      {toast && (
+        <p role="status" style={{ maxWidth: 420, margin: '0 auto 8px', fontSize: 13 }}>
+          {toast}
+        </p>
+      )}
       <GameProviders>
-        <PokedexScreen onToast={() => {}} />
+        {tab === 'privacy' ? (
+          <SettingsScreen onToast={(m) => setToast(m)} />
+        ) : (
+          <PokedexScreen onToast={(m) => setToast(m)} />
+        )}
       </GameProviders>
     </div>
   )

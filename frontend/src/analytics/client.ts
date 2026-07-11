@@ -9,6 +9,7 @@
 
 import { authedRequest } from '../auth/deviceAuth'
 import { getConsent, hasScope } from '../compliance'
+import { getAnalyticsPref } from '../privacy/analyticsPrefs'
 import {
   ANALYTICS_SCHEMA_VERSION,
   isFunnelEventName,
@@ -69,6 +70,8 @@ export function setAnalyticsConsent(state: AnalyticsConsentState | null): void {
 
 export function isAnalyticsAllowed(): boolean {
   if (consentOverride != null) return consentOverride === 'allowed'
+  // 用户在隐私中心显式关闭分析（AP-068）
+  if (getAnalyticsPref() === 'denied') return false
   const c = getConsent()
   if (c.status === 'denied' || c.status === 'pending') return false
   if (c.revokedAt != null && (c.status !== 'granted' || c.scopes.length === 0)) return false
