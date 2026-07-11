@@ -11,6 +11,7 @@ import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
 import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
+import { useI18n } from '../../../i18n'
 
 interface DiscoverScreenProps {
   energy: number
@@ -65,12 +66,6 @@ function MascotBlob() {
   )
 }
 
-const SPECIES_LABEL: Record<string, string> = {
-  cat: '猫',
-  dog: '狗',
-  goose: '鹅',
-}
-
 export default function DiscoverScreen({
   energy,
   coins,
@@ -79,11 +74,14 @@ export default function DiscoverScreen({
   onNavigate,
   onEnterCapture,
   onOpenAccount,
-  city = '定位中',
+  city,
   weather = '—',
 }: DiscoverScreenProps) {
   const camera = useCamera()
   const { decision: perf, shouldPauseCamera } = usePerfMode()
+  const { t } = useI18n()
+  const speciesLabel = (species: string) =>
+    species === 'cat' ? t('species.cat') : species === 'dog' ? t('species.dog') : species === 'goose' ? t('species.goose') : species
   // perf.scanMode: continuous | manual; compress before upload via compressImageForUpload
   const [busy, setBusy] = useState(false)
 
@@ -112,7 +110,7 @@ export default function DiscoverScreen({
     if (flow.phase === 'detecting') return '正在识别…'
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
       const s = flow.selectedBox
-      return `识别：${SPECIES_LABEL[s.species] || s.species} · 置信度 ${Math.round(s.confidence * 100)}%`
+      return `识别：${speciesLabel(s.species)} · 置信度 ${Math.round(s.confidence * 100)}%`
     }
     if (flow.phase === 'failed' && flow.errorMessage) return flow.errorMessage
     if (camera.status === 'denied') return '相机权限被拒绝 · 请在系统设置开启'
@@ -238,10 +236,10 @@ export default function DiscoverScreen({
 
   const primaryLabel =
     flow.phase === 'target_confirmed'
-      ? '进入捕获'
+      ? t('discover.enter_capture')
       : busy || flow.phase === 'detecting'
-        ? '识别中…'
-        : '开始识别'
+        ? t('discover.detecting')
+        : t('discover.start')
 
   const onPrimary = () => {
     if (flow.phase === 'target_confirmed') {
@@ -253,7 +251,7 @@ export default function DiscoverScreen({
 
   return (
     <div className="ap-screen">
-      <TopResourceBar city={city} weather={weather} energy={energy} coins={coins} />
+      <TopResourceBar city={city || t('discover.city_loading')} weather={weather} energy={energy} coins={coins} />
 
       <div className="ap-discover__hero">
         <div className="ap-discover__eyebrow-row">
@@ -265,19 +263,19 @@ export default function DiscoverScreen({
               onClick={() => onNavigate('settings')}
               data-testid="open-settings"
             >
-              设置
+              {t('discover.settings')}
             </button>
             {onOpenAccount ? (
               <button type="button" className="ap-account-entry" onClick={onOpenAccount} data-testid="open-account">
-                账号
+                {t('discover.account')}
               </button>
             ) : null}
           </div>
         </div>
         <h1 className="ap-discover__title">
-          <span className="ap-highlight ap-highlight--pink">真实识别</span>
+          <span className="ap-highlight ap-highlight--pink">{t('discover.title_line_one')}</span>
           <br />
-          发现野生动物
+          {t('discover.title_line_two')}
         </h1>
       </div>
 
@@ -286,9 +284,9 @@ export default function DiscoverScreen({
           className="ap-map-chip"
           onClick={() => onNavigate('map')}
           type="button"
-          aria-label="打开地图"
+          aria-label={t('discover.open_map_label')}
         >
-          打开猎取地图
+          {t('discover.open_map')}
         </button>
       </div>
 
@@ -330,7 +328,7 @@ export default function DiscoverScreen({
       </div>
 
       <p className="ap-photo-skill-hint" role="note">
-        观察技巧：稳定、完整、光线、无遮挡、构图与安全距离。靠得更近不会提高稀有度。
+        {t('discover.photo_hint')}
       </p>
 
       {showSelect && (
@@ -345,7 +343,7 @@ export default function DiscoverScreen({
               }}
               onClick={() => dispatch({ type: 'SELECT_TARGET', animalId: d.id })}
             >
-              {SPECIES_LABEL[d.species] || d.species} {Math.round(d.confidence * 100)}%
+              {speciesLabel(d.species)} {Math.round(d.confidence * 100)}%
             </button>
           ))}
           <button
@@ -357,7 +355,7 @@ export default function DiscoverScreen({
               onEnterCapture()
             }}
           >
-            确认目标并捕获
+            {t('discover.confirm_target')}
           </button>
         </div>
       )}
@@ -372,7 +370,7 @@ export default function DiscoverScreen({
               dispatch({ type: 'RESET' })
             }}
           >
-            识别错了 · 重新扫描
+            {t('discover.retry_scan')}
           </button>
           {(['cat', 'dog', 'goose'] as const)
             .filter((s) => s !== flow.selectedBox?.species)
@@ -393,7 +391,7 @@ export default function DiscoverScreen({
                   dispatch({ type: 'DETECT_SUCCESS', detectInferenceId: flow.detectInferenceId || 'user-correct', detections: [corrected] })
                 }}
               >
-                改成{s === 'cat' ? '猫' : s === 'dog' ? '狗' : '鹅'}
+                {t('discover.correct_to', { species: speciesLabel(s) })}
               </button>
             ))}
         </div>
@@ -406,7 +404,7 @@ export default function DiscoverScreen({
           style={{ margin: '0 16px 8px' }}
           onClick={() => dispatch({ type: 'RESET' })}
         >
-          重新开始
+          {t('discover.restart')}
         </button>
       )}
 

@@ -6,9 +6,11 @@ import {
   stepCopy,
   type OnboardingState,
 } from '../onboarding'
+import { useI18n } from '../../../i18n'
 
 export default function OnboardingOverlay() {
   const [state, setState] = useState<OnboardingState>(() => loadOnboarding())
+  const { t } = useI18n()
   if (state.step === 'done' || state.skipped) return null
   const copy = stepCopy(state.step)
   return (
@@ -46,10 +48,10 @@ export default function OnboardingOverlay() {
             className="ap-map-chip"
             onClick={() => setState(advanceOnboarding())}
           >
-            继续
+            {t('onboarding.continue')}
           </button>
           <button type="button" className="ap-map-chip" onClick={() => setState(skipOnboarding())}>
-            跳过教学
+            {t('onboarding.skip')}
           </button>
         </div>
       </div>

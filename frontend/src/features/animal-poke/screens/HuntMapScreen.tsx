@@ -7,6 +7,7 @@ import { MAX_ACCURACY_M } from '../../../outdoorSafety/constants'
 import { DISCOVERY_RANGE_M } from '../../../lbs/constants'
 import { discoveryToHuntTarget } from '../lbsMap'
 import type { HuntTarget } from '../data/types'
+import { useI18n } from '../../../i18n'
 
 interface HuntMapScreenProps {
   selectedTargetId: string
@@ -14,10 +15,10 @@ interface HuntMapScreenProps {
   onBack: () => void
 }
 
-const speciesNames = {
-  goose: '鹅',
-  cat: '猫',
-  dog: '狗',
+const speciesNameKeys = {
+  goose: 'species.goose',
+  cat: 'species.cat',
+  dog: 'species.dog',
 } as const
 
 export default function HuntMapScreen({
@@ -26,6 +27,7 @@ export default function HuntMapScreen({
   onBack,
 }: HuntMapScreenProps) {
   const lbs = useLbs()
+  const { t } = useI18n()
   const { state, requestLocation, refreshPoints, nextRefreshIn } = lbs
   const accuracy = state.playerLocation?.accuracy
   const accuracyRadius = accuracyCircleRadiusM(accuracy)
@@ -57,36 +59,36 @@ export default function HuntMapScreen({
   const secs = String(Math.max(0, nextRefreshIn) % 60).padStart(2, '0')
 
   const statusLine = (() => {
-    if (state.geoStatus === 'locating') return '定位中…'
-    if (state.geoStatus === 'denied') return '定位被拒绝'
-    if (state.geoStatus === 'timeout') return '定位超时'
-    if (state.geoStatus === 'unsupported') return '设备不支持定位'
-    if (!state.playerLocation) return '等待定位'
+    if (state.geoStatus === 'locating') return t('map.locating')
+    if (state.geoStatus === 'denied') return t('map.denied')
+    if (state.geoStatus === 'timeout') return t('map.timeout')
+    if (state.geoStatus === 'unsupported') return t('map.unsupported')
+    if (!state.playerLocation) return t('map.waiting')
     const acc = state.playerLocation.accuracy
-    const accText = typeof acc === 'number' ? `±${Math.round(acc)}m` : '精度未知'
-    return `${state.cityName || '未知城市'} · ${accText} · ${targets.length} 个点`
+    const accText = typeof acc === 'number' ? `±${Math.round(acc)}m` : t('map.accuracy_unknown')
+    return t('map.status', { city: state.cityName || t('map.accuracy_unknown'), accuracy: accText, count: targets.length })
   })()
 
   return (
     <div className="ap-screen ap-screen--map">
       <button className="ap-map-back" onClick={onBack} type="button">
-        返回手账
+        {t('map.back')}
       </button>
 
       <PageTitle
-        title="HUNT MAP"
+        title={t('map.page_title')}
         subtitle={statusLine}
-        rightText={`刷新 ${minutes}:${secs}`}
+        rightText={t('map.refreshing', { time: `${minutes}:${secs}` })}
         rightTone="blue"
       />
 
-      <div className="ap-map-canvas" aria-label="猎取地图">
+      <div className="ap-map-canvas" aria-label={t('map.title')}>
         <div className="ap-road ap-road--blue" />
         <div className="ap-road ap-road--olive" />
 
         {circlePercent > 0 && (
           <div
-            aria-label={`定位精度约 ${Math.round(accuracy ?? 0)} 米`}
+            aria-label={t('map.accuracy_radius', { meters: Math.round(accuracy ?? 0) })}
             style={{
               position: 'absolute',
               left: '50%',
@@ -119,7 +121,7 @@ export default function HuntMapScreen({
         <div
           className="ap-pin ap-pin--user"
           style={{ left: '50%', top: '50%', zIndex: 2 }}
-          aria-label="你的位置"
+          aria-label={t('map.you')}
         />
         <div
           className="ap-pin-label"
@@ -131,36 +133,34 @@ export default function HuntMapScreen({
             zIndex: 2,
           }}
         >
-          你的位置
+          {t('map.you')}
           {accuracy != null ? ` · ±${Math.round(accuracy)}m` : ''}
         </div>
 
         <div className="ap-map-card">
-          {accuracyTooLow && <p>定位精度不足，无法判定进入捕获范围。</p>}
+          {accuracyTooLow && <p>{t('map.accuracy_low')}</p>}
           {state.geoStatus === 'denied' || state.geoStatus === 'unsupported' ? (
             <>
-              <h2>无法定位</h2>
-              <p>{state.errorMsg || '请开启定位权限后重试。'}</p>
+              <h2>{t('map.unavailable')}</h2>
+              <p>{state.errorMsg || t('map.permission_prompt')}</p>
               <button type="button" className="ap-map-chip" onClick={() => requestLocation()}>
-                重新定位
+                {t('map.relocate')}
               </button>
             </>
           ) : !selected ? (
             <>
-              <h2>附近暂无发现点</h2>
-              <p>定位成功后会生成可探索目标。低精度或极端天气时可能为空。</p>
+              <h2>{t('map.no_targets')}</h2>
+              <p>{t('map.no_targets_body')}</p>
               <button type="button" className="ap-map-chip" onClick={() => refreshPoints()}>
-                手动刷新
+                {t('map.manual_refresh')}
               </button>
             </>
           ) : (
             <>
               <h2>
-                {speciesNames[selected.species]} · {selected.distanceMeters}m · {selected.rarity}
+                {t(speciesNameKeys[selected.species])} · {selected.distanceMeters}m · {selected.rarity}
               </h2>
-              <p>
-                {selected.label}。超出捕获范围时无法开始捕获；服务端权威校验见后续接口。
-              </p>
+              <p>{t('map.target_detail', { label: selected.label })}</p>
             </>
           )}
         </div>

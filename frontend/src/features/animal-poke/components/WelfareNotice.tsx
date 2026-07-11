@@ -1,5 +1,7 @@
+import { useI18n } from '../../../i18n'
 /** 动物福利提示（#205）—— 不鼓励现实投喂/追逐 */
 export default function WelfareNotice() {
+  const { t } = useI18n()
   return (
     <p
       role="note"
@@ -10,7 +12,7 @@ export default function WelfareNotice() {
         margin: '8px 16px 0',
       }}
     >
-      请温柔观察：不追逐、不触摸、不投喂、不惊扰野生动物。投掷物仅为虚拟贴纸/光点，请勿在现实中向动物投掷食物。
+      {t('welfare.notice')}
     </p>
   )
 }

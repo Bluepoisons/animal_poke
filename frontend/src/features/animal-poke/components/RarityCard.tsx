@@ -1,6 +1,7 @@
 import type { AnimalEntry } from '../data/types'
 import AnimalIcon from './AnimalIcon'
 import { rarityNames } from '../data/animals'
+import { useI18n } from '../../../i18n'
 
 interface RarityCardProps {
   entry: AnimalEntry
@@ -8,9 +9,10 @@ interface RarityCardProps {
 }
 
 export default function RarityCard({ entry, onClick }: RarityCardProps) {
+  const { t } = useI18n()
   if (!entry.collected) {
     return (
-      <article className="ap-rarity-card locked" aria-label="未解锁">
+      <article className="ap-rarity-card locked" aria-label={t('rarity.locked')}>
         ???
       </article>
     )

@@ -78,11 +78,8 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
     onToast?.(t('settings.saved'))
   }
 
-  const localeLabel = (l: Locale) => {
-    if (l === 'zh') return t('settings.chinese')
-    if (l === 'en') return t('settings.english')
-    return t('settings.japanese')
-  }
+  const localeLabel = (l: Locale) =>
+    l === 'zh' ? t('settings.chinese') : t('settings.english')
 
   return (
     <div className="ap-screen" style={{ padding: 16, overflow: 'auto' }} data-testid="settings-screen">

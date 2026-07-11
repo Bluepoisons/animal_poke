@@ -1,3 +1,4 @@
+import { useI18n } from '../../../i18n'
 interface CaptureProbabilityBarProps {
   title: string
   successRate: number
@@ -11,18 +12,17 @@ export default function CaptureProbabilityBar({
   bestMin,
   bestMax,
 }: CaptureProbabilityBarProps) {
+  const { t } = useI18n()
   return (
     <div className="ap-probability-card">
       <h2>{title}</h2>
-      <div className="ap-probability" aria-label="捕获概率区间">
+      <div className="ap-probability" aria-label={t('capture.probability')}>
         <span style={{ width: '33%' }} />
         <span style={{ width: '34%' }} />
         <span style={{ width: '7%' }} />
         <span style={{ width: '26%' }} />
       </div>
-      <p>
-        捕获成功率 {Math.round(successRate * 100)}% · 最佳力度 {bestMin}-{bestMax}
-      </p>
+      <p>{t('capture.probability_detail', { rate: Math.round(successRate * 100), min: bestMin, max: bestMax })}</p>
     </div>
   )
 }

@@ -31,11 +31,9 @@ describe('i18n', () => {
     expect(result.current.t('app.name')).toBe(en['app.name'])
   })
 
-  it('switches to ja stub locale', () => {
+  it('does not expose an incomplete Japanese locale', () => {
     const { result } = renderHook(() => useI18n(), { wrapper })
-    act(() => result.current.setLocale('ja'))
-    expect(result.current.locale).toBe('ja')
-    expect(result.current.t('app.name')).toBe('アニマルポケ')
+    expect(result.current.supportedLocales).toEqual(['zh', 'en'])
   })
 
   it('persists locale choice to localStorage', () => {
@@ -56,9 +54,10 @@ describe('i18n', () => {
     expect(resolveMessage('en', 'totally.missing.key')).toBe('totally.missing.key')
   })
 
-  it('falls back to zh when key missing in current locale dict', () => {
-    // ja has partial; en/zh full — resolveMessage still returns string
-    expect(resolveMessage('ja', 'settings.title')).toBeTruthy()
+  it('uses zh when a stale Japanese preference is stored', () => {
+    localStorage.setItem('animal-poke-locale', 'ja')
+    const { result } = renderHook(() => useI18n(), { wrapper })
+    expect(result.current.locale).toBe('zh')
   })
 
   it('substitutes params in template', () => {
@@ -67,11 +66,10 @@ describe('i18n', () => {
     expect(text).toBe(zh['collection.unlocked'])
   })
 
-  it('all zh keys have en translations', () => {
-    const zhKeys = Object.keys(zh) as TranslationKey[]
-    const enKeys = Object.keys(en)
-    const missing = zhKeys.filter(k => !enKeys.includes(k))
-    expect(missing).toEqual([])
+  it('keeps the production catalogs exactly in sync', () => {
+    const zhKeys = Object.keys(zh).sort()
+    const enKeys = Object.keys(en).sort()
+    expect(enKeys).toEqual(zhKeys)
   })
 
   it('settings keys exist for settings center', () => {
