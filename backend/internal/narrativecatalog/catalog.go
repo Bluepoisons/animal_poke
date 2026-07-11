@@ -101,6 +101,9 @@ func SeedFragments() []FragmentDef {
 		{FragmentID: "frag_first_dog", Title: "狗的页边", Body: "首次犬科观察：晨间与黄昏的路线不同。", Priority: 85, Triggers: map[string]any{"first_species": "dog"}, ReasonHint: "首次观察狗", FallbackID: "frag_first_any"},
 		{FragmentID: "frag_weather_rain", Title: "雨天旁证", Body: "雨天观察：缺席本身成为下一章的引子。", Priority: 70, Triggers: map[string]any{"weather": "rain"}, ReasonHint: "雨天触发", CooldownHours: 24},
 		{FragmentID: "frag_combo_urban", Title: "城市生态拼图", Body: "猫与狗的组合笔记让你看见同一条街的不同时间层。", Priority: 75, Triggers: map[string]any{"species_set": []string{"cat", "dog"}}, ReasonHint: "跨物种组合"},
+		{FragmentID: "frag_obs_10", Title: "十次观察", Body: "里程碑：十次观察后，手账开始比较季节而不是只记物种。", Priority: 65, Triggers: map[string]any{"min_observations": 10}, ReasonHint: "累计观察达到 10"},
+		{FragmentID: "frag_obs_15", Title: "十五页之后", Body: "重复与缺席同样重要——你开始为空白留出注释栏。", Priority: 60, Triggers: map[string]any{"min_observations": 15}, ReasonHint: "累计观察达到 15"},
+		{FragmentID: "frag_first_goose", Title: "鹅的页边", Body: "首次鹅科观察：水边的时间感与街巷不同。", Priority: 85, Triggers: map[string]any{"first_species": "goose"}, ReasonHint: "首次观察鹅", FallbackID: "frag_first_any"},
 	}
 }
 
