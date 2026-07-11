@@ -152,7 +152,11 @@ test.describe('AP-014 production capture hard gate', () => {
     expect(beforeReload.pending).toBe(0)
 
     await page.reload()
-    await expect(page.getByText('DISCOVER MODE').or(page.getByText(/POKEDEX/i))).toBeVisible({
+    // After i18n (AP-069) default locale is zh; multiple nodes may contain 图鉴
+    // (route announcer + tab + subtitle). Use .first() to avoid strict-mode multi-match.
+    await expect(
+      page.getByRole('button', { name: /图鉴|POKEDEX|Collection/i }).or(page.getByText('DISCOVER MODE')).first(),
+    ).toBeVisible({
       timeout: 20_000,
     })
 

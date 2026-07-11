@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"animalpoke/backend/internal/config"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -84,20 +86,27 @@ func (r *ReadyChecker) Snapshot() ReadyDeps {
 }
 
 // evaluateReady 统一 readiness 判定。
+// db 失败时输出 reason=cert|auth|pool|network|unavailable，不回传原始错误/密钥。
 func evaluateReady(deps ReadyDeps) (ready bool, details gin.H) {
 	ready = true
 	details = gin.H{"app_env": deps.AppEnv}
 
 	if deps.DB != nil {
 		sqlDB, err := deps.DB.DB()
-		if err != nil || sqlDB.Ping() != nil {
+		if err != nil {
 			ready = false
 			details["db"] = "down"
+			details["db_reason"] = "pool"
+		} else if pingErr := sqlDB.Ping(); pingErr != nil {
+			ready = false
+			details["db"] = "down"
+			details["db_reason"] = config.ClassifyDBError(pingErr)
 		} else {
 			details["db"] = "up"
 		}
 	} else {
 		details["db"] = "unavailable"
+		details["db_reason"] = "unavailable"
 		// 生产无 DB 视为未就绪；开发允许降级
 		if deps.AppEnv == "production" || deps.AppEnv == "prod" {
 			ready = false

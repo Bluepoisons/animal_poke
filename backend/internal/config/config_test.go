@@ -3,7 +3,6 @@ package config
 import (
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -14,27 +13,22 @@ import (
 )
 
 func TestDSN(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  DatabaseConfig
-		want string
-	}{
-		{
-			name: "standard",
-			cfg:  DatabaseConfig{Host: "127.0.0.1", Port: 3306, User: "u", Password: "p", DBName: "db", TLSMode: "false"},
-			want: "u:p@tcp(127.0.0.1:3306)/db?charset=utf8mb4&parseTime=True&loc=UTC&tls=false&timeout=5s&readTimeout=10s&writeTimeout=10s",
-		},
-		{
-			name: "special_password",
-			cfg:  DatabaseConfig{Host: "db.host", Port: 3307, User: "root", Password: "p@ss:w/rd", DBName: "prod", TLSMode: "require"},
-			want: "root:" + url.QueryEscape("p@ss:w/rd") + "@tcp(db.host:3307)/prod?charset=utf8mb4&parseTime=True&loc=UTC&tls=require&timeout=5s&readTimeout=10s&writeTimeout=10s",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.cfg.DSN())
-		})
-	}
+	cfg := DatabaseConfig{Host: "127.0.0.1", Port: 3306, User: "u", Password: "p", DBName: "db", TLSMode: "false"}
+	mc, err := cfg.MySQLConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "u", mc.User)
+	assert.Equal(t, "p", mc.Passwd)
+	assert.Equal(t, "127.0.0.1:3306", mc.Addr)
+	assert.Equal(t, "db", mc.DBName)
+	assert.Empty(t, mc.TLSConfig)
+
+	special := DatabaseConfig{Host: "db.host", Port: 3307, User: "root", Password: "p@ss:w/rd", DBName: "prod", TLSMode: "require", TLSServerName: "db.host"}
+	mc2, err := special.MySQLConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "p@ss:w/rd", mc2.Passwd)
+	assert.NotEmpty(t, mc2.TLSConfig)
+	// DSN() is FormatDSN-backed for diagnostics.
+	assert.Contains(t, special.DSN(), "prod")
 }
 
 // clearProviderEnv 清空 Vision/VLM/LLM 相关环境，避免宿主环境干扰。
@@ -47,6 +41,8 @@ func clearProviderEnv(t *testing.T) {
 		"STATS_HMAC_KEY", "STATS_HMAC_KEY_PREVIOUS",
 		"TIME_SIGNING_KEY", "TIME_SIGNING_KEY_PREVIOUS",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
+		"DB_TLS_CA", "DB_TLS_CERT", "DB_TLS_KEY", "DB_TLS_SERVER_NAME",
+		"REDIS_URL",
 		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY",
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
 		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
@@ -294,6 +290,8 @@ func TestValidate_ProductionHTTPEndpoint(t *testing.T) {
 	cfg.AppEnv = "production"
 	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
+	cfg.Database.TLSMode = "require"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
@@ -317,6 +315,8 @@ func TestValidate_ProductionLocalhostRejected(t *testing.T) {
 	cfg.AppEnv = "production"
 	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
+	cfg.Database.TLSMode = "require"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
@@ -346,6 +346,7 @@ func TestValidate_Production(t *testing.T) {
 
 	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
 	cfg.AIMockEnabled = false
 	cfg.AuthMockOAuthEnabled = false
 	cfg.ThirdParty = ThirdPartyConfig{
@@ -358,6 +359,7 @@ func TestValidate_Production(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS")
 
+	cfg.Database.TLSMode = "require"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	assert.NoError(t, cfg.Validate())
 }
@@ -421,6 +423,7 @@ func TestValidate_ProductionMissingPurposeKey(t *testing.T) {
 	applyStrongCryptoKeys(cfg)
 	cfg.AccountTokenPepper = "" // 缺 pepper
 	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
@@ -445,6 +448,7 @@ func TestValidate_ProductionSharedKeysRejected(t *testing.T) {
 	cfg.AdminJWTSecret = "prod-admin-jwt-secret-32chars-min!"
 	cfg.AdminTokenTTL = 15 * time.Minute
 	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
@@ -475,6 +479,45 @@ func TestValidate_ProductionNoCrossPurposeFallback(t *testing.T) {
 	assert.Contains(t, err.Error(), "STATS_HMAC_KEY")
 	assert.Contains(t, err.Error(), "TIME_SIGNING_KEY")
 	assert.Contains(t, err.Error(), "ADMIN_JWT_SECRET")
+}
+
+func TestValidate_ProductionTLSDowngradeRejected(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	applyStrongCryptoKeys(cfg)
+	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "false"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
+		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DB_TLS")
+}
+
+func TestValidate_ProductionRedisPlaintextRejected(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	applyStrongCryptoKeys(cfg)
+	cfg.Database.Password = "complex-pass"
+	cfg.Database.TLSMode = "require"
+	cfg.RedisURL = "redis://:secret@redis:6379/0"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
+		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rediss")
 }
 
 func TestCapabilityStatus_NoSecrets(t *testing.T) {

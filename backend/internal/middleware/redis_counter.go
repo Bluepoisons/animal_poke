@@ -1,11 +1,17 @@
 // Redis 共享计数：Lua 令牌桶 + INCR TTL + SET NX EX。
 // 依赖 go-redis；仅在 REDIS_URL 配置时启用。
+// rediss:// 强制 TLS 主机校验与认证；生产禁止明文 redis://（见 config.ValidateRedisURL）。
 package middleware
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
+	"strings"
 	"time"
+
+	"animalpoke/backend/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -61,12 +67,42 @@ type RedisSharedCounter struct {
 	client *redis.Client
 }
 
-// NewRedisSharedCounter 从 REDIS_URL（redis://...）构造；url 非法返回 error。
+// NewRedisSharedCounter 从 REDIS_URL 构造；拒绝不安全 rediss 配置。
+// 生产环境的 rediss-only 策略由 config.Validate 在启动时强制。
 func NewRedisSharedCounter(redisURL string) (*RedisSharedCounter, error) {
+	lower := strings.ToLower(strings.TrimSpace(redisURL))
+	// rediss always uses strict auth+TLS policy; redis:// stays dev-friendly.
+	strict := strings.HasPrefix(lower, "rediss://")
+	if err := config.ValidateRedisURL(redisURL, strict); err != nil {
+		return nil, err
+	}
+
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse REDIS_URL: %w", err)
 	}
+	if opts.TLSConfig != nil {
+		base := opts.TLSConfig.Clone()
+		if base == nil {
+			base = &tls.Config{}
+		}
+		base.MinVersion = tls.VersionTLS12
+		if base.ServerName == "" {
+			host, _, splitErr := net.SplitHostPort(opts.Addr)
+			if splitErr != nil {
+				host = opts.Addr
+			}
+			base.ServerName = host
+		}
+		if base.InsecureSkipVerify {
+			return nil, fmt.Errorf("REDIS_URL must not disable TLS verification")
+		}
+		opts.TLSConfig = base
+	}
+	if opts.Password == "" && strict {
+		return nil, fmt.Errorf("REDIS_URL must include authentication credentials")
+	}
+
 	client := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

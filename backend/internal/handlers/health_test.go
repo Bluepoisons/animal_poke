@@ -54,6 +54,10 @@ func TestReady_NoDB_Production(t *testing.T) {
 
 	Ready(ReadyDeps{DB: nil, AppEnv: "production"})(c)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var body map[string]interface{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "unavailable", body["db"])
+	assert.Equal(t, "unavailable", body["db_reason"])
 }
 
 func TestReady_ConfigErrors(t *testing.T) {

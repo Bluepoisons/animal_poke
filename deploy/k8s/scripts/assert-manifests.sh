@@ -128,6 +128,12 @@ assert_production() {
   assert_match "${file}" 'namespace:[[:space:]]*production' \
     "production: resources in production namespace"
 
+  # AP-088: MySQL TLS must be enforced (reject plaintext / skip-verify).
+  assert_match "${file}" 'DB_TLS:[[:space:]]*"?(require|verify-ca|verify-full|true)' \
+    "production: DB_TLS is require/verify-ca/verify-full"
+  assert_no_match "${file}" 'DB_TLS:[[:space:]]*"?(false|0|off|disable|skip-verify|preferred)' \
+    "production: DB_TLS must not be false/skip-verify/preferred"
+
   # AP-015: durable encrypted object-storage backup (not emptyDir-only)
   assert_match "${file}" 'aws s3 cp' \
     "production: backup uploads via aws s3 cp"

@@ -192,32 +192,7 @@ type ServerTimeouts struct {
 	Shutdown   time.Duration
 }
 
-// DatabaseConfig MySQL 连接配置。
-type DatabaseConfig struct {
-	Host            string
-	Port            int
-	User            string
-	Password        string
-	DBName          string
-	TLSMode         string // prefer / require / skip-verify / false
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-}
-
-// DSN 使用 mysql.Config 兼容特殊字符密码，统一 UTC。
-func (d DatabaseConfig) DSN() string {
-	// 手动拼装但正确 URL 编码用户名/密码，避免特殊字符破坏 DSN。
-	user := url.QueryEscape(d.User)
-	pass := url.QueryEscape(d.Password)
-	tls := d.TLSMode
-	if tls == "" {
-		tls = "false"
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=UTC&tls=%s&timeout=5s&readTimeout=10s&writeTimeout=10s",
-		user, pass, d.Host, d.Port, d.DBName, url.QueryEscape(tls))
-}
+// DatabaseConfig is defined in db_tls.go (MySQL DSN/TLS helpers).
 
 // ThirdPartyConfig 第三方 API Key(腾讯地图/彩云/Vision/LLM)。
 type ThirdPartyConfig struct {
@@ -311,6 +286,10 @@ func Load() *Config {
 			Password:        getEnv("DB_PASSWORD", "animal_poke"),
 			DBName:          getEnv("DB_NAME", "animal_poke"),
 			TLSMode:         getEnv("DB_TLS", "false"),
+			TLSCAFile:       getEnv("DB_TLS_CA", ""),
+			TLSCertFile:     getEnv("DB_TLS_CERT", ""),
+			TLSKeyFile:      getEnv("DB_TLS_KEY", ""),
+			TLSServerName:   getEnv("DB_TLS_SERVER_NAME", ""),
 			MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 10),
 			ConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
@@ -472,6 +451,16 @@ func (c *Config) Validate() error {
 
 	// Vision 原子三元组完整性（任何环境）
 	if err := c.ThirdParty.validateVisionTriplet(); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	// MySQL TLS / client cert completeness (all envs); production forbids plaintext/skip-verify.
+	if err := c.Database.ValidateDatabaseTLS(c.IsProduction()); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	// Redis: when configured, enforce auth; production requires rediss:// + password + host verify.
+	if err := ValidateRedisURL(c.RedisURL, c.IsProduction()); err != nil {
 		errs = append(errs, err.Error())
 	}
 
