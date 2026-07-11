@@ -102,24 +102,28 @@ func (errScope) Error() string { return "invalid scope" }
 // PutConsent POST /privacy/consent
 func (h *PrivacyHandler) PutConsent(c *gin.Context) {
 	var req consentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if h.consentVersion != "" && req.Version != h.consentVersion {
 		// 仅接受当前服务端版本；升级时客户端需重弹
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported consent version", "required_version": h.consentVersion})
+		middleware.WriteError(c, http.StatusBadRequest, "unsupported_consent_version", "unsupported consent version", false, map[string]any{
+			"required_version": h.consentVersion,
+		})
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
 	scope, err := normalizeConsentScope(req.Scope)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope", "allowed": []string{"photo", "location", "precise_location"}})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_scope", "invalid scope", false, map[string]any{
+			"allowed": []string{"photo", "location", "precise_location"},
+		})
 		return
 	}
 	if err := h.deviceRepo.UpdateConsent(deviceID, req.Version, scope, req.Revoke); err != nil {
 		// DB 不可用 fail-closed
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "update failed", "reason_code": "db_unavailable"})
+		middleware.WriteError(c, http.StatusServiceUnavailable, "db_unavailable", "update failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": req.Version, "scope": scope, "revoked": req.Revoke})
@@ -136,7 +140,7 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		RequestedAt: time.Now().UTC(),
 	}
 	if err := h.db.Create(&dr).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "create_request_failed", "create request failed", true, nil)
 		return
 	}
 
@@ -145,7 +149,7 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 	if v := strings.TrimSpace(c.Query("cursor")); v != "" {
 		n, err := strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+			middleware.WriteError(c, http.StatusBadRequest, "invalid_cursor", "invalid cursor", false, nil)
 			return
 		}
 		afterID = uint(n)
@@ -158,7 +162,7 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		_ = h.db.Model(&dr).Updates(map[string]interface{}{
 			"status": "failed", "error_msg": err.Error(), "completed_at": now,
 		})
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "export animals failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "export_failed", "export animals failed", true, nil)
 		return
 	}
 
@@ -300,7 +304,7 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 		scope = "device"
 	}
 	if scope != "device" && scope != "account" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope", "reason_code": "bad_request", "request_id": middleware.GetRequestID(c)})
+		middleware.WriteError(c, http.StatusBadRequest, "bad_request", "invalid scope", false, nil)
 		return
 	}
 
@@ -310,7 +314,7 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 		RequestedAt: time.Now().UTC(),
 	}
 	if err := h.db.Create(&dr).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed", "reason_code": "db_error", "request_id": middleware.GetRequestID(c)})
+		middleware.WriteError(c, http.StatusInternalServerError, "create_request_failed", "create request failed", true, nil)
 		return
 	}
 
@@ -340,12 +344,17 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 		msg := err.Error()
 		code := http.StatusInternalServerError
 		reason := "delete_failed"
+		retryable := true
 		if strings.Contains(msg, "reauth") || strings.Contains(msg, "confirm") || strings.Contains(msg, "account required") {
 			code = http.StatusForbidden
 			reason = "reauth_required"
+			retryable = false
 		}
 		if status == "failed" && code == http.StatusForbidden {
-			c.JSON(code, gin.H{"request_id": reqID, "status": status, "error": msg, "reason_code": reason})
+			middleware.WriteError(c, code, reason, msg, retryable, map[string]any{
+				"status":     status,
+				"request_id": reqID,
+			})
 			return
 		}
 	}
@@ -484,7 +493,7 @@ func (h *PrivacyHandler) GetDataRequest(c *gin.Context) {
 	id := c.Param("id")
 	var dr models.DataRequest
 	if err := h.db.Where("request_id = ? AND device_id = ?", id, middleware.GetDeviceID(c)).First(&dr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		middleware.WriteError(c, http.StatusNotFound, "not_found", "not found", false, nil)
 		return
 	}
 	c.JSON(http.StatusOK, dr)
@@ -516,12 +525,12 @@ type securityReportRequest struct {
 // Nonce 策略：SET NX EX 5m；fail-closed on store error。
 func (h *SecurityHandler) Report(c *gin.Context) {
 	var req securityReportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "nonce required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if len(req.Nonce) > 64 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "nonce too long"})
+		middleware.WriteError(c, http.StatusBadRequest, "nonce_too_long", "nonce too long", false, nil)
 		return
 	}
 	// 重放检查：SharedCounter.SetNX（Redis 或内存 TTL）
@@ -529,15 +538,12 @@ func (h *SecurityHandler) Report(c *gin.Context) {
 	ok, err := h.nonces.SetNX(c.Request.Context(), nonceKey, 5*time.Minute)
 	if err != nil {
 		// fail-closed：无法确认唯一性时拒绝
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":       "nonce store unavailable",
-			"reason_code": "nonce_store_error",
-		})
+		middleware.WriteError(c, http.StatusServiceUnavailable, "nonce_store_error", "nonce store unavailable", true, nil)
 		return
 	}
 	if !ok {
 		middleware.ObserveNonceReplay()
-		c.JSON(http.StatusConflict, gin.H{"error": "nonce replay", "reason_code": "replay"})
+		middleware.WriteError(c, http.StatusConflict, "replay", "nonce replay", false, nil)
 		return
 	}
 
@@ -552,7 +558,7 @@ func (h *SecurityHandler) Report(c *gin.Context) {
 	}
 	payload, _ := json.Marshal(req.Payload)
 	if len(payload) > 16<<10 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "payload too large"})
+		middleware.WriteError(c, http.StatusBadRequest, "payload_too_large", "payload too large", false, nil)
 		return
 	}
 	report := models.SecurityReport{
@@ -560,7 +566,7 @@ func (h *SecurityHandler) Report(c *gin.Context) {
 		Payload: string(payload), RiskScore: risk,
 	}
 	if err := h.db.Create(&report).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "save failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "save_failed", "save failed", true, nil)
 		return
 	}
 	if risk >= 40 && h.auditRepo != nil {
@@ -592,7 +598,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	logs, total, err := h.auditRepo.Query(deviceID, logType, status, nil, nil, offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "query failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "query_failed", "query failed", true, nil)
 		return
 	}
 	// 管理员查询本身记审计
@@ -607,7 +613,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 func (h *AuditHandler) Ack(c *gin.Context) {
 	id64, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.auditRepo.Ack(uint(id64), "admin"); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ack failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "ack_failed", "ack failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ack"})
@@ -658,16 +664,12 @@ type createOrderRequest struct {
 	IdempotencyKey string `json:"idempotency_key" binding:"required"`
 	Platform       string `json:"platform"`
 }
-
 // commerceGate 检查商业化是否可用。不可用时写入响应并返回 true。
 // op: create|fulfill|refund
 func (h *CommerceHandler) commerceGate(c *gin.Context, op string) bool {
 	if !h.enabled {
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"error":       "commerce is disabled",
-			"reason_code": "commerce_not_ready",
-			"detail":      "COMMERCE_ENABLED is false; production defaults to disabled until store verification is ready",
-			"request_id":  middleware.GetRequestID(c),
+		middleware.WriteError(c, http.StatusNotImplemented, "commerce_not_ready", "commerce is disabled", false, map[string]any{
+			"detail": "COMMERCE_ENABLED is false; production defaults to disabled until store verification is ready",
 		})
 		return true
 	}
@@ -677,25 +679,21 @@ func (h *CommerceHandler) commerceGate(c *gin.Context, op string) bool {
 		if op == "fulfill" {
 			code = "fulfill_disabled"
 		}
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":       "commerce not ready in production",
-			"reason_code": code,
-			"detail":      "set COMMERCE_STORE_VERIFY=true only after Apple/Google server-side receipt verification is integrated",
-			"request_id":  middleware.GetRequestID(c),
+		middleware.WriteError(c, http.StatusServiceUnavailable, code, "commerce not ready in production", true, map[string]any{
+			"detail": "set COMMERCE_STORE_VERIFY=true only after Apple/Google server-side receipt verification is integrated",
 		})
 		return true
 	}
 	return false
 }
-
 // CreateOrder POST /commerce/orders
 func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 	if h.commerceGate(c, "create") {
 		return
 	}
 	var req createOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "product_id and idempotency_key required", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
@@ -709,7 +707,7 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 	// 仅 active 目录商品；禁止请求时自动创建
 	var product models.Product
 	if err := h.db.Where("product_id = ? AND active = ?", req.ProductID, true).First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "product not found", "reason_code": "product_not_found"})
+		middleware.WriteError(c, http.StatusNotFound, "product_not_found", "product not found", false, nil)
 		return
 	}
 
@@ -718,12 +716,12 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 		platform = "mock"
 	}
 	if h.production && platform == "mock" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mock platform not allowed in production", "reason_code": "platform_not_allowed"})
+		middleware.WriteError(c, http.StatusBadRequest, "platform_not_allowed", "mock platform not allowed in production", false, nil)
 		return
 	}
 	if !h.production && platform != "mock" {
 		// 非生产仅允许 mock，避免误连沙盒回执到开发环境以外的路径
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only mock platform allowed outside production", "reason_code": "platform_not_allowed"})
+		middleware.WriteError(c, http.StatusBadRequest, "platform_not_allowed", "only mock platform allowed outside production", false, nil)
 		return
 	}
 
@@ -740,7 +738,7 @@ func (h *CommerceHandler) CreateOrder(c *gin.Context) {
 				return
 			}
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "create order failed", "reason_code": "create_failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "create_failed", "create order failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusCreated, order)
@@ -750,21 +748,20 @@ type fulfillRequest struct {
 	OrderID string `json:"order_id" binding:"required"`
 	Receipt string `json:"receipt" binding:"required"`
 }
-
 // FulfillOrder POST /commerce/orders/fulfill — 校验回执并幂等发放权益。
 func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 	if h.commerceGate(c, "fulfill") {
 		return
 	}
 	var req fulfillRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "order_id and receipt required", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
 	accountID := middleware.GetAccountID(c)
 	if len(strings.TrimSpace(req.Receipt)) < minReceiptLen {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "receipt too short", "reason_code": "receipt_too_short"})
+		middleware.WriteError(c, http.StatusBadRequest, "receipt_too_short", "receipt too short", false, nil)
 		return
 	}
 	sum := sha256.Sum256([]byte(req.Receipt))
@@ -776,7 +773,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		if byReceipt.Status == "fulfilled" {
 			// 仅本设备可见已履约；跨设备不泄露
 			if byReceipt.DeviceID != deviceID {
-				c.JSON(http.StatusConflict, gin.H{"error": "receipt already used", "reason_code": "receipt_replay"})
+				middleware.WriteError(c, http.StatusConflict, "receipt_replay", "receipt already used", false, nil)
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"status": "already_fulfilled", "order_id": byReceipt.OrderID})
@@ -786,7 +783,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 
 	var order models.Order
 	if err := h.db.Where("order_id = ? AND device_id = ?", req.OrderID, deviceID).First(&order).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "order not found", "reason_code": "order_not_found"})
+		middleware.WriteError(c, http.StatusNotFound, "order_not_found", "order not found", false, nil)
 		return
 	}
 	if order.Status == "fulfilled" {
@@ -794,7 +791,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 		return
 	}
 	if order.Status == "refunded" {
-		c.JSON(http.StatusConflict, gin.H{"error": "order refunded", "reason_code": "order_refunded"})
+		middleware.WriteError(c, http.StatusConflict, "order_refunded", "order refunded", false, nil)
 		return
 	}
 
@@ -806,27 +803,24 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 	// 平台策略：非 production 仅 mock；production 禁止 mock
 	if h.production {
 		if platform == "mock" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "mock platform not allowed in production", "reason_code": "platform_not_allowed"})
+			middleware.WriteError(c, http.StatusBadRequest, "platform_not_allowed", "mock platform not allowed in production", false, nil)
 			return
 		}
 		// 商店验签已开启但尚未对接 Apple/Google 时：结构化拒绝伪造回执，不发放权益
 		if !verifyStoreReceiptStub(platform, req.Receipt, order) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":       "store receipt verification failed",
-				"reason_code": "receipt_invalid",
-				"detail":      "stub verifier rejects receipts until real Apple/Google integration is complete",
-				"request_id":  middleware.GetRequestID(c),
+			middleware.WriteError(c, http.StatusBadRequest, "receipt_invalid", "store receipt verification failed", false, map[string]any{
+				"detail": "stub verifier rejects receipts until real Apple/Google integration is complete",
 			})
 			return
 		}
 	} else if platform != "mock" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only mock platform allowed outside production", "reason_code": "platform_not_allowed"})
+		middleware.WriteError(c, http.StatusBadRequest, "platform_not_allowed", "only mock platform allowed outside production", false, nil)
 		return
 	}
 
 	var product models.Product
 	if err := h.db.Where("product_id = ? AND active = ?", order.ProductID, true).First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "product not found", "reason_code": "product_not_found"})
+		middleware.WriteError(c, http.StatusNotFound, "product_not_found", "product not found", false, nil)
 		return
 	}
 
@@ -872,7 +866,7 @@ func (h *CommerceHandler) FulfillOrder(c *gin.Context) {
 			return
 		}
 		slog.Error("履约失败", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "fulfill failed", "reason_code": "fulfill_failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "fulfill_failed", "fulfill failed", true, nil)
 		return
 	}
 	_ = h.db.Create(&models.AuditLog{
@@ -895,11 +889,8 @@ func verifyStoreReceiptStub(platform, receipt string, order models.Order) bool {
 // RefundOrder POST /commerce/orders/refund — 设备 JWT 路径永久禁止。
 // 客户端不得自行决定退款；请走管理员或平台 webhook。
 func (h *CommerceHandler) RefundOrder(c *gin.Context) {
-	c.JSON(http.StatusForbidden, gin.H{
-		"error":       "device-initiated refund is forbidden",
-		"reason_code": "device_refund_forbidden",
-		"detail":      "use admin POST /admin/commerce/orders/refund or platform webhook",
-		"request_id":  middleware.GetRequestID(c),
+	middleware.WriteError(c, http.StatusForbidden, "device_refund_forbidden", "device-initiated refund is forbidden", false, map[string]any{
+		"detail": "use admin POST /admin/commerce/orders/refund or platform webhook",
 	})
 }
 
@@ -913,8 +904,8 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 		DeviceID string `json:"device_id"` // 可选，用于额外校验
 		Reason   string `json:"reason"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "order_id required", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 
@@ -924,7 +915,7 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 		q = q.Where("device_id = ?", req.DeviceID)
 	}
 	if err := q.First(&order).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "order not found", "reason_code": "order_not_found"})
+		middleware.WriteError(c, http.StatusNotFound, "order_not_found", "order not found", false, nil)
 		return
 	}
 	if order.Status == "refunded" {
@@ -944,7 +935,7 @@ func (h *CommerceHandler) AdminRefundOrder(c *gin.Context) {
 			Updates(map[string]interface{}{"active": false, "expires_at": now}).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed", "reason_code": "refund_failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "refund_failed", "refund failed", true, nil)
 		return
 	}
 	meta := order.OrderID
@@ -968,7 +959,7 @@ func (h *CommerceHandler) WebhookRefundOrder(c *gin.Context) {
 func (h *CommerceHandler) GetOrder(c *gin.Context) {
 	var order models.Order
 	if err := h.db.Where("order_id = ? AND device_id = ?", c.Param("id"), middleware.GetDeviceID(c)).First(&order).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found", "reason_code": "order_not_found"})
+		middleware.WriteError(c, http.StatusNotFound, "order_not_found", "not found", false, nil)
 		return
 	}
 	c.JSON(http.StatusOK, order)

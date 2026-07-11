@@ -2045,6 +2045,9 @@ components:
     Error:
       type: object
       required: [error, reason_code, retryable]
+      description: |
+        Unified API error envelope. All 4xx/5xx JSON errors should converge here.
+        Handlers may attach extra diagnostic fields, but clients must rely on these core keys.
       properties:
         error:
           type: string
@@ -2056,6 +2059,21 @@ components:
           example: bad_request
         request_id:
           type: string
+          description: Correlation id (also returned as X-Request-ID header)
+        retryable:
+          type: boolean
+          description: Whether the client may safely retry the request
+          example: false
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional structured context (e.g. unknown field name)
+          example:
+            field: extra
+    ErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+      description: Alias of Error (historical name used by some operations)
     FeatureUnavailableError:
       type: object
       required: [error, reason_code]

@@ -97,29 +97,29 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 		secret, salt, genErr := repo.GenerateInstallationSecret()
 		if genErr != nil {
 			slog.Error("生成 installation secret 失败", "err", genErr)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "secret generation failed"})
+			middleware.AbortInternal(c, "secret_generation_failed", "secret generation failed")
 			return
 		}
 		claimed, setErr := h.deviceRepo.SetInstallationSecret(dev.DeviceID, secret, salt)
 		if setErr != nil {
 			slog.Error("写入 installation secret 失败", "err", setErr)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "secret persistence failed"})
+			middleware.AbortInternal(c, "secret_persistence_failed", "secret persistence failed")
 			return
 		}
 		if !claimed {
 			// 并发注册：其他请求已占用 secret，本请求必须证明持有
 			if req.InstallationSecret == "" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "installation_secret required"})
+				middleware.AbortUnauthorized(c, "installation_secret_required", "installation_secret required")
 				return
 			}
 			ok, vErr := h.deviceRepo.VerifyInstallationSecret(dev.DeviceID, req.InstallationSecret)
 			if vErr != nil {
 				slog.Error("校验 installation secret 失败", "err", vErr)
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "secret verification unavailable"})
+				middleware.AbortUnavailable(c, "secret_verification_unavailable", "secret verification unavailable", 0)
 				return
 			}
 			if !ok {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid installation_secret"})
+				middleware.AbortUnauthorized(c, "invalid_installation_secret", "invalid installation_secret")
 				return
 			}
 		} else {
@@ -131,17 +131,17 @@ func (h *AuthHandler) DeviceAuth(c *gin.Context) {
 	} else {
 		// 已知设备：仅凭 device_id 不足，必须证明持有 installation_secret
 		if req.InstallationSecret == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "installation_secret required"})
+			middleware.AbortUnauthorized(c, "installation_secret_required", "installation_secret required")
 			return
 		}
 		ok, vErr := h.deviceRepo.VerifyInstallationSecret(dev.DeviceID, req.InstallationSecret)
 		if vErr != nil {
 			slog.Error("校验 installation secret 失败", "err", vErr)
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "secret verification unavailable"})
+			middleware.AbortUnavailable(c, "secret_verification_unavailable", "secret verification unavailable", 0)
 			return
 		}
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid installation_secret"})
+			middleware.AbortUnauthorized(c, "invalid_installation_secret", "invalid installation_secret")
 			return
 		}
 	}

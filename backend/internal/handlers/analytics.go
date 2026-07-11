@@ -70,45 +70,30 @@ func (h *AnalyticsHandler) Ingest(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAnalyticsBodyBytes)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "body too large or unreadable",
-			"reason_code": "bad_request",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		if middleware.IsMaxBytesError(err) {
+			middleware.WriteError(c, http.StatusRequestEntityTooLarge, "payload_too_large", "body too large or unreadable", false, nil)
+			return
+		}
+		middleware.WriteError(c, http.StatusBadRequest, "bad_request", "body too large or unreadable", false, nil)
 		return
 	}
 	var req analyticsIngestRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "invalid payload",
-			"reason_code": "bad_request",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusBadRequest, "bad_request", "invalid payload", false, nil)
 		return
 	}
 	if req.SchemaVersion != 0 && req.SchemaVersion != analyticsSchemaVersion {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":          "unsupported schema version",
-			"reason_code":    "schema_mismatch",
+		middleware.WriteError(c, http.StatusBadRequest, "schema_mismatch", "unsupported schema version", false, map[string]any{
 			"schema_version": analyticsSchemaVersion,
-			"request_id":     middleware.GetRequestID(c),
 		})
 		return
 	}
 	if len(req.Events) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "events required",
-			"reason_code": "missing_events",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusBadRequest, "missing_events", "events required", false, nil)
 		return
 	}
 	if len(req.Events) > maxEventsPerBatch {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":       "too many events",
-			"reason_code": "batch_too_large",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusBadRequest, "batch_too_large", "too many events", false, nil)
 		return
 	}
 

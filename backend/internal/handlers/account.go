@@ -80,37 +80,33 @@ type revokeDeviceRequest struct {
 // Bind POST /auth/bind — 当前设备绑定 email / mock OAuth（游客合并进账号）。
 func (h *AccountHandler) Bind(c *gin.Context) {
 	var req bindRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
 	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		middleware.WriteError(c, http.StatusUnauthorized, "unauthorized", "unauthorized", false, nil)
 		return
 	}
 	provider, subject, secret, err := normalizeBindingInput(req.Provider, req.Email, req.Password, req.OAuthSubject, req.OAuthToken)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "reason_code": "invalid_binding"})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_binding", err.Error(), false, nil)
 		return
 	}
 	if provider == "mock_oauth" && !h.allowMockOAuth {
 		// AP-063: production / 关闭开关时不暴露 mock provider（结构化 404）
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":       "provider not available",
-			"reason_code": "provider_unavailable",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusNotFound, "provider_unavailable", "provider not available", false, nil)
 		return
 	}
 
 	dev, err := h.deviceRepo.Find(deviceID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		middleware.WriteError(c, http.StatusNotFound, "device_not_found", "device not found", false, nil)
 		return
 	}
 	if dev.Disabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "device disabled"})
+		middleware.WriteError(c, http.StatusForbidden, "device_disabled", "device disabled", false, nil)
 		return
 	}
 
@@ -122,24 +118,24 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		// 绑定已存在 → 登录该账号并合并当前游客资产
 		acc, aerr := h.accountRepo.EnsureAccountActive(existing.AccountID)
 		if aerr != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "account disabled"})
+			middleware.WriteError(c, http.StatusForbidden, "account_disabled", "account disabled", false, nil)
 			return
 		}
 		if !h.accountRepo.VerifyBindingCredential(existing, secret) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credential", "reason_code": "auth_failed"})
+			middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 			return
 		}
 		accountID = acc.AccountID
 		// 若设备已绑其他账号
 		if dev.AccountID != "" && dev.AccountID != accountID {
-			c.JSON(http.StatusConflict, gin.H{"error": "device bound to another account", "reason_code": "device_bound"})
+			middleware.WriteError(c, http.StatusConflict, "device_bound", "device bound to another account", false, nil)
 			return
 		}
 		if dev.AccountID != accountID {
 			mergeStats, err = h.accountRepo.MergeGuestIntoAccount(deviceID, accountID)
 			if err != nil {
 				slog.Error("merge guest failed", "err", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "merge failed"})
+				middleware.WriteError(c, http.StatusInternalServerError, "merge_failed", "merge failed", true, nil)
 				return
 			}
 		}
@@ -150,13 +146,13 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		} else {
 			acc, cerr := h.accountRepo.CreateAccount(req.DisplayName)
 			if cerr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "create account failed"})
+				middleware.WriteError(c, http.StatusInternalServerError, "create_account_failed", "create account failed", true, nil)
 				return
 			}
 			accountID = acc.AccountID
 			mergeStats, err = h.accountRepo.MergeGuestIntoAccount(deviceID, accountID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "merge failed"})
+				middleware.WriteError(c, http.StatusInternalServerError, "merge_failed", "merge failed", true, nil)
 				return
 			}
 		}
@@ -164,7 +160,7 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		if provider == "email" {
 			credHash, err = h.accountRepo.HashPassword(secret)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "hash failed"})
+				middleware.WriteError(c, http.StatusInternalServerError, "hash_failed", "hash failed", true, nil)
 				return
 			}
 		} else {
@@ -172,30 +168,30 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 		}
 		if _, err := h.accountRepo.UpsertBinding(accountID, provider, subject, credHash); err != nil {
 			if err == repo.ErrBindingConflict {
-				c.JSON(http.StatusConflict, gin.H{"error": "binding conflict", "reason_code": "binding_conflict"})
+				middleware.WriteError(c, http.StatusConflict, "binding_conflict", "binding conflict", false, nil)
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "bind failed"})
+			middleware.WriteError(c, http.StatusInternalServerError, "bind_failed", "bind failed", true, nil)
 			return
 		}
 	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "lookup failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "lookup_failed", "lookup failed", true, nil)
 		return
 	}
 
 	_, refresh, err := h.accountRepo.LinkDevice(deviceID, accountID, "", h.refreshTTL)
 	if err != nil {
 		if err == repo.ErrAlreadyBound {
-			c.JSON(http.StatusConflict, gin.H{"error": "device already bound", "reason_code": "device_bound"})
+			middleware.WriteError(c, http.StatusConflict, "device_bound", "device already bound", false, nil)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "link device failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "link_device_failed", "link device failed", true, nil)
 		return
 	}
 
 	token, exp, err := h.issueToken(deviceID, accountID, dev.TokenVersion)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "token_generation_failed", "token generation failed", true, nil)
 		return
 	}
 	_ = h.accountRepo.TouchDevice(deviceID)
@@ -215,42 +211,38 @@ func (h *AccountHandler) Bind(c *gin.Context) {
 // 仅知道 device_id 不能合并他人动物/订单/权益；新设备登录无需伪造旧 device_id。
 func (h *AccountHandler) Login(c *gin.Context) {
 	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device_id and provider required", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	if !deviceIDPattern.MatchString(req.DeviceID) {
 		if _, err := uuid.Parse(req.DeviceID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device_id", "reason_code": "invalid_device_id"})
+			middleware.WriteError(c, http.StatusBadRequest, "invalid_device_id", "invalid device_id", false, nil)
 			return
 		}
 	}
 	provider, subject, secret, err := normalizeBindingInput(req.Provider, req.Email, req.Password, req.OAuthSubject, req.OAuthToken)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "reason_code": "invalid_binding"})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_binding", err.Error(), false, nil)
 		return
 	}
 	if provider == "mock_oauth" && !h.allowMockOAuth {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":       "provider not available",
-			"reason_code": "provider_unavailable",
-			"request_id":  middleware.GetRequestID(c),
-		})
+		middleware.WriteError(c, http.StatusNotFound, "provider_unavailable", "provider not available", false, nil)
 		return
 	}
 
 	binding, err := h.accountRepo.FindBinding(provider, subject)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credential", "reason_code": "auth_failed"})
+		middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 		return
 	}
 	if !h.accountRepo.VerifyBindingCredential(binding, secret) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credential", "reason_code": "auth_failed"})
+		middleware.WriteError(c, http.StatusUnauthorized, "auth_failed", "invalid credential", false, nil)
 		return
 	}
 	acc, err := h.accountRepo.EnsureAccountActive(binding.AccountID)
 	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "account disabled", "reason_code": "account_disabled"})
+		middleware.WriteError(c, http.StatusForbidden, "account_disabled", "account disabled", false, nil)
 		return
 	}
 
@@ -262,38 +254,23 @@ func (h *AccountHandler) Login(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case repo.ErrDeviceOwnership, repo.ErrInvalidMergeProof:
-			c.JSON(http.StatusForbidden, gin.H{
-				"error":       "device ownership proof required",
-				"reason_code": "device_ownership_required",
-			})
+			middleware.WriteError(c, http.StatusForbidden, "device_ownership_required", "device ownership proof required", false, nil)
 			return
 		case repo.ErrDeviceDisabled:
-			c.JSON(http.StatusForbidden, gin.H{
-				"error":       "device revoked; provide installation_secret or migration_ticket to re-enable",
-				"reason_code": "device_revoked",
-			})
+			middleware.WriteError(c, http.StatusForbidden, "device_revoked", "device revoked; provide installation_secret or migration_ticket to re-enable", false, nil)
 			return
 		case repo.ErrTicketReplay:
-			c.JSON(http.StatusConflict, gin.H{
-				"error":       "migration ticket already used",
-				"reason_code": "ticket_replay",
-			})
+			middleware.WriteError(c, http.StatusConflict, "ticket_replay", "migration ticket already used", false, nil)
 			return
 		case repo.ErrTicketExpired, repo.ErrTicketNotFound:
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":       "invalid or expired migration ticket",
-				"reason_code": "ticket_invalid",
-			})
+			middleware.WriteError(c, http.StatusUnauthorized, "ticket_invalid", "invalid or expired migration ticket", false, nil)
 			return
 		case repo.ErrAlreadyBound:
-			c.JSON(http.StatusConflict, gin.H{
-				"error":       "device bound to another account",
-				"reason_code": "device_bound",
-			})
+			middleware.WriteError(c, http.StatusConflict, "device_bound", "device bound to another account", false, nil)
 			return
 		default:
 			slog.Error("login link/merge failed", "err", err, "device_id", req.DeviceID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed", "reason_code": "login_failed"})
+			middleware.WriteError(c, http.StatusInternalServerError, "login_failed", "login failed", true, nil)
 			return
 		}
 	}
@@ -302,13 +279,13 @@ func (h *AccountHandler) Login(c *gin.Context) {
 	if dev == nil {
 		dev, err = h.deviceRepo.Find(req.DeviceID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "device lookup failed"})
+			middleware.WriteError(c, http.StatusInternalServerError, "device_lookup_failed", "device lookup failed", true, nil)
 			return
 		}
 	}
 	token, exp, err := h.issueToken(req.DeviceID, acc.AccountID, dev.TokenVersion)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "token_generation_failed", "token generation failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusOK, accountAuthResponse{
@@ -327,11 +304,11 @@ func (h *AccountHandler) Login(c *gin.Context) {
 func (h *AccountHandler) Logout(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
 	if deviceID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		middleware.WriteError(c, http.StatusUnauthorized, "unauthorized", "unauthorized", false, nil)
 		return
 	}
 	if err := h.accountRepo.LogoutDevice(deviceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "logout failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "logout_failed", "logout failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "logged_out"})
@@ -347,7 +324,7 @@ func (h *AccountHandler) ListDevices(c *gin.Context) {
 	}
 	list, err := h.accountRepo.ListDevices(dev.AccountID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "list failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "list_failed", "list failed", true, nil)
 		return
 	}
 	items := make([]gin.H, 0, len(list))
@@ -368,26 +345,26 @@ func (h *AccountHandler) ListDevices(c *gin.Context) {
 // RevokeDevice POST /auth/devices/revoke
 func (h *AccountHandler) RevokeDevice(c *gin.Context) {
 	var req revokeDeviceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device_id required"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	deviceID := middleware.GetDeviceID(c)
 	dev, err := h.deviceRepo.Find(deviceID)
 	if err != nil || dev.AccountID == "" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "account required", "reason_code": "guest_mode"})
+		middleware.WriteError(c, http.StatusForbidden, "guest_mode", "account required", false, nil)
 		return
 	}
 	if req.DeviceID == deviceID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot revoke current device", "reason_code": "self_revoke"})
+		middleware.WriteError(c, http.StatusBadRequest, "self_revoke", "cannot revoke current device", false, nil)
 		return
 	}
 	if err := h.accountRepo.RevokeDevice(dev.AccountID, req.DeviceID); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+			middleware.WriteError(c, http.StatusNotFound, "device_not_found", "device not found", false, nil)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "revoke failed"})
+		middleware.WriteError(c, http.StatusInternalServerError, "revoke_failed", "revoke failed", true, nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "revoked", "device_id": req.DeviceID})

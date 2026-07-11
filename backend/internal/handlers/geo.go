@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"animalpoke/backend/internal/middleware"
 	"animalpoke/backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,23 +27,23 @@ func (h *GeoHandler) GetCity(c *gin.Context) {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
 	if latStr == "" || lngStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lat and lng are required"})
+		middleware.WriteError(c, http.StatusBadRequest, "missing_params", "lat and lng are required", false, nil)
 		return
 	}
 
 	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lat"})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_lat", "invalid lat", false, nil)
 		return
 	}
 	lng, err := strconv.ParseFloat(lngStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lng"})
+		middleware.WriteError(c, http.StatusBadRequest, "invalid_lng", "invalid lng", false, nil)
 		return
 	}
 
 	if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "coordinates out of range"})
+		middleware.WriteError(c, http.StatusBadRequest, "coords_out_of_range", "coordinates out of range", false, nil)
 		return
 	}
 

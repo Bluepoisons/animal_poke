@@ -167,7 +167,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Bind current device to email or mock OAuth account
+         * Bind current device to an account (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
          * @description Guest remains default. Binding creates or attaches an account, merges guest
          *     animals/entitlements without double-granting rewards. Credentials are stored hashed.
          */
@@ -187,7 +187,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login with email/mock OAuth to recover after clearing local data */
+        /**
+         * Login to recover after clearing local data (email; mock_oauth only when AUTH_MOCK_OAUTH_ENABLED)
+         * @description Recovers an account onto the provided `device_id`.
+         *     **New device** (unknown device_id): links without ownership proof and does not claim another device's assets.
+         *     **Claim existing guest assets** or **re-enable a revoked device**: requires `installation_secret` or a one-time `migration_ticket`.
+         *     Knowing only another user's `device_id` is insufficient to merge their animals/orders/entitlements (AP-076).
+         */
         post: operations["authLogin"];
         delete?: never;
         options?: never;
@@ -966,6 +972,10 @@ export interface components {
             };
             request_id: string;
         };
+        /**
+         * @description Unified API error envelope. All 4xx/5xx JSON errors should converge here.
+         *     Handlers may attach extra diagnostic fields, but clients must rely on these core keys.
+         */
         Error: {
             /**
              * @description Human-readable error message (safe for clients)
@@ -977,8 +987,25 @@ export interface components {
              * @example bad_request
              */
             reason_code: string;
+            /** @description Correlation id (also returned as X-Request-ID header) */
             request_id?: string;
+            /**
+             * @description Whether the client may safely retry the request
+             * @example false
+             */
+            retryable: boolean;
+            /**
+             * @description Optional structured context (e.g. unknown field name)
+             * @example {
+             *       "field": "extra"
+             *     }
+             */
+            details?: {
+                [key: string]: unknown;
+            };
         };
+        /** @description Alias of Error (historical name used by some operations) */
+        ErrorResponse: components["schemas"]["Error"];
         FeatureUnavailableError: {
             /** @example feature unavailable */
             error: string;
@@ -1033,24 +1060,38 @@ export interface components {
             guest?: boolean;
         };
         AuthBindRequest: {
-            /** @enum {string} */
+            /**
+             * @description Public production providers. Development may also accept mock_oauth when AUTH_MOCK_OAUTH_ENABLED (returns 404 provider_unavailable otherwise).
+             * @enum {string}
+             */
             provider: "email";
             /** Format: email */
             email?: string;
             password?: string;
+            /** @description Development-only mock provider field (not a production provider) */
             oauth_subject?: string;
             /** @description Development-only mock provider field; server stores only a hash */
             oauth_token?: string;
             display_name?: string;
         };
         AuthLoginRequest: {
+            /** @description Device to link. New devices need no proof; claiming existing guest assets requires proof. */
             device_id: string;
-            /** @enum {string} */
+            /**
+             * @description Public production providers. Development may also accept mock_oauth when AUTH_MOCK_OAUTH_ENABLED.
+             * @enum {string}
+             */
             provider: "email";
             email?: string;
             password?: string;
+            /** @description Development-only mock provider field */
             oauth_subject?: string;
+            /** @description Development-only mock provider field */
             oauth_token?: string;
+            /** @description Device ownership proof required when merging guest assets or re-enabling a revoked device */
+            installation_secret?: string;
+            /** @description One-time migration ticket alternative to installation_secret; replay is rejected */
+            migration_ticket?: string;
         };
         AuthAccountResponse: {
             token: string;
@@ -1066,7 +1107,12 @@ export interface components {
                 entitlements_moved?: number;
                 entitlements_merged?: number;
                 orders_moved?: number;
+                operation_id?: string;
+                /** @description none | installation_secret | migration_ticket */
+                proof_type?: string;
             };
+            /** @description Unique login link/merge operation id for audit (AP-076) */
+            operation_id?: string;
         };
         AuthAccountInfo: {
             guest?: boolean;
@@ -1620,7 +1666,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Logged in; guest assets on device_id merged into account */
+            /** @description Logged in; guest assets on device_id merged only when ownership proof is valid */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1631,6 +1677,24 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Device ownership proof required or device remains revoked */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Migration ticket replay or device bound to another account */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };

@@ -47,22 +47,22 @@ var allowedReportCategories = map[string]struct{}{
 // Never accepts image payloads; only structured metadata.
 func (h *SafetyHandler) Report(c *gin.Context) {
 	var req safetyReportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "reason_code": "bad_request"})
+	if err := middleware.BindStrictJSON(c, &req); err != nil {
+		middleware.WriteBindError(c, err)
 		return
 	}
 	cat := strings.ToLower(strings.TrimSpace(req.Category))
 	if _, ok := allowedReportCategories[cat]; !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category", "reason_code": "bad_category"})
+		middleware.WriteError(c, http.StatusBadRequest, "bad_category", "invalid category", false, nil)
 		return
 	}
 	if len(req.Note) > 1000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "note too long", "reason_code": "note_too_long"})
+		middleware.WriteError(c, http.StatusBadRequest, "note_too_long", "note too long", false, nil)
 		return
 	}
 	// Reject accidental image/base64 dumps in note.
 	if looksLikeImagePayload(req.Note) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "images not accepted", "reason_code": "image_not_allowed"})
+		middleware.WriteError(c, http.StatusBadRequest, "image_not_allowed", "images not accepted", false, nil)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *SafetyHandler) Report(c *gin.Context) {
 	if h.db != nil {
 		if err := h.db.Create(&report).Error; err != nil {
 			slog.Error("safety report save failed", "device_id", deviceID, "err", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "save failed", "reason_code": "db_error"})
+			middleware.WriteError(c, http.StatusInternalServerError, "db_error", "save failed", true, nil)
 			return
 		}
 	}
