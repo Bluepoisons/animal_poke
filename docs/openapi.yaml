@@ -18,7 +18,8 @@ servers:
 
 tags:
   - name: Health
-    description: Liveness, readiness and lightweight health probes
+  - name: Content
+    description: Versioned multi-locale content manifests (AP-080)
   - name: Auth
     description: Device registration, account binding and JWT issuance
   - name: Geo
@@ -3677,6 +3678,159 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+
+  /api/v1/content/manifest:
+    get:
+      operationId: getContentManifest
+      tags: [Content]
+      summary: Versioned multi-locale content manifest (AP-080)
+      description: |
+        Returns filtered content package references with ETag and optional HMAC signature.
+        Clients MUST honor 304 and fall back to last-known-good when revoked=true.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: locale
+          in: query
+          schema: { type: string, example: zh-CN }
+        - name: region
+          in: query
+          schema: { type: string, example: CN }
+        - name: age
+          in: query
+          schema: { type: string, enum: [everyone, teen] }
+        - name: client_version
+          in: query
+          schema: { type: string }
+        - name: X-Client-Version
+          in: header
+          schema: { type: string }
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: Content manifest
+          headers:
+            ETag:
+              schema: { type: string }
+            X-Content-Revoked:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, content_version, packages, etag]
+                properties:
+                  schema_version: { type: string }
+                  content_version: { type: string }
+                  locale: { type: string }
+                  region: { type: string }
+                  min_client_version: { type: string }
+                  generated_at: { type: string, format: date-time }
+                  revoked: { type: boolean }
+                  packages:
+                    type: array
+                    items:
+                      type: object
+                      required: [kind, id, version]
+                      properties:
+                        kind: { type: string }
+                        id: { type: string }
+                        version: { type: string }
+                        locale: { type: string }
+                        url: { type: string }
+                        checksum: { type: string }
+                        labels:
+                          type: object
+                          additionalProperties: { type: string }
+                  etag: { type: string }
+                  signature: { type: string }
+                  request_id: { type: string }
+        "304":
+          description: Not modified
+        "426":
+          description: Client below minimum version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/ops/content/manifest:
+    put:
+      operationId: publishContentManifest
+      tags: [Content]
+      summary: Publish content manifest version (ops)
+      security: []
+      parameters:
+        - name: X-AP-Ops-Token
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, packages]
+              properties:
+                version: { type: string }
+                packages:
+                  type: array
+                  items:
+                    type: object
+                    required: [kind, id, version]
+                    properties:
+                      kind: { type: string }
+                      id: { type: string }
+                      version: { type: string }
+                      locale: { type: string }
+                      url: { type: string }
+      responses:
+        "200":
+          description: Published
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ops/content/manifest/revoke:
+    post:
+      operationId: revokeContentManifest
+      tags: [Content]
+      summary: Revoke current content version
+      security: []
+      parameters:
+        - name: X-AP-Ops-Token
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Revoked
+        "403":
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/ops/content/manifest/rollback:
+    post:
+      operationId: rollbackContentManifest
+      tags: [Content]
+      summary: Rollback to previous content version
+      security: []
+      parameters:
+        - name: X-AP-Ops-Token
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rolled back
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "409":
+          description: No previous version
 
   /api/v1/config/game:
     get:

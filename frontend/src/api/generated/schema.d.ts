@@ -2370,6 +2370,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/content/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Versioned multi-locale content manifest (AP-080)
+         * @description Returns filtered content package references with ETag and optional HMAC signature.
+         *     Clients MUST honor 304 and fall back to last-known-good when revoked=true.
+         */
+        get: operations["getContentManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/content/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Publish content manifest version (ops) */
+        put: operations["publishContentManifest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/content/manifest/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke current content version */
+        post: operations["revokeContentManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/content/manifest/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback to previous content version */
+        post: operations["rollbackContentManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config/game": {
         parameters: {
             query?: never;
@@ -7547,6 +7619,161 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getContentManifest: {
+        parameters: {
+            query?: {
+                locale?: string;
+                region?: string;
+                age?: "everyone" | "teen";
+                client_version?: string;
+            };
+            header?: {
+                "X-Client-Version"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Content manifest */
+            200: {
+                headers: {
+                    ETag?: string;
+                    "X-Content-Revoked"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        schema_version: string;
+                        content_version: string;
+                        locale?: string;
+                        region?: string;
+                        min_client_version?: string;
+                        /** Format: date-time */
+                        generated_at?: string;
+                        revoked?: boolean;
+                        packages: {
+                            kind: string;
+                            id: string;
+                            version: string;
+                            locale?: string;
+                            url?: string;
+                            checksum?: string;
+                            labels?: {
+                                [key: string]: string;
+                            };
+                        }[];
+                        etag: string;
+                        signature?: string;
+                        request_id?: string;
+                    };
+                };
+            };
+            /** @description Not modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Client below minimum version */
+            426: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    publishContentManifest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-AP-Ops-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    version: string;
+                    packages: {
+                        kind: string;
+                        id: string;
+                        version: string;
+                        locale?: string;
+                        url?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Published */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokeContentManifest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-AP-Ops-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    rollbackContentManifest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-AP-Ops-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rolled back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            /** @description No previous version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getGameConfig: {

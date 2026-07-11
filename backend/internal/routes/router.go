@@ -333,6 +333,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/ops/metrics-summary", product.OpsMetrics)
 			// AP-059 versioned game config (read for all auth; write/rollback ops-gated)
 			auth.GET("/config/game", product.GameConfigGet)
+			contentH := handlers.NewContentHandler(nil, cfg.OpsToken)
+			auth.GET("/content/manifest", contentH.GetManifest)
+			auth.PUT("/ops/content/manifest", middleware.BodyLimit(middleware.MaxBodyDefault), contentH.PublishManifest)
+			auth.POST("/ops/content/manifest/revoke", middleware.BodyLimit(middleware.MaxBodyDefault), contentH.RevokeManifest)
+			auth.POST("/ops/content/manifest/rollback", middleware.BodyLimit(middleware.MaxBodyDefault), contentH.RollbackManifest)
 			auth.PUT("/ops/game-config", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigPut)
 			auth.POST("/ops/game-config/rollback", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigRollback)
 
