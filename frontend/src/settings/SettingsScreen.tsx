@@ -3,6 +3,7 @@ import { useSettings } from './SettingsContext'
 import type { Locale } from '../i18n'
 import type { UserSettings } from './types'
 import { isFeatureEnabled } from '../features/animal-poke/featureFlags'
+import PrivacyCenter from '../privacy/PrivacyCenter'
 
 interface SettingsScreenProps {
   onToast?: (msg: string) => void
@@ -37,15 +38,16 @@ function ToggleRow({
       <span>{label}</span>
       <button
         type="button"
+        role="switch"
+        aria-checked={value}
         onClick={() => onChange(!value)}
-        aria-pressed={value}
         style={{
           minWidth: 56,
           padding: '6px 10px',
           borderRadius: 999,
           border: '1px solid #E0C0A0',
           background: value ? '#FF8A4C' : '#FFF8F0',
-          color: value ? '#fff' : '#4A2C1A',
+          color: value ? '#fff' : '#6D4C41',
           cursor: 'pointer',
         }}
       >
@@ -57,7 +59,7 @@ function ToggleRow({
 
 export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps) {
   const { t, locale, setLocale, supportedLocales } = useI18n()
-  const { settings, update, exportData, deleteLocalData } = useSettings()
+  const { settings, update } = useSettings()
 
   const showRanking = isFeatureEnabled('ranking')
   const showPvP = isFeatureEnabled('pvp')
@@ -76,22 +78,6 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
     onToast?.(t('settings.saved'))
   }
 
-  const handleExport = async () => {
-    const json = exportData()
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(json)
-      }
-    } catch { /* ignore */ }
-    onToast?.(t('settings.export.done'))
-  }
-
-  const handleDelete = async () => {
-    if (typeof window !== 'undefined' && !window.confirm(t('settings.delete.confirm'))) return
-    await deleteLocalData()
-    onToast?.(t('settings.delete.done'))
-  }
-
   const localeLabel = (l: Locale) => {
     if (l === 'zh') return t('settings.chinese')
     if (l === 'en') return t('settings.english')
@@ -99,7 +85,7 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
   }
 
   return (
-    <div className="ap-screen" style={{ padding: 16, overflow: 'auto' }}>
+    <div className="ap-screen" style={{ padding: 16, overflow: 'auto' }} data-testid="settings-screen">
       {onBack && (
         <button type="button" onClick={onBack} style={{ marginBottom: 8 }}>
           {t('common.back')}
@@ -179,7 +165,6 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
         <p style={{ fontSize: 12, color: '#8D6E63' }}>{t('settings.sync.hint')}</p>
       </section>
 
-
       {/* AP-042: only show unfinished product surfaces when feature flags are on */}
       {showLabs && (
         <section style={{ marginBottom: 16 }} data-testid="feature-labs">
@@ -212,17 +197,9 @@ export default function SettingsScreen({ onToast, onBack }: SettingsScreenProps)
         </section>
       )}
 
+      {/* AP-068 隐私中心：scope + 服务端导出/删除 */}
       <section style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 14, color: '#6D4C41' }}>{t('settings.section.privacy')}</h2>
-        <p style={{ fontSize: 13, color: '#5D4037' }}>{t('settings.permissions.desc')}</p>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button type="button" onClick={handleExport}>
-            {t('settings.export')}
-          </button>
-          <button type="button" onClick={handleDelete} style={{ color: '#C62828' }}>
-            {t('settings.delete')}
-          </button>
-        </div>
+        <PrivacyCenter onToast={onToast} />
       </section>
     </div>
   )

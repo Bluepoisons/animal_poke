@@ -258,11 +258,21 @@ export default function DiscoverScreen({
       <div className="ap-discover__hero">
         <div className="ap-discover__eyebrow-row">
           <div className="ap-discover__eyebrow">DISCOVER MODE</div>
-          {onOpenAccount ? (
-            <button type="button" className="ap-account-entry" onClick={onOpenAccount} data-testid="open-account">
-              账号
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="ap-account-entry"
+              onClick={() => onNavigate('settings')}
+              data-testid="open-settings"
+            >
+              设置
             </button>
-          ) : null}
+            {onOpenAccount ? (
+              <button type="button" className="ap-account-entry" onClick={onOpenAccount} data-testid="open-account">
+                账号
+              </button>
+            ) : null}
+          </div>
         </div>
         <h1 className="ap-discover__title">
           <span className="ap-highlight ap-highlight--pink">真实识别</span>
