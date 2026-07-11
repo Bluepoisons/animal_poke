@@ -19,18 +19,24 @@ import (
 
 // AccountRepo 账号/绑定/设备关联仓储。
 type AccountRepo struct {
-	db     *gorm.DB
-	pepper string // 用于 token 哈希的 pepper（通常为 JWT secret）
+	db             *gorm.DB
+	pepper         string // ACCOUNT_TOKEN_PEPPER（与 JWT 独立）
+	pepperPrevious string // 可选上一版 pepper，仅双读校验
 }
 
-// NewAccountRepo 构造。
+// NewAccountRepo 构造（单 pepper）。
 func NewAccountRepo(db *gorm.DB, pepper string) *AccountRepo {
-	return &AccountRepo{db: db, pepper: pepper}
+	return NewAccountRepoWithPeppers(db, pepper, "")
+}
+
+// NewAccountRepoWithPeppers 构造（当前 + 可选 previous，单写双读）。
+func NewAccountRepoWithPeppers(db *gorm.DB, pepper, previous string) *AccountRepo {
+	return &AccountRepo{db: db, pepper: pepper, pepperPrevious: previous}
 }
 
 // WithTx 事务绑定。
 func (r *AccountRepo) WithTx(tx *gorm.DB) *AccountRepo {
-	return &AccountRepo{db: tx, pepper: r.pepper}
+	return &AccountRepo{db: tx, pepper: r.pepper, pepperPrevious: r.pepperPrevious}
 }
 
 // DB 底层 DB。
@@ -65,10 +71,28 @@ func (r *AccountRepo) CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-// HashToken 对 refresh/oauth token 做 peppered SHA-256（可索引比对，不存明文）。
+// HashToken 对 refresh/oauth token 做 peppered SHA-256（单写：始终用当前 pepper）。
 func (r *AccountRepo) HashToken(token string) string {
-	sum := sha256.Sum256([]byte(r.pepper + ":" + token))
+	return r.hashTokenWith(r.pepper, token)
+}
+
+func (r *AccountRepo) hashTokenWith(pepper, token string) string {
+	sum := sha256.Sum256([]byte(pepper + ":" + token))
 	return hex.EncodeToString(sum[:])
+}
+
+// matchTokenHash 双读：当前 pepper 命中或 previous pepper 命中即通过。
+func (r *AccountRepo) matchTokenHash(stored, token string) bool {
+	if stored == "" || token == "" {
+		return false
+	}
+	if stored == r.hashTokenWith(r.pepper, token) {
+		return true
+	}
+	if r.pepperPrevious != "" && stored == r.hashTokenWith(r.pepperPrevious, token) {
+		return true
+	}
+	return false
 }
 
 // NormalizeEmail 规范化邮箱。
@@ -370,7 +394,7 @@ func (r *AccountRepo) VerifyBindingCredential(b *models.AccountBinding, password
 		return r.CheckPassword(b.CredentialHash, passwordOrToken)
 	default:
 		// mock_oauth / apple / google: peppered sha256
-		return b.CredentialHash != "" && b.CredentialHash == r.HashToken(passwordOrToken)
+		return r.matchTokenHash(b.CredentialHash, passwordOrToken)
 	}
 }
 
@@ -475,10 +499,16 @@ func (r *AccountRepo) consumeMigrationTicketTx(tx *gorm.DB, plain, sourceDeviceI
 	if plain == "" {
 		return ErrTicketNotFound
 	}
-	hash := r.HashToken(plain)
+	hashes := []string{r.HashToken(plain)}
+	if r.pepperPrevious != "" {
+		prev := r.hashTokenWith(r.pepperPrevious, plain)
+		if prev != hashes[0] {
+			hashes = append(hashes, prev)
+		}
+	}
 	var t models.DeviceMigrationTicket
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("ticket_hash = ?", hash).First(&t).Error
+		Where("ticket_hash IN ?", hashes).First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrTicketNotFound
 	}

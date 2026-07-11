@@ -12,6 +12,8 @@ import (
 	"math/rand/v2"
 	"strings"
 	"unicode"
+
+	"animalpoke/backend/internal/config"
 )
 
 // StatsConfigVersion 写入 inference.config_version 的算法版本。
@@ -48,13 +50,14 @@ type ValueFactors struct {
 }
 
 // ComputeDeterministicValue 用 HMAC 派生 RNG，计算 rarity/stats（不含 narrative）。
-// seedID 应为 capture/parent inference id；secret 为服务端密钥（如 JWT secret）。
+// seedID 应为 capture/parent inference id；secret 为 STATS_HMAC_KEY（与 JWT 独立）。
 func ComputeDeterministicValue(input ValueInput, seedID, secret, configVersion string) *ValueResult {
 	if configVersion == "" {
 		configVersion = StatsConfigVersion
 	}
 	if secret == "" {
-		secret = "animal-poke-dev-stats-secret"
+		// 开发兜底；production 由 config.Validate 强制配置 STATS_HMAC_KEY
+		secret = config.DefaultDevStatsHMACKey
 	}
 	if seedID == "" {
 		// 无稳定 id 时用输入摘要，保证同输入同结果（开发/mock 兜底）

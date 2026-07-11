@@ -13,8 +13,15 @@ import (
 	"time"
 )
 
-// 默认开发 JWT Secret（仅 development/test 允许）。
-const DefaultDevJWTSecret = "animal-poke-dev-secret"
+// 默认开发密钥（仅 development/test 允许；各用途独立，禁止互为 fallback）。
+const (
+	DefaultDevJWTSecret          = "animal-poke-dev-secret"
+	DefaultDevAccountTokenPepper = "animal-poke-dev-account-pepper"
+	DefaultDevStatsHMACKey       = "animal-poke-dev-stats-secret"
+	DefaultDevTimeSigningKey     = "animal-poke-dev-time-signing"
+	// MinCryptoKeyLen production 密钥最小长度。
+	MinCryptoKeyLen = 32
+)
 
 // Config 聚合所有服务端配置。第三方 Key 全部在此集中(客户端永不含)。
 type Config struct {
@@ -25,13 +32,34 @@ type Config struct {
 	// Never expose this port via public Ingress; use ClusterIP only.
 	MetricsAddr string
 	LogLevel    string
-	JWTSecret   string
-	// JWTSecretPrevious optional previous secret for rotation window.
+	// JWTSecret 当前 JWT HMAC 签名密钥。
+	// 环境变量：JWT_SIGNING_KEY（首选）或兼容别名 JWT_SECRET。
+	JWTSecret string
+	// JWTSecretPrevious 可选上一版 JWT 密钥（双读窗口，仅校验旧 Token）。
+	// 环境变量：JWT_SIGNING_KEY_PREVIOUS 或 JWT_SECRET_PREVIOUS。
 	JWTSecretPrevious string
-	JWTIssuer         string
-	JWTAudience       string
-	JWTAccessTTL      time.Duration
-	AIMockEnabled     bool
+	// AccountTokenPepper 账号 refresh/oauth token 哈希 pepper（与 JWT 独立）。
+	// 环境变量：ACCOUNT_TOKEN_PEPPER。
+	AccountTokenPepper string
+	// AccountTokenPepperPrevious 可选上一版 pepper（双读校验旧哈希）。
+	// 环境变量：ACCOUNT_TOKEN_PEPPER_PREVIOUS。
+	AccountTokenPepperPrevious string
+	// StatsHMACKey rarity/stats 确定性算法 HMAC 密钥（与 JWT 独立）。
+	// 环境变量：STATS_HMAC_KEY。
+	StatsHMACKey string
+	// StatsHMACKeyPrevious 可选上一版 stats 密钥（双读/回放窗口）。
+	// 环境变量：STATS_HMAC_KEY_PREVIOUS。
+	StatsHMACKeyPrevious string
+	// TimeSigningKey 可信时间 API HMAC 签名密钥（与 JWT 独立）。
+	// 环境变量：TIME_SIGNING_KEY。
+	TimeSigningKey string
+	// TimeSigningKeyPrevious 可选上一版时间签名密钥。
+	// 环境变量：TIME_SIGNING_KEY_PREVIOUS。
+	TimeSigningKeyPrevious string
+	JWTIssuer              string
+	JWTAudience            string
+	JWTAccessTTL           time.Duration
+	AIMockEnabled          bool
 	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
 	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
 	AuthMockOAuthEnabled bool
@@ -220,12 +248,11 @@ func (c *Config) MockAllowed() bool {
 // Vision 配置视为原子三元组：禁止 VISION/VLM/LLM 字段级混合；默认禁止回退到 LLM_*。
 func Load() *Config {
 	cfg := &Config{
-		AppEnv:             getEnv("APP_ENV", "development"),
-		ServerAddr:         getEnv("SERVER_ADDR", ":8080"),
-		MetricsAddr:        getEnv("METRICS_ADDR", ":9090"),
-		LogLevel:           getEnv("LOG_LEVEL", "INFO"),
-		JWTSecret:          getEnv("JWT_SECRET", DefaultDevJWTSecret),
-		JWTSecretPrevious:  getEnv("JWT_SECRET_PREVIOUS", ""),
+		AppEnv:      getEnv("APP_ENV", "development"),
+		ServerAddr:  getEnv("SERVER_ADDR", ":8080"),
+		MetricsAddr: getEnv("METRICS_ADDR", ":9090"),
+		LogLevel:    getEnv("LOG_LEVEL", "INFO"),
+		// 密钥在下方 load* 中按用途填充（AP-087）
 		JWTIssuer:          getEnv("JWT_ISSUER", "animal-poke"),
 		JWTAudience:        getEnv("JWT_AUDIENCE", "animal-poke-client"),
 		JWTAccessTTL:       getEnvDuration("JWT_ACCESS_TTL", 2*time.Hour),
@@ -270,6 +297,19 @@ func Load() *Config {
 		},
 		Upstream: loadUpstreamConfig(),
 	}
+
+	// 按用途拆分密钥（AP-087）。production 禁止跨用途 fallback；非 production 使用独立默认值。
+	isProd := cfg.IsProduction()
+	cfg.JWTSecret, cfg.JWTSecretPrevious = loadJWTSigningKeys(isProd)
+	cfg.AccountTokenPepper, cfg.AccountTokenPepperPrevious = loadPurposeKey(
+		"ACCOUNT_TOKEN_PEPPER", "ACCOUNT_TOKEN_PEPPER_PREVIOUS", DefaultDevAccountTokenPepper, isProd,
+	)
+	cfg.StatsHMACKey, cfg.StatsHMACKeyPrevious = loadPurposeKey(
+		"STATS_HMAC_KEY", "STATS_HMAC_KEY_PREVIOUS", DefaultDevStatsHMACKey, isProd,
+	)
+	cfg.TimeSigningKey, cfg.TimeSigningKeyPrevious = loadPurposeKey(
+		"TIME_SIGNING_KEY", "TIME_SIGNING_KEY_PREVIOUS", DefaultDevTimeSigningKey, isProd,
+	)
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
 	cfg.ThirdParty.loadVisionTriplet()
@@ -388,8 +428,8 @@ func (c *Config) Validate() error {
 	}
 
 	if c.IsProduction() {
-		if c.JWTSecret == "" || c.JWTSecret == DefaultDevJWTSecret || len(c.JWTSecret) < 32 {
-			errs = append(errs, "production requires strong JWT_SECRET (>=32 chars, not default)")
+		if err := c.validateProductionCryptoKeys(); err != nil {
+			errs = append(errs, err.Error())
 		}
 		if c.Database.Password == "" || c.Database.Password == "animal_poke" {
 			errs = append(errs, "production forbids default DB_PASSWORD")
@@ -592,6 +632,79 @@ func loadProviderBudget(prefix string, def ProviderBudget) ProviderBudget {
 		b.MaxConcurrent = def.MaxConcurrent
 	}
 	return b
+}
+
+// loadJWTSigningKeys 加载 JWT 签名密钥。
+// 首选 JWT_SIGNING_KEY / JWT_SIGNING_KEY_PREVIOUS；兼容 JWT_SECRET / JWT_SECRET_PREVIOUS。
+// 非 production 未配置时回退 DefaultDevJWTSecret；production 保持空串由 Validate 拒绝。
+func loadJWTSigningKeys(isProd bool) (current, previous string) {
+	current = firstNonEmpty(os.Getenv("JWT_SIGNING_KEY"), os.Getenv("JWT_SECRET"))
+	previous = firstNonEmpty(os.Getenv("JWT_SIGNING_KEY_PREVIOUS"), os.Getenv("JWT_SECRET_PREVIOUS"))
+	if current == "" && !isProd {
+		current = DefaultDevJWTSecret
+	}
+	return current, previous
+}
+
+// loadPurposeKey 加载单一用途密钥及其可选 previous（双读窗口）。
+// 非 production 未配置时使用 devDefault；production 不回退、不跨用途借用。
+func loadPurposeKey(envKey, prevEnvKey, devDefault string, isProd bool) (current, previous string) {
+	current = os.Getenv(envKey)
+	previous = os.Getenv(prevEnvKey)
+	if current == "" && !isProd {
+		current = devDefault
+	}
+	return current, previous
+}
+
+// validateProductionCryptoKeys production 强制：各用途密钥齐全、足够长、非默认、互不共享。
+func (c *Config) validateProductionCryptoKeys() error {
+	var errs []string
+
+	type keySpec struct {
+		label      string
+		value      string
+		devDefault string
+	}
+	specs := []keySpec{
+		// 报错文案含 JWT_SECRET 以便兼容旧运维检索；首选 env 仍为 JWT_SIGNING_KEY。
+		{"JWT_SIGNING_KEY/JWT_SECRET", c.JWTSecret, DefaultDevJWTSecret},
+		{"ACCOUNT_TOKEN_PEPPER", c.AccountTokenPepper, DefaultDevAccountTokenPepper},
+		{"STATS_HMAC_KEY", c.StatsHMACKey, DefaultDevStatsHMACKey},
+		{"TIME_SIGNING_KEY", c.TimeSigningKey, DefaultDevTimeSigningKey},
+	}
+	for _, s := range specs {
+		if s.value == "" || s.value == s.devDefault || len(s.value) < MinCryptoKeyLen {
+			errs = append(errs, fmt.Sprintf("production requires strong %s (>=%d chars, not default)", s.label, MinCryptoKeyLen))
+		}
+	}
+
+	// 禁止跨用途共享同一密钥（扩大单点泄露面）。
+	if c.JWTSecret != "" {
+		if c.JWTSecret == c.AccountTokenPepper {
+			errs = append(errs, "production forbids sharing JWT signing key with ACCOUNT_TOKEN_PEPPER")
+		}
+		if c.JWTSecret == c.StatsHMACKey {
+			errs = append(errs, "production forbids sharing JWT signing key with STATS_HMAC_KEY")
+		}
+		if c.JWTSecret == c.TimeSigningKey {
+			errs = append(errs, "production forbids sharing JWT signing key with TIME_SIGNING_KEY")
+		}
+	}
+	if c.AccountTokenPepper != "" && c.AccountTokenPepper == c.StatsHMACKey {
+		errs = append(errs, "production forbids sharing ACCOUNT_TOKEN_PEPPER with STATS_HMAC_KEY")
+	}
+	if c.AccountTokenPepper != "" && c.AccountTokenPepper == c.TimeSigningKey {
+		errs = append(errs, "production forbids sharing ACCOUNT_TOKEN_PEPPER with TIME_SIGNING_KEY")
+	}
+	if c.StatsHMACKey != "" && c.StatsHMACKey == c.TimeSigningKey {
+		errs = append(errs, "production forbids sharing STATS_HMAC_KEY with TIME_SIGNING_KEY")
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 func getEnv(k, def string) string {

@@ -54,6 +54,27 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: jwt-secret
+            - name: JWT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: jwt-signing-key
+                  optional: true
+            - name: ACCOUNT_TOKEN_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: account-token-pepper
+            - name: STATS_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: stats-hmac-key
+            - name: TIME_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: time-signing-key
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:

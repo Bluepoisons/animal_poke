@@ -41,7 +41,11 @@ func TestDSN(t *testing.T) {
 func clearProviderEnv(t *testing.T) {
 	t.Helper()
 	keys := []string{
-		"APP_ENV", "SERVER_ADDR", "METRICS_ADDR", "LOG_LEVEL", "JWT_SECRET", "AI_MOCK_ENABLED",
+		"APP_ENV", "SERVER_ADDR", "METRICS_ADDR", "LOG_LEVEL", "AI_MOCK_ENABLED",
+		"JWT_SECRET", "JWT_SECRET_PREVIOUS", "JWT_SIGNING_KEY", "JWT_SIGNING_KEY_PREVIOUS",
+		"ACCOUNT_TOKEN_PEPPER", "ACCOUNT_TOKEN_PEPPER_PREVIOUS",
+		"STATS_HMAC_KEY", "STATS_HMAC_KEY_PREVIOUS",
+		"TIME_SIGNING_KEY", "TIME_SIGNING_KEY_PREVIOUS",
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
 		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY",
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
@@ -271,11 +275,20 @@ func TestLoad_VisionAtomicTriplet(t *testing.T) {
 	}
 }
 
+// applyStrongCryptoKeys 为 production Validate 测试填充四类互不相同的强密钥。
+func applyStrongCryptoKeys(cfg *Config) {
+	cfg.JWTSecret = "prod-jwt-signing-key-32chars-min!"
+	cfg.AccountTokenPepper = "prod-account-pepper-32chars-min!!"
+	cfg.StatsHMACKey = "prod-stats-hmac-key-32chars-min!"
+	cfg.TimeSigningKey = "prod-time-signing-key-32chars-min!"
+	cfg.AuthMockOAuthEnabled = false
+}
+
 func TestValidate_ProductionHTTPEndpoint(t *testing.T) {
 	clearProviderEnv(t)
 	cfg := Load()
 	cfg.AppEnv = "production"
-	cfg.JWTSecret = strings.Repeat("x", 32)
+	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
@@ -298,7 +311,7 @@ func TestValidate_ProductionLocalhostRejected(t *testing.T) {
 	clearProviderEnv(t)
 	cfg := Load()
 	cfg.AppEnv = "production"
-	cfg.JWTSecret = strings.Repeat("x", 32)
+	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
 	cfg.AIMockEnabled = false
 	cfg.AdminAPIKey = "admin-secret"
@@ -327,9 +340,10 @@ func TestValidate_Production(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "JWT_SECRET")
 
-	cfg.JWTSecret = strings.Repeat("x", 32)
+	applyStrongCryptoKeys(cfg)
 	cfg.Database.Password = "complex-pass"
 	cfg.AIMockEnabled = false
+	cfg.AuthMockOAuthEnabled = false
 	cfg.ThirdParty = ThirdPartyConfig{
 		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
 		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
@@ -342,6 +356,115 @@ func TestValidate_Production(t *testing.T) {
 
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	assert.NoError(t, cfg.Validate())
+}
+
+func TestLoad_CryptoKeys_DevDefaultsDistinct(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	assert.Equal(t, DefaultDevJWTSecret, cfg.JWTSecret)
+	assert.Equal(t, DefaultDevAccountTokenPepper, cfg.AccountTokenPepper)
+	assert.Equal(t, DefaultDevStatsHMACKey, cfg.StatsHMACKey)
+	assert.Equal(t, DefaultDevTimeSigningKey, cfg.TimeSigningKey)
+	// 开发默认也按用途分离，避免误用同一串
+	assert.NotEqual(t, cfg.JWTSecret, cfg.AccountTokenPepper)
+	assert.NotEqual(t, cfg.JWTSecret, cfg.StatsHMACKey)
+	assert.NotEqual(t, cfg.JWTSecret, cfg.TimeSigningKey)
+}
+
+func TestLoad_JWTSigningKeyPreferredOverAlias(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("JWT_SIGNING_KEY", "signing-key-from-preferred-name-xx")
+	t.Setenv("JWT_SECRET", "signing-key-from-alias-should-lose")
+	t.Setenv("JWT_SIGNING_KEY_PREVIOUS", "prev-from-preferred")
+	t.Setenv("JWT_SECRET_PREVIOUS", "prev-from-alias")
+	cfg := Load()
+	assert.Equal(t, "signing-key-from-preferred-name-xx", cfg.JWTSecret)
+	assert.Equal(t, "prev-from-preferred", cfg.JWTSecretPrevious)
+}
+
+func TestLoad_JWTSecretAliasStillWorks(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("JWT_SECRET", "legacy-jwt-secret-alias-value")
+	t.Setenv("JWT_SECRET_PREVIOUS", "legacy-prev")
+	cfg := Load()
+	assert.Equal(t, "legacy-jwt-secret-alias-value", cfg.JWTSecret)
+	assert.Equal(t, "legacy-prev", cfg.JWTSecretPrevious)
+}
+
+func TestLoad_PurposeKeysAndPrevious(t *testing.T) {
+	clearProviderEnv(t)
+	t.Setenv("ACCOUNT_TOKEN_PEPPER", "acct-pepper-current")
+	t.Setenv("ACCOUNT_TOKEN_PEPPER_PREVIOUS", "acct-pepper-prev")
+	t.Setenv("STATS_HMAC_KEY", "stats-hmac-current")
+	t.Setenv("STATS_HMAC_KEY_PREVIOUS", "stats-hmac-prev")
+	t.Setenv("TIME_SIGNING_KEY", "time-sign-current")
+	t.Setenv("TIME_SIGNING_KEY_PREVIOUS", "time-sign-prev")
+	cfg := Load()
+	assert.Equal(t, "acct-pepper-current", cfg.AccountTokenPepper)
+	assert.Equal(t, "acct-pepper-prev", cfg.AccountTokenPepperPrevious)
+	assert.Equal(t, "stats-hmac-current", cfg.StatsHMACKey)
+	assert.Equal(t, "stats-hmac-prev", cfg.StatsHMACKeyPrevious)
+	assert.Equal(t, "time-sign-current", cfg.TimeSigningKey)
+	assert.Equal(t, "time-sign-prev", cfg.TimeSigningKeyPrevious)
+}
+
+func TestValidate_ProductionMissingPurposeKey(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	applyStrongCryptoKeys(cfg)
+	cfg.AccountTokenPepper = "" // 缺 pepper
+	cfg.Database.Password = "complex-pass"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
+		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ACCOUNT_TOKEN_PEPPER")
+}
+
+func TestValidate_ProductionSharedKeysRejected(t *testing.T) {
+	clearProviderEnv(t)
+	cfg := Load()
+	cfg.AppEnv = "production"
+	shared := "shared-secret-must-not-cross-purpose!!"
+	cfg.JWTSecret = shared
+	cfg.AccountTokenPepper = shared
+	cfg.StatsHMACKey = "prod-stats-hmac-key-32chars-min!"
+	cfg.TimeSigningKey = "prod-time-signing-key-32chars-min!"
+	cfg.Database.Password = "complex-pass"
+	cfg.AIMockEnabled = false
+	cfg.AdminAPIKey = "admin-secret"
+	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
+	cfg.ThirdParty = ThirdPartyConfig{
+		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
+		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ACCOUNT_TOKEN_PEPPER")
+}
+
+func TestValidate_ProductionNoCrossPurposeFallback(t *testing.T) {
+	// production Load 不得用 JWT 填补其他用途
+	clearProviderEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SIGNING_KEY", "prod-jwt-signing-key-32chars-min!")
+	// 故意不设 ACCOUNT/STATS/TIME
+	cfg := Load()
+	assert.Equal(t, "prod-jwt-signing-key-32chars-min!", cfg.JWTSecret)
+	assert.Empty(t, cfg.AccountTokenPepper)
+	assert.Empty(t, cfg.StatsHMACKey)
+	assert.Empty(t, cfg.TimeSigningKey)
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ACCOUNT_TOKEN_PEPPER")
+	assert.Contains(t, err.Error(), "STATS_HMAC_KEY")
+	assert.Contains(t, err.Error(), "TIME_SIGNING_KEY")
 }
 
 func TestCapabilityStatus_NoSecrets(t *testing.T) {
