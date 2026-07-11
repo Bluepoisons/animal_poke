@@ -3,7 +3,9 @@ package routes
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
+	"animalpoke/backend/internal/admin"
 	"animalpoke/backend/internal/config"
 	"animalpoke/backend/internal/handlers"
 	"animalpoke/backend/internal/middleware"
@@ -349,14 +351,91 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			}
 		}
 
-		// 管理员 RBAC（API Key）
-		if auditRepo != nil {
-			admin := api.Group("/admin")
-			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey))
+		// 管理员 RBAC（AP-085）：短期 Admin JWT + 可选 break-glass；独立限流
+		adminEnv := strings.ToLower(cfg.AppEnv)
+		if adminEnv == "" {
+			adminEnv = "development"
+		}
+		adminSessions := admin.NewSessionStore(db)
+		adminSessions.RevokeGrace = cfg.AdminSessionRevokeGrace
+		adminTokens := admin.NewTokenService(admin.TokenConfig{
+			Secret:         cfg.AdminJWTSecret,
+			PreviousSecret: cfg.AdminJWTSecretPrevious,
+			Issuer:         cfg.AdminJWTIssuer,
+			Audience:       "animal-poke-admin-" + adminEnv,
+			Env:            adminEnv,
+			TTL:            cfg.AdminTokenTTL,
+		}, adminSessions)
+		adminAuditor := admin.NewActionAuditor(db, cfg.AdminJWTSecret)
+		adminAuthCfg := middleware.AdminAuthConfig{
+			Tokens:               adminTokens,
+			Sessions:             adminSessions,
+			Auditor:              adminAuditor,
+			AdminAPIKey:          cfg.AdminAPIKey,
+			BreakGlassEnabled:    cfg.AdminBreakGlassEnabled,
+			Production:           cfg.IsProduction(),
+			Env:                  adminEnv,
+			RequireReasonOnWrite: true,
+		}
+		// 管理端独立限流：IP 30/min + actor 60/min（fail-closed 倾向：burst 小）
+		adminIPLimiter := middleware.NewRateLimiter(30.0/60.0, 10).WithShared(sharedCounter)
+		adminActorLimiter := middleware.NewRateLimiter(60.0/60.0, 20).WithShared(sharedCounter)
+
+		adminH := handlers.NewAdminHandler(handlers.AdminHandlerOptions{
+			Tokens:      adminTokens,
+			Sessions:    adminSessions,
+			Auditor:     adminAuditor,
+			DB:          db,
+			AdminAPIKey: cfg.AdminAPIKey,
+			BreakGlass:  cfg.AdminBreakGlassEnabled,
+			Production:  cfg.IsProduction(),
+			DevIssueKey: cfg.AdminDevIssueSecret,
+			Env:         adminEnv,
+		})
+
+		adminGroup := api.Group("/admin")
+		adminGroup.Use(middleware.RateLimitByIP(adminIPLimiter))
+		adminGroup.Use(middleware.RateLimitMulti(adminActorLimiter, func(c *gin.Context) []string {
+			if a := middleware.GetAdminActor(c); a != nil && a.ActorID != "" {
+				return []string{"admin-actor:" + a.ActorID}
+			}
+			return nil
+		}))
+		{
+			// token 签发：可选鉴权（dev_secret / break-glass / super）
+			adminGroup.POST("/auth/token", middleware.BodyLimit(middleware.MaxBodyDefault),
+				middleware.OptionalAdminAuth(adminAuthCfg), adminH.IssueToken)
+
+			secured := adminGroup.Group("")
+			secured.Use(middleware.AdminAuthRBAC(adminAuthCfg))
 			{
-				ah := handlers.NewAuditHandler(auditRepo)
-				admin.GET("/audit/logs", ah.List)
-				admin.POST("/audit/logs/:id/ack", ah.Ack)
+				secured.POST("/sessions/revoke", middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.RequireAdminPermission(admin.PermSessionRevoke, adminAuditor),
+					middleware.AdminActionAudit(admin.PermSessionRevoke, adminAuditor),
+					adminH.RevokeSession)
+
+				secured.PUT("/config/game", middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.RequireAdminPermission(admin.PermConfigWrite, adminAuditor),
+					adminH.WriteGameConfig)
+
+				secured.GET("/security/reports/:id",
+					middleware.RequireAdminPermission(admin.PermSecurityReportMeta, adminAuditor),
+					adminH.GetSecurityReport)
+
+				if auditRepo != nil {
+					ah := handlers.NewAuditHandler(auditRepo)
+					secured.GET("/audit/logs",
+						middleware.RequireAdminPermission(admin.PermAuditLogsRead, adminAuditor),
+						middleware.AdminActionAudit(admin.PermAuditLogsRead, adminAuditor),
+						ah.List)
+					secured.POST("/audit/logs/:id/ack",
+						middleware.RequireAdminPermission(admin.PermAuditLogsAck, adminAuditor),
+						middleware.AdminActionAudit(admin.PermAuditLogsAck, adminAuditor),
+						ah.Ack)
+				} else {
+					secured.GET("/audit/logs", unavailable("db_unavailable"))
+					secured.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
+				}
 
 				if db != nil {
 					commerceAdmin := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
@@ -364,20 +443,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 						Enabled:     cfg.CommerceEnabled,
 						StoreVerify: cfg.CommerceStoreVerify,
 					})
-					admin.POST("/commerce/orders/refund", commerceAdmin.AdminRefundOrder)
-					admin.POST("/commerce/webhooks/refund", commerceAdmin.WebhookRefundOrder)
+					secured.POST("/commerce/orders/refund",
+						middleware.BodyLimit(middleware.MaxBodyDefault),
+						middleware.RequireAdminPermission(admin.PermCommerceRefund, adminAuditor),
+						middleware.AdminActionAudit(admin.PermCommerceRefund, adminAuditor),
+						commerceAdmin.AdminRefundOrder)
+					// webhook 仍走 break-glass/密钥或 JWT；平台签名接入前保持与 refund 相同网关
+					secured.POST("/commerce/webhooks/refund",
+						middleware.BodyLimit(middleware.MaxBodyDefault),
+						middleware.RequireAdminPermission(admin.PermCommerceRefund, adminAuditor),
+						commerceAdmin.WebhookRefundOrder)
 				} else {
-					admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
-					admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
+					secured.POST("/commerce/orders/refund", unavailable("db_unavailable"))
+					secured.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
 				}
 			}
-		} else {
-			admin := api.Group("/admin")
-			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey))
-			admin.GET("/audit/logs", unavailable("db_unavailable"))
-			admin.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
-			admin.POST("/commerce/orders/refund", unavailable("db_unavailable"))
-			admin.POST("/commerce/webhooks/refund", unavailable("db_unavailable"))
 		}
 	}
 	return r

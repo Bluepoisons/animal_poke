@@ -19,6 +19,8 @@ const (
 	DefaultDevAccountTokenPepper = "animal-poke-dev-account-pepper"
 	DefaultDevStatsHMACKey       = "animal-poke-dev-stats-secret"
 	DefaultDevTimeSigningKey     = "animal-poke-dev-time-signing"
+	DefaultDevAdminJWTSecret     = "animal-poke-dev-admin-jwt-secret"
+	DefaultDevAdminIssueSecret   = "animal-poke-dev-admin-issue"
 	// MinCryptoKeyLen production 密钥最小长度。
 	MinCryptoKeyLen = 32
 )
@@ -67,10 +69,27 @@ type Config struct {
 	// AuthMockOAuthEnabled 允许 mock_oauth 绑定/登录（仅 development/test；production 强制 false）。
 	// 环境变量 AUTH_MOCK_OAUTH_ENABLED；非 production 默认 true。
 	AuthMockOAuthEnabled bool
-	RedisURL             string
-	AdminAPIKey          string
+	RedisURL    string
+	AdminAPIKey string
 	// OpsToken 运维内部接口 X-AP-Ops-Token 校验值（可与 AdminAPIKey 相同，但独立配置）。
 	OpsToken string
+	// AdminJWTSecret 管理端短期 JWT 签名密钥（与设备 JWT 独立）。
+	// 环境变量：ADMIN_JWT_SECRET。
+	AdminJWTSecret string
+	// AdminJWTSecretPrevious 可选上一版管理 JWT 密钥。
+	AdminJWTSecretPrevious string
+	// AdminJWTIssuer 管理 JWT iss（默认 animal-poke-admin）。
+	AdminJWTIssuer string
+	// AdminTokenTTL 管理 JWT 有效期（默认 15m）。
+	AdminTokenTTL time.Duration
+	// AdminBreakGlassEnabled 允许 X-Admin-Key 紧急入口（生产默认 false）。
+	// 环境变量：ADMIN_BREAK_GLASS_ENABLED。
+	AdminBreakGlassEnabled bool
+	// AdminDevIssueSecret 非生产签发管理 JWT 的 bootstrap 密钥。
+	// 环境变量：ADMIN_DEV_ISSUE_SECRET。
+	AdminDevIssueSecret string
+	// AdminSessionRevokeGrace 撤权宽限窗口（默认 0 立即失效）。
+	AdminSessionRevokeGrace time.Duration
 	// CommerceEnabled 商业化下单/履约总开关。production 默认 false；非 production 默认 true。
 	// 环境变量 COMMERCE_ENABLED 可覆盖。
 	CommerceEnabled bool
@@ -266,6 +285,9 @@ func Load() *Config {
 		RedisURL:              getEnv("REDIS_URL", ""),
 		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),
 		OpsToken:              getEnv("OPS_TOKEN", ""),
+		AdminJWTIssuer:        getEnv("ADMIN_JWT_ISSUER", "animal-poke-admin"),
+		AdminTokenTTL:         getEnvDuration("ADMIN_TOKEN_TTL", 15*time.Minute),
+		AdminSessionRevokeGrace: getEnvDuration("ADMIN_SESSION_REVOKE_GRACE", 0),
 		MaxImageBytes:         int64(getEnvInt("MAX_IMAGE_BYTES", 5*1024*1024)),
 		MaxImagePixels:        getEnvInt("MAX_IMAGE_PIXELS", 12_000_000),
 		CORSAllowedOrigins:    splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "")),
@@ -316,6 +338,17 @@ func Load() *Config {
 	cfg.TimeSigningKey, cfg.TimeSigningKeyPrevious = loadPurposeKey(
 		"TIME_SIGNING_KEY", "TIME_SIGNING_KEY_PREVIOUS", DefaultDevTimeSigningKey, isProd,
 	)
+	// 管理端 JWT 密钥（AP-085）：与设备 JWT 独立；非 production 回退 dev 默认。
+	cfg.AdminJWTSecret, cfg.AdminJWTSecretPrevious = loadPurposeKey(
+		"ADMIN_JWT_SECRET", "ADMIN_JWT_SECRET_PREVIOUS", DefaultDevAdminJWTSecret, isProd,
+	)
+	// break-glass：production 默认关闭；非 production 默认开启（便于联调）。
+	cfg.AdminBreakGlassEnabled = getEnvBool("ADMIN_BREAK_GLASS_ENABLED", !isProd)
+	if isProd {
+		cfg.AdminDevIssueSecret = "" // 生产禁止 dev issue
+	} else {
+		cfg.AdminDevIssueSecret = getEnv("ADMIN_DEV_ISSUE_SECRET", DefaultDevAdminIssueSecret)
+	}
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
 	cfg.ThirdParty.loadVisionTriplet()
@@ -453,7 +486,13 @@ func (c *Config) Validate() error {
 			errs = append(errs, "production requires LLM_ENDPOINT/KEY/MODEL")
 		}
 		if c.AdminAPIKey == "" {
-			errs = append(errs, "production requires ADMIN_API_KEY for audit RBAC")
+			errs = append(errs, "production requires ADMIN_API_KEY for break-glass only")
+		}
+		if c.AdminJWTSecret == "" {
+			errs = append(errs, "production requires ADMIN_JWT_SECRET for admin RBAC")
+		}
+		if c.AdminTokenTTL <= 0 || c.AdminTokenTTL > time.Hour {
+			errs = append(errs, "production ADMIN_TOKEN_TTL must be in (0, 1h]")
 		}
 		if len(c.CORSAllowedOrigins) == 0 {
 			errs = append(errs, "production requires CORS_ALLOWED_ORIGINS allowlist")
@@ -684,6 +723,7 @@ func (c *Config) validateProductionCryptoKeys() error {
 		{"ACCOUNT_TOKEN_PEPPER", c.AccountTokenPepper, DefaultDevAccountTokenPepper},
 		{"STATS_HMAC_KEY", c.StatsHMACKey, DefaultDevStatsHMACKey},
 		{"TIME_SIGNING_KEY", c.TimeSigningKey, DefaultDevTimeSigningKey},
+		{"ADMIN_JWT_SECRET", c.AdminJWTSecret, DefaultDevAdminJWTSecret},
 	}
 	for _, s := range specs {
 		if s.value == "" || s.value == s.devDefault || len(s.value) < MinCryptoKeyLen {
@@ -702,6 +742,9 @@ func (c *Config) validateProductionCryptoKeys() error {
 		if c.JWTSecret == c.TimeSigningKey {
 			errs = append(errs, "production forbids sharing JWT signing key with TIME_SIGNING_KEY")
 		}
+		if c.JWTSecret == c.AdminJWTSecret {
+			errs = append(errs, "production forbids sharing JWT signing key with ADMIN_JWT_SECRET")
+		}
 	}
 	if c.AccountTokenPepper != "" && c.AccountTokenPepper == c.StatsHMACKey {
 		errs = append(errs, "production forbids sharing ACCOUNT_TOKEN_PEPPER with STATS_HMAC_KEY")
@@ -711,6 +754,17 @@ func (c *Config) validateProductionCryptoKeys() error {
 	}
 	if c.StatsHMACKey != "" && c.StatsHMACKey == c.TimeSigningKey {
 		errs = append(errs, "production forbids sharing STATS_HMAC_KEY with TIME_SIGNING_KEY")
+	}
+	if c.AdminJWTSecret != "" {
+		if c.AdminJWTSecret == c.AccountTokenPepper {
+			errs = append(errs, "production forbids sharing ADMIN_JWT_SECRET with ACCOUNT_TOKEN_PEPPER")
+		}
+		if c.AdminJWTSecret == c.StatsHMACKey {
+			errs = append(errs, "production forbids sharing ADMIN_JWT_SECRET with STATS_HMAC_KEY")
+		}
+		if c.AdminJWTSecret == c.TimeSigningKey {
+			errs = append(errs, "production forbids sharing ADMIN_JWT_SECRET with TIME_SIGNING_KEY")
+		}
 	}
 
 	if len(errs) > 0 {
