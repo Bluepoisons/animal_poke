@@ -160,6 +160,14 @@ func loadInventoryOps(t *testing.T) []contractOp {
 		id := item.OperationID
 
 		switch {
+		case strings.Contains(p, "/admin/cases") || p == "/api/v1/cases/{id}":
+			// AP-086 cases sit on JWT auth group (role via X-Admin-Role), not X-Admin-Key.
+			op.needsAuth = true
+			op.needsDB = true
+			op.successStatuses = authSuccess
+			op.failureStatuses = authFail
+			op.failureNoAuth = true
+			op.successBody = defaultBodyFor(id, p, op.method)
 		case p == "/health" || p == "/livez" || p == "/ready" || p == "/readyz" || p == "/metrics" ||
 			p == "/api/v1/ping" || p == "/api/v1/time" || p == "/api/v1/version":
 			op.successStatuses = publicSuccess
@@ -263,6 +271,14 @@ func defaultBodyFor(id, path, method string) string {
 		return `{"schema_version":1,"events":[{"name":"app_open","ts":"2020-01-01T00:00:00Z"}]}`
 	case strings.Contains(path, "errors/report"):
 		return `{"message":"boom","stack":"at x","release":"test"}`
+	case strings.Contains(path, "admin/cases") && method == http.MethodPost && strings.HasSuffix(path, "/cases"):
+		return `{"resource_type":"moderation","resource_id":"rep-1","reporter_email":"u@example.com","sla_hours":24}`
+	case strings.Contains(path, "admin/cases") && strings.HasSuffix(path, "/assign"):
+		return `{"assignee":"agent-1"}`
+	case strings.Contains(path, "admin/cases") && strings.HasSuffix(path, "/transition"):
+		return `{"state":"triaged","reason":"looks ok"}`
+	case strings.Contains(path, "admin/cases") && strings.HasSuffix(path, "/notes"):
+		return `{"body":"triage note"}`
 	case strings.Contains(path, "value/generate"):
 		return `{"species":"cat","cuteness":5,"rarity_hint":3}`
 	case strings.Contains(path, "vision/analyze"):

@@ -85,12 +85,15 @@ func (s *Service) Enqueue(ownerKey, category, title, body, dedupeKey string, sen
 			Sensitive: sensitive,
 			CreatedAt: s.now(),
 		}
-		if err := tx.Create(&msg).Error; err != nil {
-			// concurrent insert race → load winner
-			if err2 := tx.Where("dedupe_key = ?", dedupeKey).First(&msg).Error; err2 == nil {
-				return nil
-			}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&msg).Error; err != nil {
 			return err
+		}
+		if msg.ID == 0 {
+			// concurrent insert race → load winner and skip outbox create (winner owns it)
+			if err2 := tx.Where("dedupe_key = ?", dedupeKey).First(&msg).Error; err2 != nil {
+				return err2
+			}
+			return nil
 		}
 		out := models.NotificationOutbox{
 			OwnerKey:      ownerKey,

@@ -24,6 +24,8 @@ tags:
     description: Server-authoritative season and event instances (AP-081)
   - name: Notifications
     description: Inbox, outbox delivery and push preferences (AP-084)
+  - name: Cases
+    description: Unified backoffice case workflow (AP-086)
   - name: Auth
     description: Device registration, account binding and JWT issuance
   - name: Geo
@@ -3682,6 +3684,130 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+
+  /api/v1/cases/{id}:
+    get:
+      operationId: getUserCaseStatus
+      tags: [Cases]
+      summary: User-safe case status query
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Case status }
+        "404": { description: Not found }
+  /api/v1/admin/cases:
+    get:
+      operationId: listAdminCases
+      tags: [Cases]
+      summary: List cases for operators
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: X-Admin-Role, in: header, schema: { type: string } }
+      responses:
+        "200": { description: Case list }
+    post:
+      operationId: createAdminCase
+      tags: [Cases]
+      summary: Create unified case
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_type, resource_id]
+              properties:
+                resource_type: { type: string }
+                resource_id: { type: string }
+                reporter_email: { type: string }
+                sla_hours: { type: integer }
+      responses:
+        "201": { description: Created }
+        "400": { description: Invalid }
+  /api/v1/admin/cases/{id}:
+    get:
+      operationId: getAdminCase
+      tags: [Cases]
+      summary: Get case with role-based redaction
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: X-Admin-Role, in: header, schema: { type: string } }
+      responses:
+        "200": { description: Case }
+        "404": { description: Not found }
+  /api/v1/admin/cases/{id}/assign:
+    post:
+      operationId: assignAdminCase
+      tags: [Cases]
+      summary: Claim or assign case
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignee: { type: string }
+      responses:
+        "200": { description: Assigned }
+        "409": { description: Already assigned }
+  /api/v1/admin/cases/{id}/transition:
+    post:
+      operationId: transitionAdminCase
+      tags: [Cases]
+      summary: Transition case state
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state: { type: string }
+                reason: { type: string }
+      responses:
+        "200": { description: Transitioned }
+        "409": { description: Illegal transition }
+  /api/v1/admin/cases/{id}/notes:
+    post:
+      operationId: addAdminCaseNote
+      tags: [Cases]
+      summary: Add immutable internal note
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        "200": { description: Note added }
+  /api/v1/admin/cases/{id}/audits:
+    get:
+      operationId: listAdminCaseAudits
+      tags: [Cases]
+      summary: Immutable case audit log
+      security: [{bearerAuth: []}]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Audits }
 
   /api/v1/notifications/inbox:
     get:
