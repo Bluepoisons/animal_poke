@@ -282,19 +282,22 @@ const progression = useProgression()
           />
         )
       case 'capture': {
-        if (!flow.selectedBox || !flow.detectInferenceId || !flow.captureAttemptId) {
+        // Prefer flowRef: ENTER_CAPTURE updates the ref before navigate, while
+        // useReducer state may lag one paint (E2E enter-capture race).
+        const cap = flowRef.current.captureAttemptId ? flowRef.current : flow
+        if (!cap.selectedBox || !cap.detectInferenceId || !cap.captureAttemptId) {
           queueMicrotask(() => handleInvalidCapture())
           return discoverBlock
         }
         return (
           <CaptureScreen
             onToast={showToast}
-            species={flow.selectedBox.species}
-            detection={flow.selectedBox}
-            detectInferenceId={flow.detectInferenceId}
-            photoBlob={flow.photoBlob}
-            targetId={flow.targetId}
-            captureAttemptId={flow.captureAttemptId}
+            species={cap.selectedBox.species}
+            detection={cap.selectedBox}
+            detectInferenceId={cap.detectInferenceId}
+            photoBlob={cap.photoBlob}
+            targetId={cap.targetId}
+            captureAttemptId={cap.captureAttemptId}
             onInvalidAccess={handleInvalidCapture}
             onSettled={(ok) => {
               if (ok) {
