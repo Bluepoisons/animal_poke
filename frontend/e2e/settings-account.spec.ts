@@ -26,6 +26,19 @@ test.describe('AP-075 settings and account', () => {
           }),
         )
         localStorage.setItem(
+          'animal-poke-onboarding-v2',
+          JSON.stringify({
+            version: 2,
+            step: 'done',
+            skipped: true,
+            completedAt: Date.now(),
+            trainingCaptureDone: true,
+            active: false,
+            path: 'outdoor',
+            updatedAt: Date.now(),
+          }),
+        )
+        localStorage.setItem(
           'animal-poke-onboarding-v1',
           JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
         )
@@ -63,6 +76,19 @@ test.describe('AP-075 settings and account', () => {
             scopes: ['photo'],
             serverSynced: true,
             revokedAt: null,
+            updatedAt: Date.now(),
+          }),
+        )
+        localStorage.setItem(
+          'animal-poke-onboarding-v2',
+          JSON.stringify({
+            version: 2,
+            step: 'done',
+            skipped: true,
+            completedAt: Date.now(),
+            trainingCaptureDone: true,
+            active: false,
+            path: 'outdoor',
             updatedAt: Date.now(),
           }),
         )

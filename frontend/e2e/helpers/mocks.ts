@@ -176,15 +176,40 @@ export async function installApiMocks(
 }
 
 /** Mock camera + geolocation + force capture success for deterministic E2E */
-export async function installBrowserMocks(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+export async function installBrowserMocks(
+  page: Page,
+  opts?: { /** When false, leave onboarding fresh for AP-066 first-run E2E. Default true. */
+    completeOnboarding?: boolean
+  },
+): Promise<void> {
+  const completeOnboarding = opts?.completeOnboarding !== false
+  await page.addInitScript(
+    ({ completeOnboarding: done }) => {
     window.__AP_FORCE_CAPTURE_SUCCESS = true
     window.__AP_FORCE_CAMERA_READY = true
     try {
-      localStorage.setItem(
-        'animal-poke-onboarding-v1',
-        JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
-      )
+      if (done) {
+        localStorage.setItem(
+          'animal-poke-onboarding-v2',
+          JSON.stringify({
+            version: 2,
+            step: 'done',
+            skipped: true,
+            completedAt: Date.now(),
+            trainingCaptureDone: true,
+            active: false,
+            path: 'outdoor',
+            updatedAt: Date.now(),
+          }),
+        )
+        localStorage.setItem(
+          'animal-poke-onboarding-v1',
+          JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
+        )
+      } else {
+        localStorage.removeItem('animal-poke-onboarding-v2')
+        localStorage.removeItem('animal-poke-onboarding-v1')
+      }
     } catch {}
 
     class FakeTrack {
@@ -300,7 +325,9 @@ export async function installBrowserMocks(page: Page): Promise<void> {
       configurable: true,
       get: () => true,
     })
-  })
+  },
+    { completeOnboarding },
+  )
 
   // Playwright WebKit does not expose the `camera` permission through
   // BrowserContext.grantPermissions. The media stream itself is fully mocked
