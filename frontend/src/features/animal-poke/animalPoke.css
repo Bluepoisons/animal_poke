@@ -1714,3 +1714,9 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+/* AP-065 enter CTA above tabs */
+.ap-action-button {
+  position: relative;
+  z-index: 25;
+}

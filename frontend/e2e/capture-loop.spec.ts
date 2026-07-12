@@ -99,9 +99,24 @@ test.describe('AP-014 production capture hard gate', () => {
     const enterBtn = page.getByTestId('enter-capture').or(page.getByRole('button', { name: /进入捕获/ }))
     await expect(enterBtn).toBeVisible({ timeout: 20_000 })
     await expect(enterBtn).toBeEnabled()
-    // force avoids rare overlay measure thrash blocking actionability
-    await enterBtn.click({ force: true })
-
+    // DOM click (not force coordinates) — force can hit BottomTabBar over the CTA
+    await enterBtn.evaluate((el: HTMLElement) => {
+      el.scrollIntoView({ block: 'center', inline: 'center' })
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    // Prefer hash change as success signal; capture-screen mounts next
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => ({
+            hash: location.hash,
+            hasCapture: !!document.querySelector('[data-testid="capture-screen"]'),
+            toast: document.querySelector('.ap-toast')?.textContent || '',
+            phasePill: document.querySelector('[data-testid="camera-status-pill"]')?.textContent || '',
+          })),
+        { timeout: 15_000 },
+      )
+      .toMatchObject({ hash: '#capture' })
     await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/cat/i).first()).toBeVisible()
 
