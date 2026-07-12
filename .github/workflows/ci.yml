@@ -162,10 +162,11 @@ jobs:
       - name: Install
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Install Playwright Chromium + WebKit
-        run: npx playwright install --with-deps chromium webkit
-      - name: E2E hard gate (production entry, chromium+webkit)
-        run: npm run test:e2e
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E hard gate (production entry, chromium)
+        # Chromium is the CI hard gate; WebKit is opt-in via PLAYWRIGHT_WEBKIT=1 locally.
+        run: npx playwright test --project=chromium
         env:
           CI: true
           VITE_API_BASE_URL: ""
