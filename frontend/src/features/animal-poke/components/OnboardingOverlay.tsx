@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyOnboardingEvent,
-  isInfoStep,
+  isModalStep,
   isOnboardingActive,
   loadOnboarding,
   skipOnboarding,
@@ -43,7 +43,7 @@ export default function OnboardingOverlay({ onRationaleDone, onOpenPokedex }: Pr
   }, [refresh])
 
   const active = isOnboardingActive(state)
-  const modal = active && isInfoStep(state.step)
+  const modal = active && isModalStep(state.step)
 
   useFocusTrap({
     containerRef: dialogRef,

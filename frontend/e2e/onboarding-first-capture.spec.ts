@@ -65,9 +65,16 @@ test.describe('AP-075 onboarding to first capture', () => {
     await page.getByTestId('capture-stage').click()
     await expect(page.getByText(/捕获成功/).first()).toBeVisible({ timeout: 30_000 })
 
-    // Navigate to pokedex
-    await page.getByRole('button', { name: /图鉴/ }).click()
-    await expect(page.getByTestId('pokedex-screen')).toBeVisible({ timeout: 10_000 })
+    // AP-066: after training capture → reveal coach; open pokedex via CTA or tab
+    const revealCta = page.getByTestId('onboarding-continue')
+    if (await revealCta.isVisible().catch(() => false)) {
+      await revealCta.click()
+    } else {
+      await page.getByRole('button', { name: /图鉴/ }).click()
+    }
+    await expect(page.getByTestId('pokedex-screen')).toBeVisible({ timeout: 15_000 })
+    // Tutorial should complete once pokedex opens
+    await expect(page.getByTestId('onboarding-overlay')).toHaveCount(0, { timeout: 10_000 })
 
     // Axe scan on pokedex
     const pokedexAxe = await scanA11y(page)

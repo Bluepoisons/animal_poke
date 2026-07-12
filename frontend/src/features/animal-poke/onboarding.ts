@@ -62,8 +62,12 @@ const ORDER: OnboardingStep[] = [
   'done',
 ]
 
-/** Steps that only advance on `continue` (coach copy, not real gameplay). */
-const INFO_STEPS: OnboardingStep[] = ['rationale', 'reveal']
+/**
+ * Steps that only advance on `continue` and use a full-screen modal.
+ * `reveal` is a non-blocking coach so the player can still open 图鉴 via tabs.
+ */
+const INFO_STEPS: OnboardingStep[] = ['rationale']
+const MODAL_STEPS: OnboardingStep[] = ['rationale']
 
 const INITIAL: OnboardingState = {
   version: ONBOARDING_VERSION,
@@ -391,4 +395,9 @@ export function stepOrder(): readonly OnboardingStep[] {
 
 export function isInfoStep(step: OnboardingStep): boolean {
   return INFO_STEPS.includes(step)
+}
+
+/** Full-screen modal only for rationale (before sensors start). */
+export function isModalStep(step: OnboardingStep): boolean {
+  return MODAL_STEPS.includes(step)
 }
