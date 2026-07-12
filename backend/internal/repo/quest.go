@@ -860,7 +860,9 @@ func (r *QuestRepo) claimOnce(req ClaimRequest) (*ClaimResult, error) {
 		}
 	}
 
-	// gold=0 时用 claim 行唯一约束做闸门
+	// gold=0 时用 claim 行唯一约束做闸门。
+	// Idempotent 语义以 claim 行首次插入为准：并发下可能 wallet 先入账的 goroutine
+	// 输掉 Create，若仍用 walletIdempotent 会导致「无人报告 created」。
 	claim := models.QuestClaim{
 		ClaimID:     uuid.NewString(),
 		OperationID: opID,
@@ -892,9 +894,10 @@ func (r *QuestRepo) claimOnce(req ClaimRequest) (*ClaimResult, error) {
 			"updated_at": now,
 		}).Error
 
+	_ = walletIdempotent // wallet gate still enforces single credit; claim row is player-facing once
 	return &ClaimResult{
 		Claim:      &claim,
-		Idempotent: walletIdempotent,
+		Idempotent: false, // this goroutine won the claim-row insert
 		Gold:       reward.Gold,
 		Stamina:    reward.Stamina,
 		Balances:   balances,
