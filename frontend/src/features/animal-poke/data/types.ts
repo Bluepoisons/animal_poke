@@ -16,6 +16,7 @@ export type ScreenId =
   | 'store'
   | 'settings'
   | 'journal'
+  | 'prologue'
 
 export type PokedexFilter = 'all' | 'cat' | 'goose' | 'dog'
 
