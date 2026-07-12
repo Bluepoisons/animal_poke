@@ -95,6 +95,13 @@ function persist(record: ConsentRecord): ConsentRecord {
   } catch {
     /* ignore */
   }
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('animal-poke-consent-changed'))
+    }
+  } catch {
+    /* ignore */
+  }
   return record
 }
 

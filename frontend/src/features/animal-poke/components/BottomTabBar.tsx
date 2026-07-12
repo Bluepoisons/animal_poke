@@ -11,12 +11,14 @@ interface BottomTabBarProps {
   unlockedFeatures?: Set<FeatureId>
 }
 
-const tabs: { id: ScreenId | 'achievement'; feature: FeatureId; labelKey: string; icon: string }[] = [
+const tabs: { id: ScreenId | 'achievement'; feature: FeatureId | 'settings'; labelKey: string; icon: string; always?: boolean }[] = [
   { id: 'discover', feature: 'discover', labelKey: 'tab.camera', icon: '◎' },
   { id: 'pokedex', feature: 'pokedex', labelKey: 'tab.collection', icon: '▣' },
   { id: 'battle', feature: 'battle', labelKey: 'tab.fight', icon: '✦' },
   { id: 'store', feature: 'store', labelKey: 'tab.store', icon: '◇' },
   { id: 'achievement', feature: 'achievement', labelKey: 'tab.achievement', icon: '☆' },
+  // AP-061: settings always reachable from any core surface (≤2 taps)
+  { id: 'settings', feature: 'settings', labelKey: 'tab.settings', icon: '⚙', always: true },
 ]
 
 export default function BottomTabBar({
@@ -27,18 +29,19 @@ export default function BottomTabBar({
 }: BottomTabBarProps) {
   const { t } = useI18n()
   const visible = tabs.filter((tab) => {
+    if (tab.always) return true
     if (tab.id === 'achievement' && !FEATURE_FLAGS.achievements) return false
     if (!unlockedFeatures) return true
-    return unlockedFeatures.has(tab.feature)
+    return unlockedFeatures.has(tab.feature as FeatureId)
   })
 
   return (
-    <nav className="ap-bottom-tabs" aria-label="底部导航">
+    <nav className="ap-bottom-tabs" aria-label="底部导航" data-testid="bottom-tab-bar">
       {visible.map((tab) => {
         if (tab.id === 'achievement') {
           if (!onAchievement) return null
           return (
-            <button key={tab.id} onClick={onAchievement} type="button">
+            <button key={tab.id} onClick={onAchievement} type="button" data-testid="tab-achievement">
               <span className="ap-tab-icon" aria-hidden="true">
                 {tab.icon}
               </span>
@@ -54,6 +57,7 @@ export default function BottomTabBar({
             onClick={() => onChange(tab.id as ScreenId)}
             type="button"
             aria-current={active === tab.id ? 'page' : undefined}
+            data-testid={`tab-${tab.id}`}
           >
             <span className="ap-tab-icon" aria-hidden="true">
               {tab.icon}
