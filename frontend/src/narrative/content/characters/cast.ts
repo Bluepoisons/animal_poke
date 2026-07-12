@@ -93,7 +93,7 @@ export const season1Cast: CastPack = {
         {
           stage: 3,
           chapterIds: ['ch04.map_blank', 'finale.who_tells_the_city'],
-          desire: '让空白可触摸',
+          desire: '让空白可被感知与亲近',
           blindSpot: '仍想给展览一个权威结语',
           visibleChange: '接受多声部可能更诚实',
         },

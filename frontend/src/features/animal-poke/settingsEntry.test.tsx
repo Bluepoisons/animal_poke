@@ -25,11 +25,19 @@ vi.mock('../../auth/accountAuth', async (importOriginal) => {
 })
 
 function mockCameraReady() {
+  const track = {
+    stop: vi.fn(),
+    enabled: true,
+    readyState: 'live' as MediaStreamTrackState,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
       getUserMedia: vi.fn().mockResolvedValue({
-        getTracks: () => [{ stop: vi.fn(), enabled: true }],
+        getTracks: () => [track],
+        getVideoTracks: () => [track],
       }),
     },
   })

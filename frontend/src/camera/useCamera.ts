@@ -83,7 +83,9 @@ export function useCamera(): UseCameraResult {
       const onEnded = () => {
         if (gen !== genRef.current || !mountedRef.current) return
         // Another track may still be live; only fail if all video tracks ended.
-        const live = stream.getVideoTracks().some((t) => t.readyState === 'live')
+        const vids =
+          typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : stream.getTracks()
+        const live = vids.some((t) => (t.readyState ?? 'live') === 'live')
         if (live) return
         stopStream(stream)
         if (streamRef.current === stream) streamRef.current = null
@@ -91,10 +93,15 @@ export function useCamera(): UseCameraResult {
         setStatus('ended')
         setError('track_ended')
       }
-      const tracks = stream.getVideoTracks()
-      tracks.forEach((t) => t.addEventListener('ended', onEnded))
+      const tracks =
+        typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : stream.getTracks()
+      tracks.forEach((t) => {
+        if (typeof t.addEventListener === 'function') t.addEventListener('ended', onEnded)
+      })
       detachTrackEnded.current = () => {
-        tracks.forEach((t) => t.removeEventListener('ended', onEnded))
+        tracks.forEach((t) => {
+          if (typeof t.removeEventListener === 'function') t.removeEventListener('ended', onEnded)
+        })
       }
     },
     [clearTrackEnded],
@@ -265,7 +272,11 @@ export function useCamera(): UseCameraResult {
       })
       // If tracks died while backgrounded, recover
       if (statusRef.current === 'ready' || statusRef.current === 'ended') {
-        const live = stream?.getVideoTracks().some((t) => t.readyState === 'live')
+        const vids =
+          stream && typeof stream.getVideoTracks === 'function'
+            ? stream.getVideoTracks()
+            : stream?.getTracks() ?? []
+        const live = vids.some((t) => (t.readyState ?? 'live') === 'live')
         if (!live) {
           void start(facingRef.current)
         }
