@@ -2,6 +2,7 @@ import { useEffect, useState, type RefObject } from 'react'
 import type { ScreenId } from '../data/types'
 import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
+import DetectionOverlay from '../components/DetectionOverlay'
 import { useCamera } from '../../../camera/useCamera'
 import { guidanceForStatus } from '../../../camera/cameraStatus'
 import { usePerfMode } from '../../../performance'
@@ -11,6 +12,11 @@ import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
 import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
+import {
+  OBSERVATION_TIP_KEYS,
+  tipForErrorCode,
+  visualStateForFlow,
+} from '../recognition/qualityGuidance'
 import { useI18n } from '../../../i18n'
 import { useSettings } from '../../../settings'
 
@@ -125,16 +131,38 @@ export default function DiscoverScreen({
     }
   }, [camera.status, camera.error, camGuide.reasonKey, dispatch, t])
 
+  const multiSelect =
+    flow.errorCode === 'need_select_target' && flow.detections.length > 1
+  const recognitionVisual = visualStateForFlow({
+    phase: flow.phase,
+    errorCode: flow.errorCode,
+    hasDetections: flow.detections.length > 0,
+    multiSelect,
+    targetConfirmed: flow.phase === 'target_confirmed',
+    detecting: busy || flow.phase === 'detecting',
+  })
+  const qualityTip =
+    flow.phase === 'failed' || flow.errorCode
+      ? tipForErrorCode(flow.errorCode === 'need_select_target' ? 'low_confidence' : flow.errorCode)
+      : null
+
   const statusText = (() => {
-    if (flow.phase === 'detecting' && flow.errorCode === 'need_select_target') {
-      return flow.errorMessage || '请选择目标'
+    if (recognitionVisual === 'selectable') {
+      return t('recognition.state.selectable')
     }
-    if (flow.phase === 'detecting') return '正在识别…'
+    if (recognitionVisual === 'processing') {
+      return t('recognition.state.processing')
+    }
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
       const s = flow.selectedBox
-      return `识别：${speciesLabel(s.species)} · 置信度 ${Math.round(s.confidence * 100)}%`
+      return `${t('recognition.state.ready')} · ${speciesLabel(s.species)} ${Math.round(s.confidence * 100)}%`
     }
-    if (flow.phase === 'failed' && flow.errorMessage) return flow.errorMessage
+    if (recognitionVisual === 'error' || recognitionVisual === 'low_confidence') {
+      if (qualityTip) {
+        return `${t(qualityTip.titleKey as never)} · ${t(qualityTip.bodyKey as never)}`
+      }
+      return flow.errorMessage || t('recognition.state.error')
+    }
     if (camera.status === 'ready') {
       const b = loadScanBudget()
       const facingLabel =
@@ -153,6 +181,16 @@ export default function DiscoverScreen({
     camera.status === 'unavailable' ||
     camera.status === 'idle' ||
     camera.status === 'denied'
+
+  const videoEl = camera.videoRef.current
+  const videoWidth = videoEl?.videoWidth || 640
+  const videoHeight = videoEl?.videoHeight || 480
+  const showBoxes =
+    flow.detections.length > 0 &&
+    (flow.phase === 'detecting' ||
+      flow.phase === 'target_confirmed' ||
+      multiSelect ||
+      flow.errorCode === 'need_select_target')
 
 
   const canScan =
@@ -344,6 +382,7 @@ export default function DiscoverScreen({
           className="ap-scan-box"
           data-camera-status={camera.status}
           data-live-preview={camGuide.livePreview ? 'true' : 'false'}
+          data-recognition={recognitionVisual}
         >
           <div className="ap-scan-box__corners" aria-hidden="true">
             <span />
@@ -377,8 +416,25 @@ export default function DiscoverScreen({
               }
             />
           )}
-          {camGuide.livePreview && <div className="ap-scan-line" />}
-          {camGuide.livePreview && <MascotBlob />}
+          {camGuide.livePreview && recognitionVisual === 'processing' && (
+            <div className="ap-scan-line" data-testid="scan-line-processing" />
+          )}
+          {camGuide.livePreview && !showBoxes && recognitionVisual === 'idle' && <MascotBlob />}
+          {showBoxes && (
+            <DetectionOverlay
+              detections={flow.detections}
+              selectedId={flow.selectedBox?.id ?? null}
+              videoWidth={videoWidth}
+              videoHeight={videoHeight}
+              mirrorX={camera.facing === 'user' && camGuide.livePreview}
+              objectFit="cover"
+              speciesLabel={speciesLabel}
+              visualState={
+                recognitionVisual === 'idle' ? 'selectable' : (recognitionVisual as never)
+              }
+              onSelect={(animalId) => dispatch({ type: 'SELECT_TARGET', animalId })}
+            />
+          )}
         </div>
       </div>
 
@@ -430,21 +486,55 @@ export default function DiscoverScreen({
         )}
       </div>
 
-      <div className="ap-result-pill" role="status" aria-live="polite" data-testid="camera-status-pill">
+      <div
+        className="ap-result-pill"
+        role="status"
+        aria-live="polite"
+        data-testid="camera-status-pill"
+        data-recognition={recognitionVisual}
+      >
         <span
           className="ap-result-pill__dot"
-          data-status={camera.status}
+          data-status={
+            recognitionVisual === 'error' || recognitionVisual === 'low_confidence'
+              ? 'denied'
+              : recognitionVisual === 'processing'
+                ? 'requesting'
+                : recognitionVisual === 'ready_capture'
+                  ? 'ready'
+                  : camera.status
+          }
           aria-hidden="true"
         />
         <span>{statusText}</span>
       </div>
 
+      {qualityTip && (recognitionVisual === 'error' || recognitionVisual === 'low_confidence') && (
+        <div
+          className={`ap-quality-tip ap-quality-tip--${qualityTip.tone}`}
+          data-testid="quality-tip"
+          role="alert"
+        >
+          <strong>{t(qualityTip.titleKey as never)}</strong>
+          <p>{t(qualityTip.bodyKey as never)}</p>
+        </div>
+      )}
+
       <p className="ap-photo-skill-hint" role="note">
         {t('discover.photo_hint')}
       </p>
 
+      <ul className="ap-observe-tips" data-testid="observe-tips">
+        {OBSERVATION_TIP_KEYS.map((key) => (
+          <li key={key}>{t(key as never)}</li>
+        ))}
+      </ul>
+
       {showSelect && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
+        <div
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}
+          data-testid="detect-chip-row"
+        >
           {flow.detections.map((d) => (
             <button
               key={d.id}
