@@ -302,6 +302,10 @@ export const zh = {
   'welfare.notice': '请温柔观察：不追逐、不触摸、不投喂、不惊扰野生动物。投掷物仅为虚拟贴纸/光点，请勿在现实中向动物投掷食物。',
   'onboarding.continue': '继续',
   'onboarding.skip': '跳过教学',
+  'onboarding.start_training': '开始训练',
+  'onboarding.open_pokedex': '去图鉴',
+  'onboarding.training_banner': '训练捕获 · 不计入正式经济与排行',
+
   'phone.label': '手机界面',
   'rarity.locked': '未解锁',
   // 发现页

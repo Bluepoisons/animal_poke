@@ -293,6 +293,10 @@ export const en: Record<TranslationKey, string> = {
   'welfare.notice': 'Observe gently: do not chase, touch, feed, or disturb wildlife. Throws are virtual stickers/light points; never throw food at real animals.',
   'onboarding.continue': 'Continue',
   'onboarding.skip': 'Skip tutorial',
+  'onboarding.start_training': 'Start training',
+  'onboarding.open_pokedex': 'Open Pokédex',
+  'onboarding.training_banner': 'Training capture · not counted in economy or rankings',
+
   'phone.label': 'Phone interface',
   'rarity.locked': 'Locked',
   // Discovery screen

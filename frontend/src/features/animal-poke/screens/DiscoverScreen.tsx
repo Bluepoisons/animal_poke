@@ -19,6 +19,12 @@ import {
 } from '../recognition/qualityGuidance'
 import { useI18n } from '../../../i18n'
 import { useSettings } from '../../../settings'
+import {
+  applyOnboardingEvent,
+  isOnboardingActive,
+  loadOnboarding,
+  shouldDeferSensors,
+} from '../onboarding'
 
 interface DiscoverScreenProps {
   energy: number
@@ -30,6 +36,8 @@ interface DiscoverScreenProps {
   onOpenAccount?: () => void
   city?: string
   weather?: string
+  /** AP-066: when true, do not auto-start camera (rationale step). */
+  deferCamera?: boolean
 }
 
 function DoodleStar() {
@@ -97,6 +105,7 @@ export default function DiscoverScreen({
   onNavigate,
   onEnterCapture,
   onOpenAccount,
+  deferCamera = false,
   city,
   weather = '—',
 }: DiscoverScreenProps) {
@@ -108,12 +117,18 @@ export default function DiscoverScreen({
     species === 'cat' ? t('species.cat') : species === 'dog' ? t('species.dog') : species === 'goose' ? t('species.goose') : species
   // perf.scanMode: continuous | manual; compress before upload via compressImageForUpload
   const [busy, setBusy] = useState(false)
+  // AP-066: also re-check storage so resume/skip mid-session still works.
+  const blockCamera = deferCamera || shouldDeferSensors()
 
   useEffect(() => {
+    if (blockCamera) {
+      camera.stop()
+      return
+    }
     void camera.start()
     return () => camera.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [blockCamera])
 
   const camGuide = guidanceForStatus(camera.status, camera.error)
 
@@ -255,6 +270,12 @@ export default function DiscoverScreen({
     setBusy(true)
     recordScanAttempt()
     dispatch({ type: 'START_DETECT', photoBlob: blob })
+    // AP-066: real scan event (idempotent if already past train_scan)
+    if (isOnboardingActive()) {
+      const path = settings.homeMode || camera.status !== 'ready' ? 'home_training' : 'outdoor'
+      applyOnboardingEvent('scan_started', { path })
+      window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+    }
     try {
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
@@ -266,6 +287,11 @@ export default function DiscoverScreen({
         detections,
         detectInferenceId: result.inferenceId,
       })
+      if (isOnboardingActive() || loadOnboarding().step === 'train_scan') {
+        const path = settings.homeMode ? 'home_training' : 'outdoor'
+        applyOnboardingEvent('detect_success', { path })
+        window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'detect_failed'
       let code = 'detect_failed'
@@ -294,6 +320,10 @@ export default function DiscoverScreen({
 
   const handleEnterCapture = () => {
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
+      if (isOnboardingActive()) {
+        applyOnboardingEvent('target_confirmed')
+        window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+      }
       onEnterCapture()
       return
     }
@@ -436,7 +466,13 @@ export default function DiscoverScreen({
               visualState={
                 recognitionVisual === 'idle' ? 'selectable' : (recognitionVisual as never)
               }
-              onSelect={(animalId) => dispatch({ type: 'SELECT_TARGET', animalId })}
+              onSelect={(animalId) => {
+                dispatch({ type: 'SELECT_TARGET', animalId })
+                if (isOnboardingActive()) {
+                  applyOnboardingEvent('target_selected')
+                  window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+                }
+              }}
             />
           )}
         </div>
