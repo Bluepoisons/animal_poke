@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,6 +131,41 @@ func TestVisionAnalyze_Success(t *testing.T) {
 	var result services.AnalysisResult
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
 	assert.Equal(t, "British Shorthair", result.Breed)
+}
+
+func TestVisionAnalyze_RealProviderReceivesMinimizedJPEG(t *testing.T) {
+	var requestBody struct {
+		Input []struct {
+			Content []struct {
+				Type     string `json:"type"`
+				ImageURL string `json:"image_url"`
+			} `json:"content"`
+		} `json:"input"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&requestBody))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output_text":"{\"breed\":\"Tabby\",\"color\":\"orange\",\"body_type\":\"medium\",\"quality_score\":8,\"subject_completeness\":8,\"clarity\":8,\"lighting\":8,\"composition\":8,\"pose\":8,\"angle\":8}"}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.ThirdPartyConfig{AIEndpoint: server.URL, AIKey: "test-key", AIModel: "test-model"}
+	provider := services.NewProvider(services.ProviderOptions{Name: "vision", Client: server.Client()})
+	handler := NewVisionHandler(services.NewAIServiceWithProviders(cfg, false, provider, nil))
+	r := gin.New()
+	r.POST("/api/v1/vision/analyze", handler.Analyze)
+
+	ct, buf := createMultipartBody("image", "cat.png", tinyPNG())
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vision/analyze", buf)
+	req.Header.Set("Content-Type", ct)
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Len(t, requestBody.Input, 1)
+	require.Len(t, requestBody.Input[0].Content, 2)
+	assert.Equal(t, "input_image", requestBody.Input[0].Content[1].Type)
+	assert.True(t, strings.HasPrefix(requestBody.Input[0].Content[1].ImageURL, "data:image/jpeg;base64,"))
 }
 
 // TestMinimizeForProvider_StripsEXIF ensures re-encode drops APP1 Exif markers.

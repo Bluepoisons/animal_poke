@@ -340,7 +340,8 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		if header != nil {
 			fname = safeFilename(header)
 		}
-		r, err := h.aiService.AnalyzeContext(c.Request.Context(), imageData, fname)
+		// 原始上传已在最小化后置空；分析必须与检测一样使用标准化 JPEG。
+		r, err := h.aiService.AnalyzeContext(c.Request.Context(), minimized, fname)
 		if err != nil {
 			slog.Error("AI 分析失败", "device_id", deviceID, "err", err)
 			// 校验失败与模型失败区分

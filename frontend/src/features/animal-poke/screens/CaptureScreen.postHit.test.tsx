@@ -14,7 +14,7 @@ vi.mock('../../../outdoorSafety/logic', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../outdoorSafety/logic')>()
   return {
     ...actual,
-    evaluateOutdoorSafety: () => ({ allowed: true, messages: [], stopFirst: false }),
+    evaluateOutdoorSafety: () => ({ allowed: false, messages: ['定位精度不足'], stopFirst: true }),
   }
 })
 
@@ -91,7 +91,9 @@ describe('CaptureScreen post-hit stages (AP-062)', () => {
     )
 
     const chargeButton = screen.getByTestId('charge-button')
+    expect(chargeButton).not.toBeDisabled()
     expect(chargeButton).toHaveTextContent('按住蓄力')
+    expect(screen.queryByText('定位精度不足')).toBeNull()
     await act(async () => {
       fireEvent.pointerDown(chargeButton)
       expect(chargeButton).toHaveTextContent('松开投掷')

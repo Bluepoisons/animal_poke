@@ -201,7 +201,9 @@ type ServerTimeouts struct {
 
 // ThirdPartyConfig 第三方 API Key（地图/天气/统一多模态 AI）。
 type ThirdPartyConfig struct {
-	TencentMapKey    string
+	TencentMapKey string
+	// TencentMapSK 仅用于服务端 WebService 请求的 SN 签名，绝不能下发到客户端。
+	TencentMapSK     string
 	CaiyunWeatherKey string
 	// AI 是统一的 OpenAI Responses 兼容 Provider，同时处理图片与文本。
 	AIEndpoint string
@@ -330,6 +332,7 @@ func Load() *Config {
 		},
 		ThirdParty: ThirdPartyConfig{
 			TencentMapKey:    getEnv("TENCENT_MAP_KEY", ""),
+			TencentMapSK:     getEnv("TENCENT_MAP_SK", ""),
 			CaiyunWeatherKey: getEnv("CAIYUN_WEATHER_KEY", ""),
 			AIEndpoint:       getEnv("AI_ENDPOINT", ""),
 			AIKey:            getEnv("AI_KEY", ""),

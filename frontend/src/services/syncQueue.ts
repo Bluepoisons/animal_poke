@@ -18,6 +18,10 @@ const MAX_ATTEMPTS = 8
 const BASE_DELAY_MS = 1000
 export const SYNCING_LEASE_MS = 30_000
 
+function isLegacyAttemptID(uuid: string): boolean {
+  return uuid.startsWith('attempt-')
+}
+
 function backoffMs(attempts: number): number {
   const exp = Math.min(attempts, 6)
   const jitter = Math.floor(Math.random() * 200)
@@ -131,6 +135,12 @@ export async function flushSyncQueue(now = Date.now()): Promise<{ synced: number
 }
 
 async function processQueueItem(item: SyncQueueItem): Promise<boolean> {
+  // 旧版降级路径使用 `attempt-<timestamp>` 作为捕获 ID；同步 API 会正确拒绝
+  // 它，因为动物 UUID 必须符合 RFC 4122。启动时不应反复发送这些历史记录。
+  if (isLegacyAttemptID(item.payload.uuid)) {
+    return markPermanentFailure(item, 'invalid_uuid: legacy attempt id cannot be synchronized')
+  }
+
   const working: SyncQueueItem = {
     ...item,
     status: 'syncing',
@@ -156,6 +166,9 @@ async function processQueueItem(item: SyncQueueItem): Promise<boolean> {
     await SyncQueueRepository.put(done)
     return true
   } catch (err) {
+    if (err instanceof ApiError && err.status === 400) {
+      return markPermanentFailure(working, `${err.reasonCode ?? 'bad_request'}: ${err.message}`)
+    }
     if (err instanceof ApiError && err.status === 409) {
       const reason = extractReasonCode(
         { reason_code: err.reasonCode, error: err.message },
@@ -211,6 +224,18 @@ async function processQueueItem(item: SyncQueueItem): Promise<boolean> {
     await SyncQueueRepository.put(next)
     return false
   }
+}
+
+async function markPermanentFailure(item: SyncQueueItem, lastError: string): Promise<boolean> {
+  await SyncQueueRepository.put({
+    ...item,
+    attempts: item.attempts + 1,
+    status: 'failed',
+    lastError,
+    nextAttemptAt: Number.MAX_SAFE_INTEGER,
+    updatedAt: Date.now(),
+  })
+  return false
 }
 
 /** 安装 online 监听：恢复网络时自动 flush */

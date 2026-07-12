@@ -3,11 +3,14 @@ package services
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -67,10 +70,18 @@ func (s *GeoService) GetCityContext(ctx context.Context, lat, lng float64) (*Geo
 }
 
 func (s *GeoService) callTencentMap(ctx context.Context, lat, lng float64) (*GeoCityResult, error) {
-	url := fmt.Sprintf("https://apis.map.qq.com/ws/geocoder/v1/?location=%f,%f&key=%s",
-		lat, lng, s.cfg.TencentMapKey)
+	const uri = "/ws/geocoder/v1/"
+	params := url.Values{
+		"key":      {s.cfg.TencentMapKey},
+		"location": {fmt.Sprintf("%f,%f", lat, lng)},
+	}
+	query := params.Encode()
+	endpoint := "https://apis.map.qq.com" + uri + "?" + query
+	if s.cfg.TencentMapSK != "" {
+		endpoint += "&sig=" + tencentMapSignature(uri, query, s.cfg.TencentMapSK)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +119,19 @@ func (s *GeoService) callTencentMap(ctx context.Context, lat, lng float64) (*Geo
 		City:     geoResp.Result.AddressComponent.City,
 		District: geoResp.Result.AddressComponent.District,
 	}, nil
+}
+
+// tencentMapSignature 按腾讯位置服务规则生成 GET 请求的 sig 签名。
+// 签名时的参数顺序必须与实际发出的请求保持一致。
+func tencentMapSignature(uri, encodedQuery, secretKey string) string {
+	query, err := url.QueryUnescape(encodedQuery)
+	if err != nil {
+		// url.Values.Encode 总会生成合法编码；这里保留安全降级，避免未来手动构造
+		// 参数时因畸形输入导致请求处理 panic。
+		query = encodedQuery
+	}
+	sum := md5.Sum([]byte(uri + "?" + query + secretKey))
+	return hex.EncodeToString(sum[:])
 }
 
 func cityCacheKey(lat, lng float64) string {

@@ -43,7 +43,7 @@ func clearProviderEnv(t *testing.T) {
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_TLS",
 		"DB_TLS_CA", "DB_TLS_CERT", "DB_TLS_KEY", "DB_TLS_SERVER_NAME",
 		"REDIS_URL",
-		"TENCENT_MAP_KEY", "CAIYUN_WEATHER_KEY",
+		"TENCENT_MAP_KEY", "TENCENT_MAP_SK", "CAIYUN_WEATHER_KEY",
 		"VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL",
 		"VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL",
 		"LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL",
@@ -86,6 +86,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "animal_poke", cfg.Database.Password)
 	assert.Equal(t, "animal_poke", cfg.Database.DBName)
 	assert.Equal(t, "", cfg.ThirdParty.TencentMapKey)
+	assert.Equal(t, "", cfg.ThirdParty.TencentMapSK)
 	assert.Equal(t, "", cfg.ThirdParty.VisionKey)
 	assert.Equal(t, "", cfg.ThirdParty.LLMModel)
 	assert.False(t, cfg.ThirdParty.VisionConfigured())
@@ -110,6 +111,7 @@ func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("DB_PASSWORD", "pw")
 	t.Setenv("DB_NAME", "prod")
 	t.Setenv("TENCENT_MAP_KEY", "tk")
+	t.Setenv("TENCENT_MAP_SK", "tsk")
 	t.Setenv("LLM_MODEL", "qwen3.6-flash")
 	t.Setenv("VISION_ENDPOINT", "https://vision.example")
 	t.Setenv("VISION_KEY", "vk")
@@ -124,6 +126,7 @@ func TestLoad_Overrides(t *testing.T) {
 	assert.Equal(t, "pw", cfg.Database.Password)
 	assert.Equal(t, "prod", cfg.Database.DBName)
 	assert.Equal(t, "tk", cfg.ThirdParty.TencentMapKey)
+	assert.Equal(t, "tsk", cfg.ThirdParty.TencentMapSK)
 	assert.Equal(t, "qwen3.6-flash", cfg.ThirdParty.LLMModel)
 	assert.Equal(t, "https://vision.example", cfg.ThirdParty.VisionEndpoint)
 	assert.Equal(t, "vk", cfg.ThirdParty.VisionKey)

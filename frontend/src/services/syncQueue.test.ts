@@ -93,6 +93,50 @@ describe('syncQueue', () => {
     expect(item?.status).toBe('synced')
   })
 
+  it('permanently fails a legacy attempt id without sending a request', async () => {
+    const item = await enqueueAnimalSync({
+      uuid: 'attempt-1720796230000',
+      species: 'cat',
+      rarity: 1,
+      generated_at: new Date().toISOString(),
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await flushSyncQueue()
+
+    expect(result).toEqual({ synced: 0, failed: 1 })
+    expect(fetchMock).not.toHaveBeenCalled()
+    const persisted = await SyncQueueRepository.getById(item.id)
+    expect(persisted?.status).toBe('failed')
+    expect(persisted?.nextAttemptAt).toBe(Number.MAX_SAFE_INTEGER)
+    expect(persisted?.lastError).toContain('invalid_uuid')
+  })
+
+  it('permanently fails a 400 response instead of retrying it', async () => {
+    const item = await enqueueAnimalSync({
+      uuid: '8324ee15-806f-47c5-857a-cd1e8283b8d8',
+      species: 'cat',
+      rarity: 1,
+      generated_at: new Date().toISOString(),
+    })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      json: async () => ({ error: 'invalid uuid', reason_code: 'invalid_uuid', retryable: false }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await flushSyncQueue()
+
+    expect(result).toEqual({ synced: 0, failed: 1 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const persisted = await SyncQueueRepository.getById(item.id)
+    expect(persisted?.status).toBe('failed')
+    expect(persisted?.nextAttemptAt).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('enqueueGeneratedAnimal maps fields', async () => {
     const animal: GeneratedAnimal = {
       sessionId: 'sess-9',

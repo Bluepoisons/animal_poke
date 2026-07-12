@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"math"
 	"testing"
 	"time"
@@ -52,4 +54,17 @@ func TestCacheKeyRounding(t *testing.T) {
 	expected := math.Floor(lat*100) / 100
 	assert.Equal(t, 39.12, expected)
 	assert.Equal(t, "city:39.12,116.98", cityCacheKey(lat, lng))
+}
+
+func TestTencentMapSignature(t *testing.T) {
+	uri := "/ws/geocoder/v1/"
+	query := "key=map-key&location=39.904200%2C116.407400"
+	secretKey := "secret-key"
+
+	// 腾讯规则：MD5(uri + '?' + urldecode(query) + SK)，不对拼接串整体编码。
+	basicString := uri + "?key=map-key&location=39.904200,116.407400" + secretKey
+	expectedSum := md5.Sum([]byte(basicString))
+	expected := hex.EncodeToString(expectedSum[:])
+
+	assert.Equal(t, expected, tencentMapSignature(uri, query, secretKey))
 }

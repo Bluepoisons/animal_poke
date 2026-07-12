@@ -4,9 +4,6 @@ import AnimalIcon from '../components/AnimalIcon'
 import CaptureProbabilityBar from '../components/CaptureProbabilityBar'
 import { useStamina } from '../../../stamina/useStamina'
 import { useLbs } from '../../../lbs/useLbs'
-import { useWeather } from '../../../weather/useWeather'
-import SafetyStopBanner from '../../../outdoorSafety/SafetyStopBanner'
-import { evaluateOutdoorSafety } from '../../../outdoorSafety/logic'
 import type { DetectionResult } from '../../../services/visionDetect'
 import type { SpeciesType } from '../../../types'
 import WelfareNotice from '../components/WelfareNotice'
@@ -79,17 +76,12 @@ export default function CaptureScreen({
     label: '标准',
   }
   const lbs = useLbs()
-  const weather = useWeather()
   const [enc, setEnc] = useState<EncounterState>(() => createEncounter(species, 3))
   // Keep the latest encounter available to event handlers without relying on a
   // state updater callback. State updater callbacks must stay pure: settling a
   // throw consumes stamina and starts async work, both of which are side effects.
   const encRef = useRef(enc)
   encRef.current = enc
-  const [battery, setBattery] = useState<{ level: number | null; charging: boolean | null }>({
-    level: null,
-    charging: null,
-  })
   const [postHit, setPostHit] = useState<PostHitTask>(
     () => loadPostHitTask(captureAttemptId) ?? createPostHitTask(captureAttemptId, species),
   )
@@ -120,34 +112,10 @@ export default function CaptureScreen({
   }, [captureAttemptId, species])
 
   useEffect(() => {
-    let cancelled = false
-    const nav = navigator as Navigator & {
-      getBattery?: () => Promise<{ level: number; charging: boolean }>
-    }
-    if (typeof nav.getBattery === 'function') {
-      nav
-        .getBattery()
-        .then((b) => {
-          if (!cancelled) setBattery({ level: b.level, charging: b.charging })
-        })
-        .catch(() => {})
-    }
     return () => {
-      cancelled = true
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
-
-  const outdoor = useMemo(() => {
-    const loc = lbs.state.playerLocation
-    return evaluateOutdoorSafety({
-      weather: weather.today?.weather ?? null,
-      accuracyM: loc?.accuracy ?? null,
-      batteryLevel: battery.level,
-      batteryCharging: battery.charging,
-      speedMps: null,
-    })
-  }, [lbs.state.playerLocation, weather.today?.weather, battery.level, battery.charging])
 
   const att = currentAttempt(enc)
   const power = att?.power ?? 0
@@ -415,7 +383,6 @@ export default function CaptureScreen({
   ])
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!outdoor.allowed) return
     if (enc.locked || enc.success) return
     if (att?.settled) return
     if (postHit.stage !== 'idle' && postHit.stage !== 'failed') return
@@ -430,10 +397,6 @@ export default function CaptureScreen({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault()
-      if (!outdoor.allowed) {
-        onToast(outdoor.messages[0] ?? '户外捕获已暂停，请先停下再操作')
-        return
-      }
       if (!chargingRef.current && att && !att.settled && !enc.locked) {
         startChargeLoop()
       } else if (chargingRef.current) {
@@ -470,7 +433,6 @@ export default function CaptureScreen({
   const reveal = isRevealAllowed(postHit.stage)
   const stageText = stageLabel(postHit.stage)
   const canCharge =
-    outdoor.allowed &&
     !enc.locked &&
     !enc.success &&
     !att?.settled &&
@@ -486,13 +448,7 @@ export default function CaptureScreen({
         rightTone="pink"
       />
 
-      <SafetyStopBanner showStopFirst messages={outdoor.allowed ? [] : outdoor.messages} />
-
-      <div
-        className="ap-capture-stage"
-        data-testid="capture-stage"
-        style={outdoor.allowed ? undefined : { opacity: 0.55 }}
-      >
+      <div className="ap-capture-stage" data-testid="capture-stage">
         <AnimalIcon species={species} size={120} />
         <CaptureProbabilityBar
           title={att?.phase === 'charging' ? `蓄力 ${power}` : '捕获判定'}
