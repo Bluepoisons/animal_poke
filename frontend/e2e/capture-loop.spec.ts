@@ -250,10 +250,9 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    // AP-064/065: denied reason may appear in status pill or settings help
-    await expect(
-      page.getByTestId('camera-status-pill').or(page.getByTestId('camera-settings-help')).or(page.getByText(/权限|denied|设置/i)),
-    ).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByTestId('camera-retry').or(page.getByTestId('camera-settings-help')).or(page.getByTestId('camera-placeholder'))).toBeVisible()
+    // AP-064/065: denied recovery chrome (avoid multi-match strict mode)
+    await expect(page.getByTestId('camera-status-pill')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByTestId('camera-placeholder')).toBeVisible()
+    await expect(page.getByTestId('camera-settings-help')).toBeVisible()
   })
 })

@@ -122,16 +122,21 @@ const progression = useProgression()
   )
 
   const handleEnterCapture = useCallback(() => {
-    const f = flowRef.current
+    let f = flowRef.current
     if (!f.selectedBox || !f.detectInferenceId || !f.photoBlob) {
       showToast('识别数据不完整')
       navigate('discover', { replace: true })
       return
     }
+    // Advance flowRef synchronously so hash/route guard and the first capture
+    // paint see captureAttemptId (dispatch alone can race with pushState).
     if (!canEnterCapture(f) && f.phase !== 'target_confirmed') {
+      f = reduceCaptureFlow(f, { type: 'CONFIRM_TARGET' })
       dispatch({ type: 'CONFIRM_TARGET' })
     }
     const attemptId = newAttemptId()
+    f = reduceCaptureFlow(f, { type: 'ENTER_CAPTURE', attemptId })
+    flowRef.current = f
     dispatch({ type: 'ENTER_CAPTURE', attemptId })
     navigate('capture')
   }, [dispatch, navigate, showToast])
@@ -141,7 +146,12 @@ const progression = useProgression()
     const applyRoute = (h: ScreenId) => {
       if (h === 'capture') {
         const f = flowRef.current
-        if (!canEnterCapture(f) && f.phase !== 'capturing' && f.phase !== 'completed') {
+        if (
+          !canEnterCapture(f) &&
+          f.phase !== 'capturing' &&
+          f.phase !== 'completed' &&
+          f.phase !== 'target_confirmed'
+        ) {
           showToast('请先完成发现与识别')
           navigate('discover', { replace: true })
           return
