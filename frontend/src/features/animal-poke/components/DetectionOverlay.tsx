@@ -25,9 +25,17 @@ function useElementSize(ref: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
+    let lastW = 0
+    let lastH = 0
     const measure = () => {
       const r = el.getBoundingClientRect()
-      setSize({ w: r.width, h: r.height })
+      const w = Math.round(r.width)
+      const h = Math.round(r.height)
+      // Avoid re-render thrash (breaks Playwright actionability "stable")
+      if (w === lastW && h === lastH) return
+      lastW = w
+      lastH = h
+      setSize({ w, h })
     }
     measure()
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null

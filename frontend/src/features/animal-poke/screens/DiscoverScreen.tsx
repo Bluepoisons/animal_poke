@@ -185,12 +185,16 @@ export default function DiscoverScreen({
   const videoEl = camera.videoRef.current
   const videoWidth = videoEl?.videoWidth || 640
   const videoHeight = videoEl?.videoHeight || 480
+  // Prefer in-frame selection for multi-target; always show boxes when we have detections
+  // after a successful detect (including single auto-select / confirmed).
   const showBoxes =
     flow.detections.length > 0 &&
     (flow.phase === 'detecting' ||
       flow.phase === 'target_confirmed' ||
       multiSelect ||
-      flow.errorCode === 'need_select_target')
+      flow.errorCode === 'need_select_target') &&
+    // Avoid overlay while primary CTA is the only action and camera is not live
+    (camGuide.livePreview || multiSelect)
 
 
   const canScan =

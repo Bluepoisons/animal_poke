@@ -215,9 +215,9 @@ test.describe('AP-014 production capture hard gate', () => {
     await waitCameraReadyAndScan(page)
     await detectResp
 
-    await expect(page.getByText(/识别失败|鉴权失败|无法识别|画面中未发现/i)).toBeVisible({
-      timeout: 15_000,
-    })
+    // AP-065: status pill + quality tip may both mention 识别失败 — scope to tip/pill.
+    await expect(page.getByTestId('quality-tip')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('quality-tip')).toContainText(/识别失败|鉴权失败|无法识别|画面中未发现|检测失败/i)
     expect(log.detect).toBeGreaterThanOrEqual(1)
     await expect(page.getByTestId('capture-screen')).toHaveCount(0)
   })
@@ -248,8 +248,10 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    await expect(page.getByText('相机权限被拒绝')).toBeVisible({
+    // AP-064/065: reason · next-step copy (not bare exact string)
+    await expect(page.getByText(/相机权限被拒绝/)).toBeVisible({
       timeout: 20_000,
     })
+    await expect(page.getByTestId('camera-retry').or(page.getByTestId('camera-settings-help'))).toBeVisible()
   })
 })
