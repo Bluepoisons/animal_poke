@@ -21,6 +21,7 @@ export const zh = {
   'tab.store': '商店',
   'tab.dispatch': '派遣',
   'tab.achievement': '成就',
+  'tab.journal': '手账',
   'tab.settings': '设置',
   'tab.map': '地图',
 

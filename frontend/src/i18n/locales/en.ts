@@ -21,6 +21,7 @@ export const en: Record<TranslationKey, string> = {
   'tab.store': 'Store',
   'tab.dispatch': 'Dispatch',
   'tab.achievement': 'Achievements',
+  'tab.journal': 'Journal',
   'tab.settings': 'Settings',
   'tab.map': 'Map',
 
