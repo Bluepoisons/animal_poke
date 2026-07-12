@@ -323,19 +323,22 @@ const progression = useProgression()
           flowRef.current = cap
           queueMicrotask(() => dispatchFlow({ type: 'ENTER_CAPTURE', attemptId }))
         }
-        if (!cap.captureAttemptId || !cap.selectedBox) {
+        const selected = cap.selectedBox
+        const inferenceId = cap.detectInferenceId
+        const attemptId = cap.captureAttemptId
+        if (!selected || !inferenceId || !attemptId) {
           queueMicrotask(() => handleInvalidCapture())
           return discoverBlock
         }
         return (
           <CaptureScreen
             onToast={showToast}
-            species={cap.selectedBox.species}
-            detection={cap.selectedBox}
-            detectInferenceId={cap.detectInferenceId}
+            species={selected.species}
+            detection={selected}
+            detectInferenceId={inferenceId}
             photoBlob={cap.photoBlob}
             targetId={cap.targetId}
-            captureAttemptId={cap.captureAttemptId}
+            captureAttemptId={attemptId}
             onInvalidAccess={handleInvalidCapture}
             onSettled={(ok) => {
               if (ok) {
