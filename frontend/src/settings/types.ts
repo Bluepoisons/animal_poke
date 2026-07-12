@@ -10,6 +10,8 @@ export interface UserSettings {
   dataSaver: boolean
   /** Non-sensitive prefs may sync after account bind */
   syncNonSensitive: boolean
+  /** AP-109: prefer no-camera / no-location / low-mobility routes */
+  homeMode: boolean
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -20,6 +22,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   reduceMotion: false,
   dataSaver: false,
   syncNonSensitive: true,
+  homeMode: false,
 }
 
 export const SETTINGS_STORAGE_KEY = 'animal_poke_user_settings'
@@ -32,4 +35,5 @@ export const SYNCABLE_SETTING_KEYS: (keyof UserSettings)[] = [
   'hapticsEnabled',
   'reduceMotion',
   'dataSaver',
+  'homeMode',
 ]

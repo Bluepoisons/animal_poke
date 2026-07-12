@@ -12,6 +12,7 @@ import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
 import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
 import { useI18n } from '../../../i18n'
+import { useSettings } from '../../../settings'
 
 interface DiscoverScreenProps {
   energy: number
@@ -80,6 +81,7 @@ export default function DiscoverScreen({
   const camera = useCamera()
   const { decision: perf, shouldPauseCamera } = usePerfMode()
   const { t } = useI18n()
+  const { settings } = useSettings()
   const speciesLabel = (species: string) =>
     species === 'cat' ? t('species.cat') : species === 'dog' ? t('species.dog') : species === 'goose' ? t('species.goose') : species
   // perf.scanMode: continuous | manual; compress before upload via compressImageForUpload
@@ -252,6 +254,22 @@ export default function DiscoverScreen({
   return (
     <div className="ap-screen" data-testid="discover-screen">
       <TopResourceBar city={city || t('discover.city_loading')} weather={weather} energy={energy} coins={coins} />
+      {settings.homeMode && (
+        <div
+          role="status"
+          data-testid="home-mode-banner"
+          style={{
+            margin: '8px 0',
+            padding: 10,
+            borderRadius: 12,
+            background: '#E8F5E9',
+            color: '#1B5E20',
+            fontSize: 13,
+          }}
+        >
+          {t('settings.homeMode.hint')}
+        </div>
+      )}
 
       <div className="ap-discover__hero">
         <div className="ap-discover__eyebrow-row">

@@ -304,6 +304,16 @@ export default function SettingsScreen({ onToast, onBack, onOpenAccount }: Setti
           onLabel={t('common.on')}
           offLabel={t('common.off')}
         />
+        <ToggleRow
+          label={t('settings.homeMode')}
+          value={settings.homeMode}
+          onChange={setBool('homeMode')}
+          onLabel={t('common.on')}
+          offLabel={t('common.off')}
+        />
+        <p style={{ fontSize: 12, color: '#8D6E63' }} data-testid="settings-home-mode-hint">
+          {t('settings.homeMode.hint')}
+        </p>
         <p style={{ fontSize: 12, color: '#8D6E63' }}>{t('settings.sync.hint')}</p>
       </section>
 
