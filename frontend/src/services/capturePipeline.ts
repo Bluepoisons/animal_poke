@@ -125,12 +125,8 @@ export interface RunPipelineOptions {
   sessionId: string
   species: string
   photoDataUrl: string
-  /** detect 推理 id（AP-020 多目标一致性） */
+  /** detect 推理 id，用于服务端校验照片识别链路。 */
   detectInferenceId?: string
-  /** 选中目标 id */
-  targetId?: string
-  /** 归一化框 [x,y,w,h] */
-  boundingBox?: [number, number, number, number]
   signal?: AbortSignal
   onProgress?: (p: PipelineProgress) => void
   /** 从 partial 恢复（只跑未完成阶段） */
@@ -310,7 +306,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 export async function runCaptureGeneration(
   options: RunPipelineOptions,
 ): Promise<GeneratedAnimal> {
-  const { sessionId, species, photoDataUrl, detectInferenceId, targetId, boundingBox, signal, onProgress, resumeFrom } = options
+  const { sessionId, species, photoDataUrl, detectInferenceId, signal, onProgress, resumeFrom } = options
   const analyzeKey = `analyze:${sessionId}`
   const valueKey = `value:${sessionId}`
 
@@ -342,18 +338,6 @@ export async function runCaptureGeneration(
       form.append('image', blob, 'capture.jpg')
       form.append('species', species)
       if (detectInferenceId) form.append('detect_inference_id', detectInferenceId)
-      if (targetId) form.append('target_id', targetId)
-      if (boundingBox && boundingBox.length === 4) {
-        form.append(
-          'box',
-          JSON.stringify({
-            x: boundingBox[0],
-            y: boundingBox[1],
-            width: boundingBox[2],
-            height: boundingBox[3],
-          }),
-        )
-      }
 
       const raw = await authedRequest<unknown>({
         method: 'POST',

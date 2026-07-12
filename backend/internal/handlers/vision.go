@@ -264,7 +264,8 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		r.SafetyLabels = nil
 		result = r
 	default:
-		// AP-020: 多目标一致性 — 需引用 detect + target_id/box
+		// The client now submits one photo-level recognition result.  Legacy
+		// target_id/box fields remain accepted, but are no longer required.
 		detectInfID := c.PostForm("detect_inference_id")
 		if detectInfID == "" {
 			detectInfID = c.PostForm("parent_inference_id")
@@ -283,10 +284,6 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				middleware.WriteError(c, http.StatusBadRequest, "detect_inference_required", "detect_inference_id required", false, nil)
 				return
 			}
-			if targetID == "" && !boxOK {
-				middleware.WriteError(c, http.StatusBadRequest, "target_required", "target_id or box required", false, nil)
-				return
-			}
 			parent, err := h.inferenceRepo.FindForDevice(detectInfID, deviceID)
 			if err != nil || parent.Kind != "detect" || (parent.Status != "success" && parent.Status != "consumed") {
 				middleware.WriteError(c, http.StatusConflict, "detect_inference_invalid", "invalid detect inference", false, nil)
@@ -300,6 +297,12 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			if err != nil || len(targets) == 0 {
 				middleware.WriteError(c, http.StatusConflict, "detect_targets_missing", "detect has no targets", false, nil)
 				return
+			}
+			// Detection results are sorted by confidence.  For the simplified
+			// photo flow, analyze that single confirmed result without asking the
+			// user to select or draw a target box.
+			if targetID == "" && !boxOK {
+				targetID = targets[0].TargetID
 			}
 			var boxPtr *services.BoundingBox
 			if boxOK {

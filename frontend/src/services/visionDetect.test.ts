@@ -28,15 +28,11 @@ describe('visionDetect', () => {
     expect(result.confidence).toBeLessThanOrEqual(1)
   })
 
-  it('detect 返回有效 boundingBox（4 个值都在 0~1 范围）', async () => {
+  it('detect 只返回物种和置信度，不返回框坐标', async () => {
     const promise = mockVisionDetector.detect('data:image/jpeg;base64,xxx')
     vi.advanceTimersByTime(2000)
     const result = await promise
-    expect(result.boundingBox).toHaveLength(4)
-    for (const v of result.boundingBox) {
-      expect(v).toBeGreaterThanOrEqual(0)
-      expect(v).toBeLessThanOrEqual(1)
-    }
+    expect(result).not.toHaveProperty('boundingBox')
   })
 
   it('detect 模拟网络延迟 ≥ 300ms', async () => {

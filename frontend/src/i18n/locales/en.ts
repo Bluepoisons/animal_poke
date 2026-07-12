@@ -310,7 +310,8 @@ export const en: Record<TranslationKey, string> = {
   'discover.restart': 'Start over',
   'discover.enter_capture': 'Enter capture',
   'discover.detecting': 'Identifying…',
-  'discover.start': 'Start identification',
+  'discover.start': 'Take photo & identify',
+  'discover.upload_photo': 'Upload photo',
   // Shared state components (AP-073)
   'state.loading': 'Loading…',
   'state.empty': 'No data yet',

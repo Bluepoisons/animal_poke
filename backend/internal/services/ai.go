@@ -33,6 +33,26 @@ type DetectBox struct {
 	BoundingBox BoundingBox `json:"bounding_box"`
 }
 
+// MarshalJSON omits an absent bounding box. Photo-level recognition no longer
+// asks the VLM for coordinates, while old stored results may still contain one.
+func (d DetectBox) MarshalJSON() ([]byte, error) {
+	type detectBoxJSON struct {
+		Species     string       `json:"species"`
+		Label       string       `json:"label,omitempty"`
+		TargetID    string       `json:"target_id"`
+		Confidence  float64      `json:"confidence"`
+		BoundingBox *BoundingBox `json:"bounding_box,omitempty"`
+	}
+	var box *BoundingBox
+	if d.BoundingBox != (BoundingBox{}) {
+		box = &d.BoundingBox
+	}
+	return json.Marshal(detectBoxJSON{
+		Species: d.Species, Label: d.Label, TargetID: d.TargetID,
+		Confidence: d.Confidence, BoundingBox: box,
+	})
+}
+
 // BoundingBox 归一化检测框（0~1）。
 type BoundingBox struct {
 	X      float64 `json:"x"`
@@ -219,7 +239,7 @@ func (s *AIService) DetectContext(ctx context.Context, imageData []byte, filenam
 		return nil, err
 	}
 
-	jsonStr, err := s.parseChatResponse(body)
+	jsonStr, err := s.parseResponsesResponse(body)
 	if err != nil {
 		observe("vision", "error", 0, false)
 		return nil, err
@@ -280,7 +300,7 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 	}
 
 	var result AnalysisResult
-	jsonStr, err := s.parseChatResponse(body)
+	jsonStr, err := s.parseResponsesResponse(body)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +383,7 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 		return result, nil
 	}
 
-	jsonStr, err := s.parseChatResponse(body)
+	jsonStr, err := s.parseResponsesResponse(body)
 	if err != nil {
 		result.Narrative = narrativeFallback(input, result)
 		result.Source = "algo"
@@ -421,25 +441,36 @@ func (s *AIService) callVision(ctx context.Context, imageData []byte, filename, 
 	b64 := base64.StdEncoding.EncodeToString(imageData)
 	dataURL := "data:" + mimeType + ";base64," + b64
 
-	content := []map[string]interface{}{
-		{"type": "image_url", "image_url": map[string]string{"url": dataURL}},
-		{"type": "text", "text": prompt},
-	}
+	input := []map[string]interface{}{{
+		"role": "user",
+		"content": []map[string]interface{}{
+			{"type": "input_text", "text": prompt},
+			{"type": "input_image", "image_url": dataURL},
+		},
+	}}
 	_ = filename
-	return s.callProvider(ctx, s.cfg.VisionEndpoint, s.cfg.VisionKey, s.cfg.VisionModel, content)
+	return s.callResponses(ctx, input)
 }
 
 func (s *AIService) callText(ctx context.Context, prompt string) ([]byte, string, error) {
-	return s.callProvider(ctx, s.cfg.LLMEndpoint, s.cfg.LLMKey, s.cfg.LLMModel, prompt)
+	input := []map[string]interface{}{{
+		"role": "user",
+		"content": []map[string]interface{}{
+			{"type": "input_text", "text": prompt},
+		},
+	}}
+	return s.callResponses(ctx, input)
 }
 
-func (s *AIService) callProvider(ctx context.Context, endpoint, key, model string, content interface{}) ([]byte, string, error) {
+// callResponses is the sole model transport. The configured provider must
+// implement the OpenAI Responses API, including input_text/input_image and
+// output_text response items.
+func (s *AIService) callResponses(ctx context.Context, input interface{}) ([]byte, string, error) {
+	endpoint, key, model := s.cfg.ActiveAI()
 	body := map[string]interface{}{
-		"model": model,
-		"messages": []map[string]interface{}{
-			{"role": "user", "content": content},
-		},
-		"max_tokens": 1024,
+		"model":             model,
+		"input":             input,
+		"max_output_tokens": 1024,
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -456,12 +487,10 @@ func (s *AIService) callProvider(ctx context.Context, endpoint, key, model strin
 		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
 	}
 
-	// 选择 vision/llm provider：endpoint 匹配 Vision 时用 vision
-	provider := s.llmProvider
-	if s.cfg != nil && endpoint == s.cfg.VisionEndpoint && s.visionProvider != nil {
-		provider = s.visionProvider
-	} else if provider == nil {
-		provider = s.visionProvider
+	// One unified multimodal Provider budget/circuit now covers every AI call.
+	provider := s.visionProvider
+	if provider == nil {
+		provider = s.llmProvider
 	}
 
 	var (
@@ -486,21 +515,36 @@ func (s *AIService) callProvider(ctx context.Context, endpoint, key, model strin
 	return respBody, model, nil
 }
 
-func (s *AIService) parseChatResponse(body []byte) (string, error) {
-	var chatResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
+func (s *AIService) parseResponsesResponse(body []byte) (string, error) {
+	var response struct {
+		OutputText string `json:"output_text"`
+		Output     []struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
 	}
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return "", fmt.Errorf("unmarshal chat response: %w", err)
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("unmarshal responses api response: %w", err)
 	}
-	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("empty ai response")
+	content := strings.TrimSpace(response.OutputText)
+	if content == "" {
+		for _, item := range response.Output {
+			for _, part := range item.Content {
+				if part.Type == "output_text" && strings.TrimSpace(part.Text) != "" {
+					content = part.Text
+					break
+				}
+			}
+			if content != "" {
+				break
+			}
+		}
 	}
-	content := chatResp.Choices[0].Message.Content
+	if content == "" {
+		return "", fmt.Errorf("empty responses api output_text")
+	}
 	return extractJSON(content), nil
 }
 
@@ -549,9 +593,12 @@ func validateDetectResult(r *DetectResult) error {
 		if a.Confidence < 0 || a.Confidence > 1 {
 			return fmt.Errorf("animal[%d] confidence out of range", i)
 		}
-		bb := a.BoundingBox
-		if err := ValidateBoundingBox(bb); err != nil {
-			return fmt.Errorf("animal[%d] %w", i, err)
+		// Bounding boxes belong to the retired multi-target UI. Accept legacy
+		// coordinates when supplied, but photo-level VLM responses omit them.
+		if a.BoundingBox != (BoundingBox{}) {
+			if err := ValidateBoundingBox(a.BoundingBox); err != nil {
+				return fmt.Errorf("animal[%d] %w", i, err)
+			}
 		}
 		// 权威 taxonomy：规范化物种，禁止静默映射为鹅
 		raw := a.Species
@@ -774,10 +821,9 @@ func mockDetect() *DetectResult {
 	r := &DetectResult{
 		Animals: []DetectBox{
 			{
-				Species:     "cat",
-				TargetID:    "0",
-				Confidence:  0.92,
-				BoundingBox: BoundingBox{X: 0.15, Y: 0.2, Width: 0.35, Height: 0.45},
+				Species:    "cat",
+				TargetID:   "0",
+				Confidence: 0.92,
 			},
 		},
 	}

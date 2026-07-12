@@ -684,6 +684,15 @@
   color: var(--ink);
 }
 
+.ap-captured-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 2;
+}
+
 .ap-result-pill__dot[data-status='ready'] {
   background: #3d9a5f;
 }
@@ -996,12 +1005,13 @@
   flex: 1;
   min-height: 360px;
   display: grid;
-  place-items: center;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
   border: 2.5px dashed rgba(141, 110, 84, 0.35);
   border-radius: 28px;
   background: rgba(255, 253, 248, 0.45);
   overflow: hidden;
-  cursor: pointer;
 }
 
 .ap-capture-target {
@@ -1104,6 +1114,57 @@
   font-size: 13px;
   color: var(--ink-muted);
   font-weight: 600;
+}
+
+.ap-charge-button {
+  width: min(100%, 290px);
+  min-height: 76px;
+  padding: 12px 22px;
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  color: var(--ink);
+  background: var(--yellow);
+  box-shadow: 4px 5px 0 rgba(43, 43, 43, 0.22);
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.ap-charge-button:hover:not(:disabled),
+.ap-charge-button:focus-visible:not(:disabled) {
+  background: #f7e56f;
+  outline: 3px solid rgba(92, 168, 214, 0.5);
+  outline-offset: 3px;
+}
+
+.ap-charge-button:active:not(:disabled),
+.ap-charge-button.is-charging {
+  transform: translate(3px, 4px);
+  box-shadow: 1px 1px 0 rgba(43, 43, 43, 0.22);
+  background: var(--pink);
+}
+
+.ap-charge-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ap-charge-button__main,
+.ap-charge-button__sub {
+  display: block;
+}
+
+.ap-charge-button__main {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.ap-charge-button__sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.76;
 }
 
 /* ===== Pokedex ===== */

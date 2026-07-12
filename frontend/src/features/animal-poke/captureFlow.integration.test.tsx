@@ -63,7 +63,6 @@ describe('AP-001 production capture flow', () => {
         {
           species: 'cat',
           confidence: 0.93,
-          boundingBox: [0.2, 0.2, 0.4, 0.4],
         },
       ],
     })
@@ -74,8 +73,8 @@ describe('AP-001 production capture flow', () => {
       </AppProviders>,
     )
 
-    // wait camera ready path - button 开始识别
-    const btn = await screen.findByRole('button', { name: /开始识别|进入捕获/ })
+    // wait camera ready path - button 拍照并识别
+    const btn = await screen.findByRole('button', { name: /拍照并识别|进入捕获/ })
     // force camera ready by waiting a tick
     await act(async () => {
       await Promise.resolve()
@@ -83,7 +82,7 @@ describe('AP-001 production capture flow', () => {
 
     // If camera not ready, click may no-op; mock captureFrame via detecting path:
     // trigger by finding button again after ready
-    const scanBtn = screen.getByRole('button', { name: /开始识别|进入捕获|识别中/ })
+    const scanBtn = screen.getByRole('button', { name: /拍照并识别|进入捕获|识别中/ })
     await act(async () => {
       fireEvent.click(scanBtn)
     })
@@ -91,7 +90,7 @@ describe('AP-001 production capture flow', () => {
     // if camera wasn't ready, inject via second click after microtasks
     await act(async () => {
       await Promise.resolve()
-      const b = screen.queryByRole('button', { name: /开始识别/ })
+      const b = screen.queryByRole('button', { name: /拍照并识别/ })
       if (b) fireEvent.click(b)
     })
 

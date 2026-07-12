@@ -319,7 +319,8 @@ export const zh = {
   'discover.restart': '重新开始',
   'discover.enter_capture': '进入捕获',
   'discover.detecting': '识别中…',
-  'discover.start': '开始识别',
+  'discover.start': '拍照并识别',
+  'discover.upload_photo': '上传图片识别',
   // Shared state components (AP-073)
   'state.loading': '加载中…',
   'state.empty': '暂无数据',

@@ -202,8 +202,6 @@ export default function CaptureScreen({
             species,
             photoDataUrl,
             detectInferenceId,
-            targetId: targetId || detection.targetId,
-            boundingBox: detection.boundingBox,
           })
           generatedCache.current = generated
           working = savePostHitTask({
@@ -471,6 +469,13 @@ export default function CaptureScreen({
 
   const reveal = isRevealAllowed(postHit.stage)
   const stageText = stageLabel(postHit.stage)
+  const canCharge =
+    outdoor.allowed &&
+    !enc.locked &&
+    !enc.success &&
+    !att?.settled &&
+    (postHit.stage === 'idle' || postHit.stage === 'failed')
+  const chargeButtonLabel = att?.phase === 'charging' ? '松开投掷' : '按住蓄力'
 
   return (
     <div className="ap-screen" data-testid="capture-screen">
@@ -486,18 +491,7 @@ export default function CaptureScreen({
       <div
         className="ap-capture-stage"
         data-testid="capture-stage"
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onPointerCancel={stopChargeLoop}
-        onPointerLeave={() => {
-          /* 不自动 throw，避免误触；松开按钮时 throw */
-        }}
-        onKeyDown={onKeyDown}
-        role="button"
-        tabIndex={0}
-        aria-label="按住蓄力，松开投掷"
-        aria-disabled={!outdoor.allowed}
-        style={outdoor.allowed ? undefined : { opacity: 0.55, pointerEvents: 'none' }}
+        style={outdoor.allowed ? undefined : { opacity: 0.55 }}
       >
         <AnimalIcon species={species} size={120} />
         <CaptureProbabilityBar
@@ -506,8 +500,24 @@ export default function CaptureScreen({
           bestMin={profile.bestMin}
           bestMax={profile.bestMax}
         />
-        <div style={{ fontSize: 12, marginTop: 8, opacity: 0.75 }}>
-          置信度 {Math.round(detection.confidence * 100)}% · 按住蓄力 / 空格键
+        <button
+          type="button"
+          className={`ap-charge-button${att?.phase === 'charging' ? ' is-charging' : ''}`}
+          data-testid="charge-button"
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onPointerCancel={stopChargeLoop}
+          onKeyDown={onKeyDown}
+          disabled={!canCharge}
+          aria-label={`${chargeButtonLabel}；松开即可投掷`}
+        >
+          <span className="ap-charge-button__main">{chargeButtonLabel}</span>
+          <span className="ap-charge-button__sub">
+            {att?.phase === 'charging' ? `当前力度 ${power}` : '按住不放，松开投掷'}
+          </span>
+        </button>
+        <div className="ap-capture-hint">
+          置信度 {Math.round(detection.confidence * 100)}% · 空格键或回车键也可操作
         </div>
         {stageText ? (
           <div

@@ -14,7 +14,7 @@ describe('navigation capture guard helpers', () => {
       type: 'DETECT_SUCCESS',
       detectInferenceId: 'inf',
       detections: [
-        { id: '1', species: 'cat', confidence: 0.9, boundingBox: [0, 0, 0.2, 0.2] },
+        { id: '1', species: 'cat', confidence: 0.9 },
       ],
     })
     expect(canEnterCapture(s)).toBe(true)

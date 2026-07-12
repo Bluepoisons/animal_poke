@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0025_notification_outbox"
+const CurrentVersion = "0026_device_install_secret"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -91,6 +91,7 @@ func allMigrations() []migrationSpec {
 		{"0023_battle_design", migrate0023},
 		{"0024_narrative_schema", migrate0024},
 		{"0025_notification_outbox", migrate0025},
+		{"0026_device_install_secret", migrate0026},
 	}
 }
 
@@ -355,4 +356,21 @@ func migrate0025(db *gorm.DB) error {
 		&models.PushDeviceToken{},
 		&models.NotificationPreference{},
 	)
+}
+
+// migrate0026 设备持有证明与账号归属列（installation_secret / account_id / consent_revoked_at）。
+// 0001/0002 仅在首次 AutoMigrate 时写 devices；后续模型字段不会自动补齐。
+func migrate0026(db *gorm.DB) error {
+	if err := db.AutoMigrate(&models.Device{}); err != nil {
+		return err
+	}
+	// 历史列 consent_revoked → 模型约定 consent_revoked_at（MySQL 8）
+	migrator := db.Migrator()
+	if migrator.HasColumn(&models.Device{}, "consent_revoked") && !migrator.HasColumn(&models.Device{}, "consent_revoked_at") {
+		if err := migrator.RenameColumn(&models.Device{}, "consent_revoked", "consent_revoked_at"); err != nil {
+			// SQLite 测试/不支持 rename 时忽略：AutoMigrate 已确保新列可用
+			slog.Warn("rename consent_revoked failed", "err", err)
+		}
+	}
+	return nil
 }

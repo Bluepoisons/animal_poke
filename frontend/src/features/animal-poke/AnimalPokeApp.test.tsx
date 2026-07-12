@@ -96,7 +96,6 @@ describe('AnimalPokeApp production entry', () => {
         {
           species: 'cat',
           confidence: 0.93,
-          boundingBox: [0.2, 0.2, 0.4, 0.4],
         },
       ],
     })
@@ -109,11 +108,11 @@ describe('AnimalPokeApp production entry', () => {
 
     // wait camera ready
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /开始识别/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /拍照并识别/ })).toBeTruthy()
     })
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /开始识别/ }))
+    fireEvent.click(screen.getByRole('button', { name: /拍照并识别/ }))
     })
 
     await waitFor(() => {
@@ -151,7 +150,6 @@ describe('AnimalPokeApp production entry', () => {
         {
           species: 'cat',
           confidence: 0.91,
-          boundingBox: [0.1, 0.1, 0.3, 0.3],
         },
       ],
     })
@@ -167,10 +165,10 @@ describe('AnimalPokeApp production entry', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /开始识别/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /拍照并识别/ })).toBeTruthy()
     })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /开始识别/ }))
+    fireEvent.click(screen.getByRole('button', { name: /拍照并识别/ }))
     })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /进入捕获/ })).toBeTruthy()
@@ -183,7 +181,7 @@ describe('AnimalPokeApp production entry', () => {
       expect(screen.getByTestId('capture-screen')).toBeTruthy()
     })
 
-    const stage = screen.getByTestId('capture-stage')
+    const stage = screen.getByTestId('charge-button')
     await act(async () => {
       fireEvent.pointerDown(stage)
       fireEvent.pointerUp(stage)

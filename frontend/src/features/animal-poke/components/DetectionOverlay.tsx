@@ -2,12 +2,22 @@
  * AP-065 — Viewfinder detection boxes + selection chrome.
  */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
-import type { DetectedAnimal } from '../captureFlow'
 import { mapNormBoxToElement, type RectPx } from '../recognition/bboxMap'
 import { confidenceBand } from '../recognition/qualityGuidance'
 
+/**
+ * Legacy overlay-only shape. The capture flow intentionally no longer carries
+ * bounding boxes or renders this component.
+ */
+type OverlayDetection = {
+  id: string
+  species: string
+  confidence: number
+  boundingBox: [number, number, number, number]
+}
+
 export type DetectionOverlayProps = {
-  detections: DetectedAnimal[]
+  detections: OverlayDetection[]
   selectedId: string | null
   videoWidth: number
   videoHeight: number
@@ -71,7 +81,7 @@ export default function DetectionOverlay({
     )
   }
 
-  const boxes: Array<{ d: DetectedAnimal; rect: RectPx }> = detections.map((d) => ({
+  const boxes: Array<{ d: OverlayDetection; rect: RectPx }> = detections.map((d) => ({
     d,
     rect: mapNormBoxToElement(d.boundingBox, {
       videoWidth: videoWidth || 640,

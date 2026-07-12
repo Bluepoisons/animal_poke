@@ -9,7 +9,6 @@ import {
 
 function animal(partial: Partial<DetectedAnimal> & Pick<DetectedAnimal, 'id' | 'species' | 'confidence'>): DetectedAnimal {
   return {
-    boundingBox: [0.1, 0.1, 0.3, 0.3],
     ...partial,
   }
 }

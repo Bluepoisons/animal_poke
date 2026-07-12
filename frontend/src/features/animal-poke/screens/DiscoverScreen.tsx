@@ -1,8 +1,7 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import type { ScreenId } from '../data/types'
 import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
-import DetectionOverlay from '../components/DetectionOverlay'
 import { useCamera } from '../../../camera/useCamera'
 import { guidanceForStatus } from '../../../camera/cameraStatus'
 import { usePerfMode } from '../../../performance'
@@ -11,7 +10,6 @@ import { detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
-import { canStartScan, localFrameQualityGate, recordScanAttempt, scanModeCopy, loadScanBudget } from '../scanBudget'
 import {
   OBSERVATION_TIP_KEYS,
   tipForErrorCode,
@@ -106,14 +104,28 @@ export default function DiscoverScreen({
   const { settings } = useSettings()
   const speciesLabel = (species: string) =>
     species === 'cat' ? t('species.cat') : species === 'dog' ? t('species.dog') : species === 'goose' ? t('species.goose') : species
-  // perf.scanMode: continuous | manual; compress before upload via compressImageForUpload
   const [busy, setBusy] = useState(false)
+  const [capturedPhotoUrl, setCapturedPhotoUrl] = useState<string | null>(null)
+  const scanInFlightRef = useRef(false)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void camera.start()
     return () => camera.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!flow.photoBlob) {
+      setCapturedPhotoUrl(null)
+      scanInFlightRef.current = false
+      return
+    }
+    if (typeof URL.createObjectURL !== 'function') return
+    const url = URL.createObjectURL(flow.photoBlob)
+    setCapturedPhotoUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [flow.photoBlob])
 
   const camGuide = guidanceForStatus(camera.status, camera.error)
 
@@ -131,13 +143,11 @@ export default function DiscoverScreen({
     }
   }, [camera.status, camera.error, camGuide.reasonKey, dispatch, t])
 
-  const multiSelect =
-    flow.errorCode === 'need_select_target' && flow.detections.length > 1
   const recognitionVisual = visualStateForFlow({
     phase: flow.phase,
     errorCode: flow.errorCode,
     hasDetections: flow.detections.length > 0,
-    multiSelect,
+    multiSelect: false,
     targetConfirmed: flow.phase === 'target_confirmed',
     detecting: busy || flow.phase === 'detecting',
   })
@@ -164,10 +174,9 @@ export default function DiscoverScreen({
       return flow.errorMessage || t('recognition.state.error')
     }
     if (camera.status === 'ready') {
-      const b = loadScanBudget()
       const facingLabel =
         camera.facing === 'user' ? t('camera.facing.user') : t('camera.facing.environment')
-      return `${t('camera.status.ready')} · ${facingLabel} · ${scanModeCopy(b.mode)} · 今日剩余 ${Math.max(0, b.dailyQuota - b.usedToday)}`
+      return `${t('camera.status.ready')} · ${facingLabel}`
     }
     // Every non-ready CameraStatus: reason + next step
     return `${t(camGuide.reasonKey as never)} · ${t(camGuide.nextKey as never)}`
@@ -182,84 +191,30 @@ export default function DiscoverScreen({
     camera.status === 'idle' ||
     camera.status === 'denied'
 
-  const videoEl = camera.videoRef.current
-  const videoWidth = videoEl?.videoWidth || 640
-  const videoHeight = videoEl?.videoHeight || 480
-  // Prefer in-frame selection for multi-target; always show boxes when we have detections
-  // after a successful detect (including single auto-select / confirmed).
-  const showBoxes =
-    flow.detections.length > 0 &&
-    (flow.phase === 'detecting' ||
-      flow.phase === 'target_confirmed' ||
-      multiSelect ||
-      flow.errorCode === 'need_select_target') &&
-    // Avoid overlay while primary CTA is the only action and camera is not live
-    (camGuide.livePreview || multiSelect)
-
-
   const canScan =
-    !busy &&
+    !scanInFlightRef.current &&
     camera.status === 'ready' &&
-    flow.phase !== 'detecting' &&
+    (flow.phase === 'camera_ready' || flow.phase === 'idle') &&
     typeof navigator !== 'undefined' &&
     navigator.onLine !== false
 
-  const handleScan = async () => {
-    if (!canScan) {
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        dispatch({ type: 'DETECT_FAIL', code: 'offline', message: '离线无法识别' })
-      } else if (camera.status !== 'ready') {
-        dispatch({
-          type: 'DETECT_FAIL',
-          code: 'camera_not_ready',
-          message: '相机未就绪，无法识别',
-        })
-      }
-      return
-    }
+  const canUpload =
+    !scanInFlightRef.current &&
+    (flow.phase === 'camera_ready' || flow.phase === 'idle') &&
+    typeof navigator !== 'undefined' &&
+    navigator.onLine !== false
 
-    const gate = canStartScan()
-    if (!gate.ok) {
-      dispatch({
-        type: 'DETECT_FAIL',
-        code: gate.reason,
-        message:
-          gate.reason === 'quota_exhausted'
-            ? `今日识别次数已用完（${gate.state.dailyQuota}）`
-            : gate.reason === 'too_fast'
-              ? '扫描过快，请稍候再试'
-              : '当前仅允许手动扫描',
-      })
-      return
-    }
-
-    const blob = await camera.captureFrame()
-    if (!blob) {
-      dispatch({ type: 'DETECT_FAIL', code: 'no_frame', message: '未获取到有效画面' })
-      return
-    }
-
-    const quality = await localFrameQualityGate(blob)
-    if (!quality.ok) {
-      dispatch({
-        type: 'DETECT_FAIL',
-        code: quality.reason || 'quality',
-        message:
-          quality.reason === 'duplicate_frame'
-            ? '画面几乎未变化，请调整角度后再扫'
-            : '画面质量不足，请靠近并保持稳定',
-      })
-      return
-    }
-
+  const recognizePhoto = async (blob: Blob) => {
     setBusy(true)
-    recordScanAttempt()
     dispatch({ type: 'START_DETECT', photoBlob: blob })
+    // Whether the photo came from camera or a file, recognition uses only this
+    // frozen image and never leaves a live camera running in the background.
+    camera.stop()
     try {
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
         ...a,
-        id: a.targetId || `det-${i}-${a.species}`,
+        id: `det-${i}-${a.species}`,
       }))
       dispatch({
         type: 'DETECT_SUCCESS',
@@ -292,6 +247,58 @@ export default function DiscoverScreen({
     }
   }
 
+  const handleScan = async () => {
+    if (scanInFlightRef.current) return
+    if (!canScan) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        dispatch({ type: 'DETECT_FAIL', code: 'offline', message: '离线无法识别' })
+      } else if (camera.status !== 'ready') {
+        dispatch({
+          type: 'DETECT_FAIL',
+          code: 'camera_not_ready',
+          message: '相机未就绪，无法识别',
+        })
+      }
+      return
+    }
+
+    // Lock before awaiting the camera frame so a double click can never create
+    // two captures or two VLM requests from a live preview.
+    scanInFlightRef.current = true
+    const blob = await camera.captureFrame()
+    if (!blob) {
+      scanInFlightRef.current = false
+      dispatch({ type: 'DETECT_FAIL', code: 'no_frame', message: '未获取到有效画面' })
+      return
+    }
+
+    await recognizePhoto(blob)
+  }
+
+  const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = '' // selecting the same image again after reset must work.
+    if (!file || scanInFlightRef.current) return
+    if (!canUpload) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        dispatch({ type: 'DETECT_FAIL', code: 'offline', message: '离线无法识别' })
+      }
+      return
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      dispatch({ type: 'DETECT_FAIL', code: 'unsupported_media_type', message: '请选择 JPG、PNG 或 WebP 图片' })
+      return
+    }
+    scanInFlightRef.current = true
+    await recognizePhoto(file)
+  }
+
+  const handleRetake = () => {
+    scanInFlightRef.current = false
+    dispatch({ type: 'RESET' })
+    void camera.start()
+  }
+
   const handleEnterCapture = () => {
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
       onEnterCapture()
@@ -303,9 +310,6 @@ export default function DiscoverScreen({
       onEnterCapture()
     }
   }
-
-  const showSelect =
-    flow.errorCode === 'need_select_target' && flow.detections.length > 1
 
   const primaryLabel =
     flow.phase === 'target_confirmed'
@@ -388,12 +392,12 @@ export default function DiscoverScreen({
           data-live-preview={camGuide.livePreview ? 'true' : 'false'}
           data-recognition={recognitionVisual}
         >
-          <div className="ap-scan-box__corners" aria-hidden="true">
+          {!capturedPhotoUrl && <div className="ap-scan-box__corners" aria-hidden="true">
             <span />
             <span />
             <span />
             <span />
-          </div>
+          </div>}
           <video
             ref={camera.videoRef as RefObject<HTMLVideoElement>}
             playsInline
@@ -406,7 +410,7 @@ export default function DiscoverScreen({
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              opacity: camGuide.livePreview ? 1 : 0,
+              opacity: camGuide.livePreview && !capturedPhotoUrl ? 1 : 0,
               // Mirror front camera for natural selfie framing
               transform: camera.facing === 'user' && camGuide.livePreview ? 'scaleX(-1)' : undefined,
             }}
@@ -420,29 +424,39 @@ export default function DiscoverScreen({
               }
             />
           )}
+          {capturedPhotoUrl && (
+            <img
+              className="ap-captured-photo"
+              src={capturedPhotoUrl}
+              alt="已拍摄，正在识别的照片"
+              data-testid="captured-photo"
+            />
+          )}
           {camGuide.livePreview && recognitionVisual === 'processing' && (
             <div className="ap-scan-line" data-testid="scan-line-processing" />
           )}
-          {camGuide.livePreview && !showBoxes && recognitionVisual === 'idle' && <MascotBlob />}
-          {showBoxes && (
-            <DetectionOverlay
-              detections={flow.detections}
-              selectedId={flow.selectedBox?.id ?? null}
-              videoWidth={videoWidth}
-              videoHeight={videoHeight}
-              mirrorX={camera.facing === 'user' && camGuide.livePreview}
-              objectFit="cover"
-              speciesLabel={speciesLabel}
-              visualState={
-                recognitionVisual === 'idle' ? 'selectable' : (recognitionVisual as never)
-              }
-              onSelect={(animalId) => dispatch({ type: 'SELECT_TARGET', animalId })}
-            />
-          )}
+          {camGuide.livePreview && recognitionVisual === 'idle' && <MascotBlob />}
         </div>
       </div>
 
-      <div className="ap-camera-toolbar" data-testid="camera-toolbar">
+      {!capturedPhotoUrl && <div className="ap-camera-toolbar" data-testid="camera-toolbar">
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => void handleUpload(event)}
+          data-testid="photo-upload-input"
+          style={{ display: 'none' }}
+        />
+        <button
+          type="button"
+          className="ap-map-chip"
+          data-testid="photo-upload"
+          disabled={!canUpload}
+          onClick={() => uploadInputRef.current?.click()}
+        >
+          {t('discover.upload_photo')}
+        </button>
         <button
           type="button"
           className="ap-map-chip"
@@ -488,7 +502,7 @@ export default function DiscoverScreen({
             {t('camera.action.open_settings')}
           </button>
         )}
-      </div>
+      </div>}
 
       <div
         className="ap-result-pill"
@@ -534,46 +548,13 @@ export default function DiscoverScreen({
         ))}
       </ul>
 
-      {showSelect && (
-        <div
-          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}
-          data-testid="detect-chip-row"
-        >
-          {flow.detections.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              className="ap-map-chip"
-              style={{
-                outline: flow.selectedBox?.id === d.id ? '2px solid #FF8C42' : undefined,
-              }}
-              onClick={() => dispatch({ type: 'SELECT_TARGET', animalId: d.id })}
-            >
-              {speciesLabel(d.species)} {Math.round(d.confidence * 100)}%
-            </button>
-          ))}
-          <button
-            type="button"
-            className="ap-map-chip"
-            disabled={!flow.selectedBox}
-            onClick={() => {
-              dispatch({ type: 'CONFIRM_TARGET' })
-              onEnterCapture()
-            }}
-          >
-            {t('discover.confirm_target')}
-          </button>
-        </div>
-      )}
-
-
       {flow.phase === 'target_confirmed' && flow.selectedBox && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
           <button
             type="button"
             className="ap-map-chip"
             onClick={() => {
-              dispatch({ type: 'RESET' })
+              handleRetake()
             }}
           >
             {t('discover.retry_scan')}
@@ -608,7 +589,7 @@ export default function DiscoverScreen({
           type="button"
           className="ap-map-chip"
           style={{ margin: '0 16px 8px' }}
-          onClick={() => dispatch({ type: 'RESET' })}
+          onClick={handleRetake}
         >
           {t('discover.restart')}
         </button>
@@ -629,7 +610,7 @@ export default function DiscoverScreen({
           // Never block Enter Capture once a target is confirmed (E2E hard gate).
           flow.phase === 'target_confirmed'
             ? false
-            : busy || (flow.phase !== 'failed' && !canScan)
+            : busy || !canScan
         }
       >
         {primaryLabel}

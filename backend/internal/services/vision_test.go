@@ -1,9 +1,11 @@
 package services
 
 import (
+	"encoding/json"
 	"testing"
 
 	"animalpoke/backend/internal/config"
+	"animalpoke/backend/internal/taxonomy"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,9 +39,14 @@ func TestMockDetect_Structure(t *testing.T) {
 	result := mockDetect()
 	assert.NotNil(t, result)
 	assert.Greater(t, len(result.Animals), 0)
-	box := result.Animals[0].BoundingBox
-	assert.Greater(t, box.Width, 0.0)
-	assert.Greater(t, box.Height, 0.0)
+	assert.True(t, taxonomy.Capturable(result.Animals[0].Species))
+	assert.Equal(t, BoundingBox{}, result.Animals[0].BoundingBox)
+}
+
+func TestDetectBoxJSON_OmitsAbsentBoundingBox(t *testing.T) {
+	payload, err := json.Marshal(DetectBox{Species: "cat", TargetID: "0", Confidence: 0.95})
+	assert.NoError(t, err)
+	assert.NotContains(t, string(payload), "bounding_box")
 }
 
 func TestMockAnalyze_Structure(t *testing.T) {

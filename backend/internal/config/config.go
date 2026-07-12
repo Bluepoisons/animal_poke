@@ -199,32 +199,59 @@ type ServerTimeouts struct {
 
 // DatabaseConfig is defined in db_tls.go (MySQL DSN/TLS helpers).
 
-// ThirdPartyConfig 第三方 API Key(腾讯地图/彩云/Vision/LLM)。
+// ThirdPartyConfig 第三方 API Key（地图/天气/统一多模态 AI）。
 type ThirdPartyConfig struct {
 	TencentMapKey    string
 	CaiyunWeatherKey string
-	// Vision 图片检测/分析（原子三元组）
+	// AI 是统一的 OpenAI Responses 兼容 Provider，同时处理图片与文本。
+	AIEndpoint string
+	AIKey      string
+	AIModel    string
+	// 以下字段仅用于兼容旧环境变量；加载后会归一到 AI*。
 	VisionEndpoint string
 	VisionKey      string
 	VisionModel    string
-	// VisionReuseLLM 为 true 时允许整组复用 LLM 配置（默认禁止隐式回退）
+	// Deprecated: AI 配置会默认复用完整 LLM_* 三元组。
 	VisionReuseLLM bool
-	// VisionSource 记录配置来源：vision|vlm|llm_reuse|none（不含密钥）
+	// VisionSource 记录统一 AI 配置来源（不含密钥）。
 	VisionSource string
-	// Text/LLM 数值生成
-	LLMEndpoint string
-	LLMKey      string
-	LLMModel    string
+	LLMEndpoint  string
+	LLMKey       string
+	LLMModel     string
 }
 
-// VisionConfigured 是否具备 Vision 调用条件（完整三元组）。
+// AIConfigured 是否具备统一 Responses Provider 的完整配置。
+func (t ThirdPartyConfig) AIConfigured() bool {
+	endpoint, key, model := t.ActiveAI()
+	return endpoint != "" && key != "" && model != ""
+}
+
+// ActiveAI returns the normalized provider, with direct struct construction in
+// tests and integrations still accepting legacy LLM/Vision fields.
+func (t ThirdPartyConfig) ActiveAI() (endpoint, key, model string) {
+	if t.AIEndpoint != "" || t.AIKey != "" || t.AIModel != "" {
+		return t.AIEndpoint, t.AIKey, t.AIModel
+	}
+	if t.LLMEndpoint != "" && t.LLMKey != "" && t.LLMModel != "" {
+		return t.LLMEndpoint, t.LLMKey, t.LLMModel
+	}
+	if t.VisionEndpoint != "" && t.VisionKey != "" && t.VisionModel != "" {
+		return t.VisionEndpoint, t.VisionKey, t.VisionModel
+	}
+	if t.LLMEndpoint != "" || t.LLMKey != "" || t.LLMModel != "" {
+		return t.LLMEndpoint, t.LLMKey, t.LLMModel
+	}
+	return t.VisionEndpoint, t.VisionKey, t.VisionModel
+}
+
+// VisionConfigured 是兼容旧调用名；视觉与文本共用 AI Provider。
 func (t ThirdPartyConfig) VisionConfigured() bool {
-	return t.VisionEndpoint != "" && t.VisionKey != "" && t.VisionModel != ""
+	return t.AIConfigured()
 }
 
-// LLMConfigured 是否具备 Text 调用条件。
+// LLMConfigured 是兼容旧调用名；视觉与文本共用 AI Provider。
 func (t ThirdPartyConfig) LLMConfigured() bool {
-	return t.LLMEndpoint != "" && t.LLMKey != "" && t.LLMModel != ""
+	return t.AIConfigured()
 }
 
 // VisionFingerprint 返回不含密钥的配置指纹（用于日志/readiness）。
@@ -232,7 +259,8 @@ func (t ThirdPartyConfig) VisionFingerprint() string {
 	if !t.VisionConfigured() {
 		return "none"
 	}
-	raw := t.VisionSource + "|" + t.VisionEndpoint + "|" + t.VisionModel
+	endpoint, _, model := t.ActiveAI()
+	raw := t.VisionSource + "|" + endpoint + "|" + model
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:8])
 }
@@ -303,6 +331,9 @@ func Load() *Config {
 		ThirdParty: ThirdPartyConfig{
 			TencentMapKey:    getEnv("TENCENT_MAP_KEY", ""),
 			CaiyunWeatherKey: getEnv("CAIYUN_WEATHER_KEY", ""),
+			AIEndpoint:       getEnv("AI_ENDPOINT", ""),
+			AIKey:            getEnv("AI_KEY", ""),
+			AIModel:          getEnv("AI_MODEL", ""),
 			LLMEndpoint:      getEnv("LLM_ENDPOINT", ""),
 			LLMKey:           getEnv("LLM_KEY", ""),
 			LLMModel:         getEnv("LLM_MODEL", ""),
@@ -347,7 +378,7 @@ func Load() *Config {
 	}
 
 	// 原子加载 Vision 三元组（禁止字段级混合）
-	cfg.ThirdParty.loadVisionTriplet()
+	cfg.ThirdParty.loadAITriplet()
 
 	// 开发默认开启 mock；生产强制关闭（即使 env 写了 true）
 	if cfg.IsProduction() {
@@ -384,47 +415,50 @@ func Load() *Config {
 	return cfg
 }
 
-// loadVisionTriplet 按优先级加载完整 Vision 三元组。
+// loadAITriplet 按优先级加载完整的统一 AI 三元组。
 // 规则：
-//  1. 完整 VISION_* 优先；
-//  2. 否则完整 VLM_*（整组兼容，禁止与 VISION 字段混用）；
-//  3. 否则仅当 VISION_REUSE_LLM=true 且 LLM 三元组完整时复用 LLM；
-//  4. 任何前缀若只配置了部分字段，视为不完整（启动校验失败）。
-func (t *ThirdPartyConfig) loadVisionTriplet() {
+//  1. 完整 AI_* 优先；
+//  2. 其次完整 LLM_*、VISION_*、VLM_* 旧三元组；
+//  3. 任何候选前缀若只配置了部分字段，视为不完整（启动校验失败）。
+func (t *ThirdPartyConfig) loadAITriplet() {
+	ai := envTriplet("AI_ENDPOINT", "AI_KEY", "AI_MODEL")
 	vision := envTriplet("VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL")
 	vlm := envTriplet("VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL")
 	llm := envTriplet("LLM_ENDPOINT", "LLM_KEY", "LLM_MODEL")
 
-	// 记录部分配置以便 Validate 拒绝混合/残缺
-	t.VisionEndpoint, t.VisionKey, t.VisionModel = "", "", ""
+	// 记录部分配置以便 Validate 拒绝残缺配置。
+	t.AIEndpoint, t.AIKey, t.AIModel = "", "", ""
 	t.VisionSource = "none"
 
 	switch {
+	case ai.complete():
+		t.AIEndpoint, t.AIKey, t.AIModel = ai.endpoint, ai.key, ai.model
+		t.VisionSource = "ai"
+	case ai.partial():
+		t.AIEndpoint, t.AIKey, t.AIModel = ai.endpoint, ai.key, ai.model
+		t.VisionSource = "ai_partial"
+	case llm.complete():
+		t.AIEndpoint, t.AIKey, t.AIModel = llm.endpoint, llm.key, llm.model
+		if t.VisionReuseLLM {
+			t.VisionSource = "llm_reuse"
+		} else {
+			t.VisionSource = "llm"
+		}
 	case vision.complete():
-		t.VisionEndpoint, t.VisionKey, t.VisionModel = vision.endpoint, vision.key, vision.model
+		t.AIEndpoint, t.AIKey, t.AIModel = vision.endpoint, vision.key, vision.model
 		t.VisionSource = "vision"
 	case vision.partial():
-		// 残缺 VISION_*：保留残缺值供 Validate 报错（禁止静默回退到 VLM/LLM）
-		t.VisionEndpoint, t.VisionKey, t.VisionModel = vision.endpoint, vision.key, vision.model
+		t.AIEndpoint, t.AIKey, t.AIModel = vision.endpoint, vision.key, vision.model
 		t.VisionSource = "vision_partial"
 	case vlm.complete():
-		t.VisionEndpoint, t.VisionKey, t.VisionModel = vlm.endpoint, vlm.key, vlm.model
+		t.AIEndpoint, t.AIKey, t.AIModel = vlm.endpoint, vlm.key, vlm.model
 		t.VisionSource = "vlm"
 	case vlm.partial():
-		t.VisionEndpoint, t.VisionKey, t.VisionModel = vlm.endpoint, vlm.key, vlm.model
+		t.AIEndpoint, t.AIKey, t.AIModel = vlm.endpoint, vlm.key, vlm.model
 		t.VisionSource = "vlm_partial"
-	case t.VisionReuseLLM && llm.complete():
-		t.VisionEndpoint, t.VisionKey, t.VisionModel = llm.endpoint, llm.key, llm.model
-		t.VisionSource = "llm_reuse"
-		slog.Info("vision 显式复用 LLM 完整配置",
-			"source", t.VisionSource,
-			"fingerprint", t.VisionFingerprint(),
-			"model", t.VisionModel,
-		)
-	default:
-		// 仅配置 LLM 且未显式复用 → Vision 未配置
-		t.VisionSource = "none"
 	}
+	// Deprecated Vision fields remain populated for status and old integrations.
+	t.VisionEndpoint, t.VisionKey, t.VisionModel = t.AIEndpoint, t.AIKey, t.AIModel
 }
 
 type providerTriplet struct {
@@ -485,11 +519,8 @@ func (c *Config) Validate() error {
 		if c.AuthMockOAuthEnabled {
 			errs = append(errs, "production forbids AUTH_MOCK_OAUTH_ENABLED=true")
 		}
-		if !c.ThirdParty.VisionConfigured() {
-			errs = append(errs, "production requires VISION_ENDPOINT/KEY/MODEL")
-		}
-		if !c.ThirdParty.LLMConfigured() {
-			errs = append(errs, "production requires LLM_ENDPOINT/KEY/MODEL")
+		if !c.ThirdParty.AIConfigured() {
+			errs = append(errs, "production requires AI_ENDPOINT/KEY/MODEL")
 		}
 		if c.AdminAPIKey == "" {
 			errs = append(errs, "production requires ADMIN_API_KEY for break-glass only")
@@ -503,14 +534,10 @@ func (c *Config) Validate() error {
 		if len(c.CORSAllowedOrigins) == 0 {
 			errs = append(errs, "production requires CORS_ALLOWED_ORIGINS allowlist")
 		}
-		// 生产 Vision/LLM endpoint 必须 HTTPS，拒绝 localhost / 明文 HTTP / 空模型
-		if c.ThirdParty.VisionConfigured() {
-			if err := validateProductionEndpoint("VISION", c.ThirdParty.VisionEndpoint, c.ThirdParty.VisionModel); err != nil {
-				errs = append(errs, err.Error())
-			}
-		}
-		if c.ThirdParty.LLMConfigured() {
-			if err := validateProductionEndpoint("LLM", c.ThirdParty.LLMEndpoint, c.ThirdParty.LLMModel); err != nil {
+		// 生产统一 AI endpoint 必须 HTTPS，拒绝 localhost / 明文 HTTP / 空模型。
+		if c.ThirdParty.AIConfigured() {
+			endpoint, _, model := c.ThirdParty.ActiveAI()
+			if err := validateProductionEndpoint("AI", endpoint, model); err != nil {
 				errs = append(errs, err.Error())
 			}
 		}
@@ -537,20 +564,15 @@ func (c *Config) Validate() error {
 
 func (t ThirdPartyConfig) validateVisionTriplet() error {
 	src := t.VisionSource
-	if src == "vision_partial" || src == "vlm_partial" {
-		return fmt.Errorf("vision config must be a complete triplet (endpoint+key+model); incomplete/mixed %s rejected", src)
+	if src == "ai_partial" || src == "vision_partial" || src == "vlm_partial" {
+		return fmt.Errorf("ai config must be a complete triplet (endpoint+key+model); incomplete %s rejected", src)
 	}
 	// 检测字段级混合：若环境中同时存在 VISION 与 VLM 的部分交叉且最终不完整
 	// loadVisionTriplet 已处理；此处再校验“显式混合前缀”场景：
 	// 例如 VISION_ENDPOINT + VLM_KEY + LLM_MODEL（各有值但无完整 VISION 或 VLM）
-	vision := envTriplet("VISION_ENDPOINT", "VISION_KEY", "VISION_MODEL")
-	vlm := envTriplet("VLM_ENDPOINT", "VLM_KEY", "VLM_MODEL")
-	if !vision.empty() && !vlm.empty() && !vision.complete() && !vlm.complete() {
-		return errors.New("mixed VISION_* and VLM_* fields are forbidden; use one complete triplet")
-	}
-	// 混合 VISION + VLM + LLM 字段
-	if (vision.partial() || vlm.partial()) && !t.VisionConfigured() {
-		return errors.New("incomplete vision/vlm triplet (field-level mixing with LLM is forbidden)")
+	ai := envTriplet("AI_ENDPOINT", "AI_KEY", "AI_MODEL")
+	if ai.partial() {
+		return errors.New("incomplete AI_* triplet")
 	}
 	return nil
 }
@@ -585,11 +607,8 @@ func (c *Config) ReadyErrors() []string {
 		if err := c.ThirdParty.validateVisionTriplet(); err != nil {
 			issues = append(issues, err.Error())
 		}
-		if !c.ThirdParty.VisionConfigured() && !c.MockAllowed() {
-			issues = append(issues, "vision provider not configured and mock disabled")
-		}
-		if !c.ThirdParty.LLMConfigured() && !c.MockAllowed() {
-			issues = append(issues, "llm provider not configured and mock disabled")
+		if !c.ThirdParty.AIConfigured() && !c.MockAllowed() {
+			issues = append(issues, "ai provider not configured and mock disabled")
 		}
 	}
 	return issues
@@ -598,6 +617,8 @@ func (c *Config) ReadyErrors() []string {
 // CapabilityStatus 返回安全的 capability 状态（不含 endpoint/key）。
 func (c *Config) CapabilityStatus() map[string]interface{} {
 	return map[string]interface{}{
+		"ai_configured":      c.ThirdParty.AIConfigured(),
+		"ai_source":          c.ThirdParty.VisionSource,
 		"vision_configured":  c.ThirdParty.VisionConfigured(),
 		"vision_source":      c.ThirdParty.VisionSource,
 		"vision_fingerprint": c.ThirdParty.VisionFingerprint(),

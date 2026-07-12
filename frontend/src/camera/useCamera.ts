@@ -227,7 +227,7 @@ export function useCamera(): UseCameraResult {
   const captureFrame = useCallback(
     async (maxEdge = 1280, quality = 0.85) => {
       if (isForceCameraReady()) {
-        // Must clear Discover localFrameQualityGate (min 2KB) and look like JPEG
+        // Keep the forced test frame large enough to resemble a JPEG capture.
         const bytes = new Uint8Array(2500)
         bytes[0] = 0xff
         bytes[1] = 0xd8

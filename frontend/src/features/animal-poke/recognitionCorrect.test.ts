@@ -8,7 +8,7 @@ describe('recognition correction', () => {
     s = reduceCaptureFlow(s, {
       type: 'DETECT_SUCCESS',
       detectInferenceId: 'inf',
-      detections: [{ id: '1', species: 'cat', confidence: 0.9, boundingBox: [0, 0, 0.2, 0.2] }],
+      detections: [{ id: '1', species: 'cat', confidence: 0.9 }],
     })
     expect(s.selectedBox?.species).toBe('cat')
     s = reduceCaptureFlow(s, { type: 'RESET' })
@@ -17,7 +17,7 @@ describe('recognition correction', () => {
     s = reduceCaptureFlow(s, {
       type: 'DETECT_SUCCESS',
       detectInferenceId: 'inf2',
-      detections: [{ id: '2', species: 'dog', confidence: 0.91, boundingBox: [0, 0, 0.2, 0.2] }],
+      detections: [{ id: '2', species: 'dog', confidence: 0.91 }],
     })
     expect(s.selectedBox?.species).toBe('dog')
   })

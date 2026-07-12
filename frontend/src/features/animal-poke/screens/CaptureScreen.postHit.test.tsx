@@ -82,7 +82,6 @@ describe('CaptureScreen post-hit stages (AP-062)', () => {
           detection={{
             species: 'cat',
             confidence: 0.9,
-            boundingBox: [0.1, 0.1, 0.3, 0.3],
           }}
           detectInferenceId="inf-d"
           captureAttemptId="attempt-ap062"
@@ -91,10 +90,12 @@ describe('CaptureScreen post-hit stages (AP-062)', () => {
       </AppProviders>,
     )
 
-    const stage = screen.getByTestId('capture-stage')
+    const chargeButton = screen.getByTestId('charge-button')
+    expect(chargeButton).toHaveTextContent('按住蓄力')
     await act(async () => {
-      fireEvent.pointerDown(stage)
-      fireEvent.pointerUp(stage)
+      fireEvent.pointerDown(chargeButton)
+      expect(chargeButton).toHaveTextContent('松开投掷')
+      fireEvent.pointerUp(chargeButton)
     })
 
     // intermediate: must not show success reveal yet while generating
@@ -112,8 +113,8 @@ describe('CaptureScreen post-hit stages (AP-062)', () => {
 
     // second throw must not re-run pipeline
     await act(async () => {
-      fireEvent.pointerDown(stage)
-      fireEvent.pointerUp(stage)
+      fireEvent.pointerDown(chargeButton)
+      fireEvent.pointerUp(chargeButton)
     })
     expect(gen).toHaveBeenCalledTimes(1)
   })

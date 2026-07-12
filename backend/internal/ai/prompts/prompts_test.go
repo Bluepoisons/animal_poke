@@ -12,7 +12,7 @@ import (
 func TestDetectPrompt_NotEmpty(t *testing.T) {
 	assert.NotEmpty(t, DetectPrompt)
 	assert.Contains(t, DetectPrompt, "species")
-	assert.Contains(t, DetectPrompt, "bounding_box")
+	assert.NotContains(t, DetectPrompt, "bounding_box")
 	assert.Contains(t, DetectPrompt, "JSON")
 	assert.Contains(t, DetectPrompt, `"animals"`)
 	assert.NotContains(t, DetectPrompt, "Return ONLY a JSON array")

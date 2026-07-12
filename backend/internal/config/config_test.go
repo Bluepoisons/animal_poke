@@ -167,14 +167,16 @@ func TestLoad_VisionAtomicTriplet(t *testing.T) {
 			wantModel:      "vlm-model",
 		},
 		{
-			name: "llm_only_no_reuse_vision_not_configured",
+			name: "llm_legacy_becomes_unified_ai",
 			env: map[string]string{
 				"LLM_ENDPOINT": "https://llm.example/v1",
 				"LLM_KEY":      "lk",
 				"LLM_MODEL":    "text-model",
 			},
-			wantConfigured: false,
-			wantSource:     "none",
+			wantConfigured: true,
+			wantSource:     "llm",
+			wantEndpoint:   "https://llm.example/v1",
+			wantModel:      "text-model",
 		},
 		{
 			name: "explicit_reuse_llm",
@@ -226,15 +228,15 @@ func TestLoad_VisionAtomicTriplet(t *testing.T) {
 			wantModel:      "vision-model",
 		},
 		{
-			name: "reuse_false_even_if_llm_complete",
+			name: "legacy_llm_is_unified_even_when_reuse_flag_is_false",
 			env: map[string]string{
 				"LLM_ENDPOINT":     "https://llm.example/v1",
 				"LLM_KEY":          "lk",
 				"LLM_MODEL":        "text-model",
 				"VISION_REUSE_LLM": "false",
 			},
-			wantConfigured: false,
-			wantSource:     "none",
+			wantConfigured: true,
+			wantSource:     "llm",
 		},
 	}
 
@@ -296,13 +298,9 @@ func TestValidate_ProductionHTTPEndpoint(t *testing.T) {
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	cfg.ThirdParty = ThirdPartyConfig{
-		VisionEndpoint: "http://vision.example/v1",
-		VisionKey:      "k",
-		VisionModel:    "m",
-		VisionSource:   "vision",
-		LLMEndpoint:    "https://llm.example/v1",
-		LLMKey:         "k",
-		LLMModel:       "m",
+		AIEndpoint: "http://vision.example/v1",
+		AIKey:      "k",
+		AIModel:    "m",
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
@@ -321,13 +319,9 @@ func TestValidate_ProductionLocalhostRejected(t *testing.T) {
 	cfg.AdminAPIKey = "admin-secret"
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com"}
 	cfg.ThirdParty = ThirdPartyConfig{
-		VisionEndpoint: "https://localhost:8080/v1",
-		VisionKey:      "k",
-		VisionModel:    "m",
-		VisionSource:   "vision",
-		LLMEndpoint:    "https://llm.example/v1",
-		LLMKey:         "k",
-		LLMModel:       "m",
+		AIEndpoint: "https://localhost:8080/v1",
+		AIKey:      "k",
+		AIModel:    "m",
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
@@ -350,8 +344,7 @@ func TestValidate_Production(t *testing.T) {
 	cfg.AIMockEnabled = false
 	cfg.AuthMockOAuthEnabled = false
 	cfg.ThirdParty = ThirdPartyConfig{
-		VisionEndpoint: "https://v.example", VisionKey: "k", VisionModel: "m", VisionSource: "vision",
-		LLMEndpoint: "https://l.example", LLMKey: "k", LLMModel: "m",
+		AIEndpoint: "https://ai.example", AIKey: "k", AIModel: "m",
 	}
 	cfg.AdminAPIKey = "admin-secret"
 	// 缺 CORS 白名单应失败

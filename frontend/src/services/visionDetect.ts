@@ -9,10 +9,6 @@ export interface DetectionResult {
   species: SpeciesType
   /** 置信度 0~1 */
   confidence: number
-  /** 归一化检测框 [x, y, width, height]，值范围 0~1 */
-  boundingBox: [number, number, number, number]
-  /** 服务端稳定 target_id（多目标） */
-  targetId?: string
   /** 服务端 inference id（若有） */
   inferenceId?: string
   /** 原始 label */
@@ -52,14 +48,6 @@ const MOCK_LATENCY: [number, number] = [300, 1200]
 const MOCK_CONFIDENCE: [number, number] = [0.7, 0.98]
 const SPECIES_POOL: SpeciesType[] = capturableSpeciesIds()
 
-function randomBoundingBox(): [number, number, number, number] {
-  const x = 0.15 + Math.random() * 0.2
-  const y = 0.2 + Math.random() * 0.15
-  const w = 0.3 + Math.random() * 0.2
-  const h = 0.3 + Math.random() * 0.15
-  return [x, y, w, h]
-}
-
 /** Mock 视觉检测器 —— 仅测试/显式开发开关 */
 export const mockVisionDetector: VisionDetector = {
   async detectAll(_photoData: string | Blob): Promise<MultiDetectionResult> {
@@ -70,7 +58,6 @@ export const mockVisionDetector: VisionDetector = {
     const animal: DetectionResult = {
       species,
       confidence: Math.round(confidence * 100) / 100,
-      boundingBox: randomBoundingBox(),
       inferenceId: `mock-inf-${Date.now()}`,
     }
     return {
@@ -108,29 +95,11 @@ type BackendDetectResponse = {
     species?: string
     label?: string
     confidence?: number
-    target_id?: string
-    bounding_box?: {
-      x?: number
-      y?: number
-      w?: number
-      h?: number
-      width?: number
-      height?: number
-    }
   }>
   targets?: Array<{
     species?: string
     label?: string
     confidence?: number
-    target_id?: string
-    bounding_box?: {
-      x?: number
-      y?: number
-      w?: number
-      h?: number
-      width?: number
-      height?: number
-    }
   }>
   inference_id?: string
   inferenceId?: string
@@ -196,19 +165,19 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
       // 未知/不支持：保留 label 仅用于审计，不进入捕获列表
       continue
     }
-    const bb = a.bounding_box || {}
     animals.push({
       species: mapped,
       confidence: Math.round((a.confidence || 0) * 1000) / 1000,
-      boundingBox: [bb.x ?? 0, bb.y ?? 0, bb.w ?? bb.width ?? 0.3, bb.h ?? bb.height ?? 0.3],
-      targetId: a.target_id,
       label: a.label || a.species,
       inferenceId,
     })
   }
   animals.sort((x, y) => y.confidence - x.confidence || x.species.localeCompare(y.species))
   return {
-    animals,
+    // The capture flow only needs one confirmed species.  Choosing the most
+    // confident candidate keeps the VLM interaction photo-based and avoids a
+    // second target-selection/box-drawing step.
+    animals: animals.slice(0, 1),
     inferenceId,
     degraded: data.degraded || data.source === 'mock',
     source: data.source,

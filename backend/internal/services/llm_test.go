@@ -49,11 +49,14 @@ func TestLLMService_GenerateValue_Mock(t *testing.T) {
 
 func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	var requestBody struct {
-		Model    string `json:"model"`
-		Messages []struct {
+		Model string `json:"model"`
+		Input []struct {
 			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"messages"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"input"`
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +64,7 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&requestBody))
 		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"rarity\":3,\"hp\":60,\"atk\":20,\"def\":18,\"spd\":22,\"class\":\"Ranger\",\"element\":\"Wind\",\"narrative\":\"swift and alert\",\"fiction\":false,\"disclaimer\":\"real biography\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"rarity\":3,\"hp\":60,\"atk\":20,\"def\":18,\"spd\":22,\"class\":\"Ranger\",\"element\":\"Wind\",\"narrative\":\"swift and alert\",\"fiction\":false,\"disclaimer\":\"real biography\"}"}`))
 	}))
 	defer server.Close()
 
@@ -86,7 +89,7 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, "qwen3.6-flash", requestBody.Model)
-	assert.NotEmpty(t, requestBody.Messages)
+	assert.NotEmpty(t, requestBody.Input)
 	// LLM 返回的 rarity/stats 必须被忽略；服务端算法权威
 	assert.NotEqual(t, 0, result.Rarity)
 	assert.NotEqual(t, 60, result.HP) // LLM 给了 60，算法不应原样采用
@@ -97,15 +100,17 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	assert.True(t, result.Fiction)
 	assert.Equal(t, "fictional vignette; not a real animal biography", result.Disclaimer)
 	// 完整渲染后不应残留模板
-	assert.Contains(t, requestBody.Messages[0].Content, "FICTIONAL")
-	assert.Contains(t, requestBody.Messages[0].Content, "cat")
-	assert.Contains(t, requestBody.Messages[0].Content, "Do NOT invent")
+	assert.Len(t, requestBody.Input[0].Content, 1)
+	assert.Equal(t, "input_text", requestBody.Input[0].Content[0].Type)
+	assert.Contains(t, requestBody.Input[0].Content[0].Text, "FICTIONAL")
+	assert.Contains(t, requestBody.Input[0].Content[0].Text, "cat")
+	assert.Contains(t, requestBody.Input[0].Content[0].Text, "Do NOT invent")
 }
 
 func TestLLMService_GenerateValueBlocksUnsafeNarrative(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"narrative\":\"This cat is owned by Mei.\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"narrative\":\"This cat is owned by Mei.\"}"}`))
 	}))
 	defer server.Close()
 
@@ -135,7 +140,7 @@ func TestLLMService_GenerateValueBlocksPromptInjectionBeforeProvider(t *testing.
 func TestLLMService_GenerateValueReplacesEmergencyNarrativeWithSafetyGuidance(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"narrative\":\"A lost animal waits by the gate.\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"narrative\":\"A lost animal waits by the gate.\"}"}`))
 	}))
 	defer server.Close()
 
@@ -148,7 +153,7 @@ func TestLLMService_GenerateValueReplacesEmergencyNarrativeWithSafetyGuidance(t 
 	assert.NotContains(t, result.Narrative, "奖励")
 }
 
-func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
+func TestAIService_UsesOneConfiguredModelForVisionAndText(t *testing.T) {
 	var visionModel, textModel string
 	visionSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -156,7 +161,7 @@ func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		visionModel = body.Model
-		w.Write([]byte(`{"choices":[{"message":{"content":"{\"animals\":[]}"}}]}`))
+		w.Write([]byte(`{"output_text":"{\"animals\":[]}"}`))
 	}))
 	defer visionSrv.Close()
 	textSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +170,7 @@ func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		textModel = body.Model
-		w.Write([]byte(`{"choices":[{"message":{"content":"{\"rarity\":2,\"hp\":40,\"atk\":15,\"def\":12,\"spd\":20,\"class\":\"Tank\",\"element\":\"Earth\",\"narrative\":\"sturdy\"}"}}]}`))
+		w.Write([]byte(`{"output_text":"{\"rarity\":2,\"hp\":40,\"atk\":15,\"def\":12,\"spd\":20,\"class\":\"Tank\",\"element\":\"Earth\",\"narrative\":\"sturdy\"}"}`))
 	}))
 	defer textSrv.Close()
 
@@ -183,7 +188,7 @@ func TestLLMService_GenerateValue_UsesVisionVsTextModels(t *testing.T) {
 	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xD9}
 	_, err := svc.Detect(jpeg, "t.jpg")
 	assert.NoError(t, err)
-	assert.Equal(t, "vision-x", visionModel)
+	assert.Empty(t, visionModel)
 
 	_, err = svc.GenerateValue(ValueInput{Species: "cat", SubjectCompleteness: 5, Clarity: 5, Lighting: 5, Composition: 5, Pose: 5, Angle: 5})
 	assert.NoError(t, err)
