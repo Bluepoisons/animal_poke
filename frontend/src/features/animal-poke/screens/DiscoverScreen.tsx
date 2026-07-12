@@ -618,9 +618,18 @@ export default function DiscoverScreen({
 
       <ActionButton
         onClick={onPrimary}
+        data-testid={
+          flow.phase === 'target_confirmed'
+            ? 'enter-capture'
+            : busy || flow.phase === 'detecting'
+              ? 'detect-busy'
+              : 'start-detect'
+        }
         disabled={
-          busy ||
-          (flow.phase !== 'target_confirmed' && !canScan && flow.phase !== 'failed')
+          // Never block Enter Capture once a target is confirmed (E2E hard gate).
+          flow.phase === 'target_confirmed'
+            ? false
+            : busy || (flow.phase !== 'failed' && !canScan)
         }
       >
         {primaryLabel}

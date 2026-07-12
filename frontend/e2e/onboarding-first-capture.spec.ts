@@ -36,7 +36,7 @@ test.describe('AP-075 onboarding to first capture', () => {
     await scanBtn.click()
 
     // Enter capture
-    const enterBtn = page.getByRole('button', { name: /进入捕获/ })
+    const enterBtn = page.getByTestId('enter-capture').or(page.getByRole('button', { name: /进入捕获/ }))
     await expect(enterBtn).toBeVisible({ timeout: 20_000 })
     await expect(enterBtn).toBeEnabled()
     await enterBtn.click({ force: true })

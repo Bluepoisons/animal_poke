@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import type { ScreenId } from './data/types'
 import PhoneFrame from './components/PhoneFrame'
 import BottomTabBar from './components/BottomTabBar'
@@ -128,30 +129,50 @@ const progression = useProgression()
       navigate('discover', { replace: true })
       return
     }
-    // Advance flowRef synchronously so hash/route guard and the first capture
-    // paint see captureAttemptId (dispatch alone can race with pushState).
-    if (!canEnterCapture(f) && f.phase !== 'target_confirmed') {
+    // Advance flow state + ref in the same paint as screen switch so CaptureScreen
+    // never mounts without captureAttemptId (E2E enter-capture race).
+    if (f.phase !== 'target_confirmed' && f.phase !== 'capturing') {
       f = reduceCaptureFlow(f, { type: 'CONFIRM_TARGET' })
-      dispatch({ type: 'CONFIRM_TARGET' })
+      if (f.phase === 'failed') {
+        showToast(f.errorMessage || '无法确认目标')
+        return
+      }
     }
     const attemptId = newAttemptId()
     f = reduceCaptureFlow(f, { type: 'ENTER_CAPTURE', attemptId })
+    if (f.phase === 'failed' || !f.captureAttemptId) {
+      showToast(f.errorMessage || '无法进入捕获')
+      return
+    }
     flowRef.current = f
-    dispatch({ type: 'ENTER_CAPTURE', attemptId })
-    navigate('capture')
-  }, [dispatch, navigate, showToast])
+    flushSync(() => {
+      // Apply ENTER_CAPTURE against latest reducer state; if still missing attempt, force via ref path
+      dispatchFlow({ type: 'ENTER_CAPTURE', attemptId })
+      setScreen('capture')
+    })
+    // Keep ref authoritative after flushSync (reducer may have been one event behind)
+    if (!flowRef.current.captureAttemptId) {
+      flowRef.current = f
+    }
+    if (typeof history !== 'undefined') {
+      history.pushState({ screen: 'capture' }, '', '#capture')
+    }
+  }, [showToast, navigate])
 
   // 路由守卫：#capture 必须有确认目标
   useEffect(() => {
     const applyRoute = (h: ScreenId) => {
       if (h === 'capture') {
         const f = flowRef.current
-        if (
-          !canEnterCapture(f) &&
-          f.phase !== 'capturing' &&
-          f.phase !== 'completed' &&
-          f.phase !== 'target_confirmed'
-        ) {
+        const ready =
+          !!f.captureAttemptId &&
+          !!f.selectedBox &&
+          !!f.detectInferenceId &&
+          (canEnterCapture(f) ||
+            f.phase === 'capturing' ||
+            f.phase === 'completed' ||
+            f.phase === 'target_confirmed')
+        if (!ready) {
           showToast('请先完成发现与识别')
           navigate('discover', { replace: true })
           return
@@ -284,8 +305,25 @@ const progression = useProgression()
       case 'capture': {
         // Prefer flowRef: ENTER_CAPTURE updates the ref before navigate, while
         // useReducer state may lag one paint (E2E enter-capture race).
-        const cap = flowRef.current.captureAttemptId ? flowRef.current : flow
-        if (!cap.selectedBox || !cap.detectInferenceId || !cap.captureAttemptId) {
+        let cap = flowRef.current.captureAttemptId
+          ? flowRef.current
+          : flow.captureAttemptId
+            ? flow
+            : flowRef.current.selectedBox
+              ? flowRef.current
+              : flow
+        if (!cap.selectedBox || !cap.detectInferenceId || !cap.photoBlob) {
+          queueMicrotask(() => handleInvalidCapture())
+          return discoverBlock
+        }
+        // Last-resort: materialize attempt id if navigation won the race
+        if (!cap.captureAttemptId) {
+          const attemptId = newAttemptId()
+          cap = reduceCaptureFlow(cap, { type: 'ENTER_CAPTURE', attemptId })
+          flowRef.current = cap
+          queueMicrotask(() => dispatchFlow({ type: 'ENTER_CAPTURE', attemptId }))
+        }
+        if (!cap.captureAttemptId || !cap.selectedBox) {
           queueMicrotask(() => handleInvalidCapture())
           return discoverBlock
         }
