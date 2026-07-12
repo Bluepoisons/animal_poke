@@ -2,8 +2,8 @@ import { useEffect, useState, type RefObject } from 'react'
 import type { ScreenId } from '../data/types'
 import TopResourceBar from '../components/TopResourceBar'
 import ActionButton from '../components/ActionButton'
-import AnimalIcon from '../components/AnimalIcon'
 import { useCamera } from '../../../camera/useCamera'
+import { guidanceForStatus } from '../../../camera/cameraStatus'
 import { usePerfMode } from '../../../performance'
 import { compressImageForUpload } from '../../../performance'
 import { detectAnimals } from '../../../services/visionDetect'
@@ -67,6 +67,22 @@ function MascotBlob() {
   )
 }
 
+/** Neutral training illustration — never a species detection result (AP-064). */
+function TrainingPlaceholder({ label }: { label: string }) {
+  return (
+    <div className="ap-camera-placeholder" data-testid="camera-placeholder" role="img" aria-label={label}>
+      <svg className="ap-camera-placeholder__art" viewBox="0 0 120 120" aria-hidden="true">
+        <rect x="18" y="28" width="84" height="64" rx="12" fill="rgba(111,163,210,0.25)" stroke="#2B2B2B" strokeWidth="2.5" />
+        <circle cx="60" cy="60" r="18" fill="none" stroke="#2B2B2B" strokeWidth="2.5" />
+        <circle cx="60" cy="60" r="8" fill="rgba(255,158,198,0.55)" stroke="#2B2B2B" strokeWidth="2" />
+        <rect x="78" y="36" width="14" height="10" rx="3" fill="#F2E66B" stroke="#2B2B2B" strokeWidth="2" />
+        <path d="M36 96h48" stroke="#2B2B2B" strokeWidth="2.5" strokeLinecap="round" opacity="0.35" />
+      </svg>
+      <span className="ap-camera-placeholder__badge">{label}</span>
+    </div>
+  )
+}
+
 export default function DiscoverScreen({
   energy,
   coins,
@@ -93,17 +109,21 @@ export default function DiscoverScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const camGuide = guidanceForStatus(camera.status, camera.error)
+
   useEffect(() => {
     if (camera.status === 'ready') {
       dispatch({ type: 'CAMERA_READY' })
     } else if (camera.status === 'denied') {
-      dispatch({ type: 'CAMERA_ERROR', code: 'camera_denied', message: '相机权限被拒绝' })
+      dispatch({ type: 'CAMERA_ERROR', code: 'camera_denied', message: t(camGuide.reasonKey as never) })
     } else if (camera.status === 'busy') {
-      dispatch({ type: 'CAMERA_ERROR', code: 'camera_busy', message: '相机被占用' })
-    } else if (camera.status === 'unavailable') {
-      dispatch({ type: 'CAMERA_ERROR', code: 'camera_unavailable', message: '设备无可用相机' })
+      dispatch({ type: 'CAMERA_ERROR', code: 'camera_busy', message: t(camGuide.reasonKey as never) })
+    } else if (camera.status === 'unavailable' || camera.status === 'insecure') {
+      dispatch({ type: 'CAMERA_ERROR', code: 'camera_unavailable', message: t(camGuide.reasonKey as never) })
+    } else if (camera.status === 'ended') {
+      dispatch({ type: 'CAMERA_ERROR', code: 'camera_ended', message: t(camGuide.reasonKey as never) })
     }
-  }, [camera.status, dispatch])
+  }, [camera.status, camera.error, camGuide.reasonKey, dispatch, t])
 
   const statusText = (() => {
     if (flow.phase === 'detecting' && flow.errorCode === 'need_select_target') {
@@ -115,16 +135,25 @@ export default function DiscoverScreen({
       return `识别：${speciesLabel(s.species)} · 置信度 ${Math.round(s.confidence * 100)}%`
     }
     if (flow.phase === 'failed' && flow.errorMessage) return flow.errorMessage
-    if (camera.status === 'denied') return '相机权限被拒绝 · 请在系统设置开启'
-    if (camera.status === 'busy') return '相机被占用'
-    if (camera.status === 'unavailable') return '设备无可用相机 · 使用占位预览'
-    if (camera.status === 'requesting') return '正在打开相机…'
     if (camera.status === 'ready') {
       const b = loadScanBudget()
-      return `相机就绪 · ${scanModeCopy(b.mode)} · 今日剩余 ${Math.max(0, b.dailyQuota - b.usedToday)}`
+      const facingLabel =
+        camera.facing === 'user' ? t('camera.facing.user') : t('camera.facing.environment')
+      return `${t('camera.status.ready')} · ${facingLabel} · ${scanModeCopy(b.mode)} · 今日剩余 ${Math.max(0, b.dailyQuota - b.usedToday)}`
     }
-    return '准备相机…'
+    // Every non-ready CameraStatus: reason + next step
+    return `${t(camGuide.reasonKey as never)} · ${t(camGuide.nextKey as never)}`
   })()
+
+  const showSettingsHelp = camera.status === 'denied' || camera.status === 'insecure'
+  const showRetry =
+    camera.status === 'busy' ||
+    camera.status === 'ended' ||
+    camera.status === 'stopped' ||
+    camera.status === 'unavailable' ||
+    camera.status === 'idle' ||
+    camera.status === 'denied'
+
 
   const canScan =
     !busy &&
@@ -311,7 +340,11 @@ export default function DiscoverScreen({
       <div className="ap-scan-stage">
         <DoodleStar />
         <DoodleHeart />
-        <div className="ap-scan-box">
+        <div
+          className="ap-scan-box"
+          data-camera-status={camera.status}
+          data-live-preview={camGuide.livePreview ? 'true' : 'false'}
+        >
           <div className="ap-scan-box__corners" aria-hidden="true">
             <span />
             <span />
@@ -323,25 +356,86 @@ export default function DiscoverScreen({
             playsInline
             muted
             autoPlay
+            data-testid="camera-video"
             style={{
               position: 'absolute',
               inset: 0,
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              opacity: camera.status === 'ready' ? 1 : 0,
+              opacity: camGuide.livePreview ? 1 : 0,
+              // Mirror front camera for natural selfie framing
+              transform: camera.facing === 'user' && camGuide.livePreview ? 'scaleX(-1)' : undefined,
             }}
           />
-          {camera.status !== 'ready' && (
-            <AnimalIcon species={flow.selectedBox?.species || 'goose'} size={108} />
+          {!camGuide.livePreview && (
+            <TrainingPlaceholder
+              label={
+                camGuide.placeholderKind === 'unavailable'
+                  ? t('camera.placeholder.unavailable')
+                  : t('camera.placeholder.training')
+              }
+            />
           )}
-          <div className="ap-scan-line" />
-          <MascotBlob />
+          {camGuide.livePreview && <div className="ap-scan-line" />}
+          {camGuide.livePreview && <MascotBlob />}
         </div>
       </div>
 
-      <div className="ap-result-pill" role="status" aria-live="polite">
-        <span className="ap-result-pill__dot" aria-hidden="true" />
+      <div className="ap-camera-toolbar" data-testid="camera-toolbar">
+        <button
+          type="button"
+          className="ap-map-chip"
+          data-testid="camera-switch"
+          disabled={camera.status === 'requesting'}
+          onClick={() => void camera.switchFacing()}
+          aria-label={
+            camera.facing === 'environment'
+              ? t('camera.action.switch_to_front')
+              : t('camera.action.switch_to_back')
+          }
+        >
+          {camera.status === 'ready'
+            ? camera.facing === 'environment'
+              ? t('camera.action.switch_to_front')
+              : t('camera.action.switch_to_back')
+            : t('camera.action.switch')}
+        </button>
+        {showRetry && (
+          <button
+            type="button"
+            className="ap-map-chip"
+            data-testid="camera-retry"
+            onClick={() => void camera.retry()}
+          >
+            {t('camera.action.retry')}
+          </button>
+        )}
+        {showSettingsHelp && (
+          <button
+            type="button"
+            className="ap-map-chip"
+            data-testid="camera-settings-help"
+            onClick={() => {
+              // Browsers cannot deep-link to OS camera settings; surface explicit guidance.
+              window.alert(
+                camera.status === 'insecure'
+                  ? t('camera.next.insecure')
+                  : t('camera.next.denied'),
+              )
+            }}
+          >
+            {t('camera.action.open_settings')}
+          </button>
+        )}
+      </div>
+
+      <div className="ap-result-pill" role="status" aria-live="polite" data-testid="camera-status-pill">
+        <span
+          className="ap-result-pill__dot"
+          data-status={camera.status}
+          aria-hidden="true"
+        />
         <span>{statusText}</span>
       </div>
 

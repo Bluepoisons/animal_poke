@@ -59,12 +59,16 @@ func (s *Store) SummarizeNarrative(chapterVersion string, asOf time.Time) Narrat
 		ChapterVersion: chapterVersion,
 		Choices:        map[string]int{},
 		StuckReasons:   map[string]int{},
-		ComputedAt:     s.now(),
+		ComputedAt:     asOf,
 	}
 	optionalTotal, optionalFound := 0, 0
 	var meaningfulSum, lecturedSum float64
 	for _, e := range s.byID {
 		if e.Deleted {
+			continue
+		}
+		// only events at or before asOf (point-in-time health)
+		if e.TS.After(asOf) {
 			continue
 		}
 		props := map[string]any{}

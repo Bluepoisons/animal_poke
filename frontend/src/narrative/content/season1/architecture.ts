@@ -531,7 +531,7 @@ export const season1Architecture: Season1Architecture = {
       ],
       cast: [
         { characterId: 'urban_planner', change: '承认规划图也会制造空白' },
-        { characterId: 'archivist', change: '提议把空白做成可触摸展项' },
+        { characterId: 'archivist', change: '提议把空白做成可亲近的展项' },
         { characterId: 'street_photographer', change: '提交一张「故意不拍主体」的作品' },
         { characterId: 'journal_aide', change: '汇总四季选择进入策展清单' },
       ],
