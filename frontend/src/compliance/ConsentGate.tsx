@@ -38,6 +38,9 @@ export function ConsentGate({
       if (flushed) setRecord(flushed)
       else setRecord(getConsent())
     })()
+    const onChanged = () => setRecord(getConsent())
+    window.addEventListener('animal-poke-consent-changed', onChanged)
+    return () => window.removeEventListener('animal-poke-consent-changed', onChanged)
   }, [])
 
   const needsGate =

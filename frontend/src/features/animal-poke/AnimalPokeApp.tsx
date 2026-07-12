@@ -300,7 +300,12 @@ const progression = useProgression()
       case 'store':
         return <StoreScreen coins={gold} onCoinsChange={handleCoinsChange} onToast={showToast} />
       case 'settings':
-        return <SettingsScreen onToast={showToast} />
+        return (
+          <SettingsScreen
+            onToast={showToast}
+            onOpenAccount={() => setShowAccount(true)}
+          />
+        )
       default:
         return null
     }
