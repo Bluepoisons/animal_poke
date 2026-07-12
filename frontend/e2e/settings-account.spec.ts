@@ -77,7 +77,17 @@ test.describe('AP-075 settings and account', () => {
 
     await page.route(/\/api\/v1\//, async (route) => {
       const path = new URL(route.request().url()).pathname
-      if (path.includes('/account') || path.includes('/auth/account')) {
+      if (path.includes('/auth/device')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            token: 'e2e-test-token',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          }),
+        })
+      }
+      if (path.includes('/auth/account')) {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -87,10 +97,11 @@ test.describe('AP-075 settings and account', () => {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
     })
 
-    // Account controls live under settings in the production entry.
-    await page.goto('/#settings')
-    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByTestId('privacy-center')).toBeVisible()
+    await page.goto('/#discover')
+    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
+    await page.getByTestId('open-account').click()
+    await expect(page.getByTestId('account-settings')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/游客模式|Guest mode/i)).toBeVisible()
 
     const axeResult = await scanA11y(page)
     expect(axeResult.violations, `a11y violations on settings+account:\n${axeResult.details}`).toBe(0)

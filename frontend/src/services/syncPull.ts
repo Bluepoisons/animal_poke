@@ -2,9 +2,8 @@
  * 启动/联网时 pull 分页 + 与本地合并（#186）
  */
 import { AnimalRepository } from '../db/repositories/animal-repository'
+import { serverAnimalToRecord } from '../db/animal-record-mapper'
 import { authedRequest } from '../auth/deviceAuth'
-import type { AnimalRecord } from '../db/types'
-import type { CardEntry, RarityTier, SpeciesType } from '../types'
 
 const CURSOR_KEY = 'animal-poke-sync-pull-cursor'
 
@@ -32,27 +31,6 @@ export type PullPage = {
   has_more?: boolean
 }
 
-function mapServerAnimal(raw: Record<string, unknown>): AnimalRecord {
-  const rarityNum = typeof raw.rarity === 'number' ? raw.rarity : 1
-  const rarityMap: RarityTier[] = ['common', 'uncommon', 'rare', 'epic', 'legendary']
-  const rarity = rarityMap[Math.min(4, Math.max(0, rarityNum - 1))] || 'common'
-  const species = (String(raw.species || 'cat') as SpeciesType) || 'cat'
-  const id = String(raw.uuid || raw.id || crypto.randomUUID?.() || `pull-${Date.now()}`)
-  const entry: CardEntry = {
-    id,
-    no: String(raw.uuid || id).slice(0, 8),
-    rarity,
-    species,
-    unlocked: !raw.deleted_at && raw.deleted !== true,
-    captureDate: String(raw.generated_at || raw.created_at || new Date().toISOString()).slice(0, 10),
-    location: String(raw.city || '未知'),
-    lat: Number(raw.latitude || 0),
-    lng: Number(raw.longitude || 0),
-    seed: Number(raw.server_version || Date.now()) % 100000,
-  }
-  return { ...entry, isUnlocked: entry.unlocked ? 1 : 0 }
-}
-
 /** 分页 pull 直到 has_more=false 或空页；空页保持 cursor */
 export async function pullAnimalsFromServer(opts?: {
   pageSize?: number
@@ -77,7 +55,7 @@ export async function pullAnimalsFromServer(opts?: {
     }
 
     for (const raw of items) {
-      const rec = mapServerAnimal(raw)
+      const rec = serverAnimalToRecord(raw)
       if (raw.deleted_at || raw.deleted === true || raw.tombstone === true) {
         // tombstone：本地删除
         try {

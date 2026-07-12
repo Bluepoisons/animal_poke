@@ -43,6 +43,12 @@ func unavailable(reason string) gin.HandlerFunc {
 // NewRouter 组装 Gin 引擎: 全局中间件链 + 路由分组。
 // 所有业务路由始终注册；依赖缺失时返回 503 而非 404。
 func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
+	return NewRouterWithSchemaStatus(cfg, db, nil)
+}
+
+// NewRouterWithSchemaStatus 额外把启动时的 schema 校验结果接入 readiness。
+// nil 表示调用方未执行 schema 校验；false 必须让实例保持未就绪。
+func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) *gin.Engine {
 	r := gin.New()
 	// 可信代理：仅信任配置的上游，防止伪造 X-Forwarded-For 绕过 IP 限流
 	if len(cfg.TrustedProxies) > 0 {
@@ -74,9 +80,16 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		DB:          db,
 		ReadyErrors: cfg.ReadyErrors(),
 		AppEnv:      cfg.AppEnv,
+		SchemaOK:    schemaOK,
 	})
 	r.GET("/ready", handlers.Readyz(readyChecker))
 	r.GET("/readyz", handlers.Readyz(readyChecker))
+	// A reachable database with an incompatible schema is diagnostic-only.
+	// Keep it on readiness, but never let business handlers query or seed it.
+	appDB := db
+	if schemaOK != nil && !*schemaOK {
+		appDB = nil
+	}
 	// AP-036: /metrics is NOT on the public Ingress-facing engine.
 	// Scrape the dedicated metrics server on METRICS_ADDR (default :9090).
 	// Explicit 404 keeps probes/scanners from learning a 200 endpoint.
@@ -99,13 +112,13 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
 	var accountRepo *repo.AccountRepo
-	if db != nil {
-		deviceRepo = repo.NewDeviceRepo(db)
-		animalRepo = repo.NewAnimalRepo(db)
-		auditRepo = repo.NewAuditLogRepo(db)
+	if appDB != nil {
+		deviceRepo = repo.NewDeviceRepo(appDB)
+		animalRepo = repo.NewAnimalRepo(appDB)
+		auditRepo = repo.NewAuditLogRepo(appDB)
 		auditService = services.NewAuditService(animalRepo, auditRepo)
-		inferenceRepo = repo.NewInferenceRepo(db)
-		accountRepo = repo.NewAccountRepoWithPeppers(db, cfg.AccountTokenPepper, cfg.AccountTokenPepperPrevious)
+		inferenceRepo = repo.NewInferenceRepo(appDB)
+		accountRepo = repo.NewAccountRepoWithPeppers(appDB, cfg.AccountTokenPepper, cfg.AccountTokenPepperPrevious)
 	}
 
 	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
@@ -265,16 +278,16 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				Flags:    cfg.FeatureFlags,
 				OpsToken: cfg.OpsToken,
 			})
-			if db != nil {
-				rankH := handlers.NewRankingHandler(db, deviceRepo, cfg.FeatureFlags.Ranking)
+			if appDB != nil {
+				rankH := handlers.NewRankingHandler(appDB, deviceRepo, cfg.FeatureFlags.Ranking)
 				auth.GET("/ranking/daily", rankH.Daily)
 				auth.POST("/ranking/score", middleware.BodyLimit(middleware.MaxBodyDefault), rankH.ReportScore)
 				auth.POST("/ranking/settle", middleware.BodyLimit(middleware.MaxBodyDefault), rankH.Settle)
 			} else {
 				auth.GET("/ranking/daily", product.RankingDaily)
 			}
-			if db != nil {
-				pvpH := handlers.NewPvPHandler(db, deviceRepo, cfg.FeatureFlags.PvP)
+			if appDB != nil {
+				pvpH := handlers.NewPvPHandler(appDB, deviceRepo, cfg.FeatureFlags.PvP)
 				auth.POST("/pvp/match", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Match)
 				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Result)
 				auth.POST("/pvp/cancel", middleware.BodyLimit(middleware.MaxBodyDefault), pvpH.Cancel)
@@ -283,8 +296,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/pvp/result", middleware.BodyLimit(middleware.MaxBodyDefault), product.PvPReport)
 			}
 			// AP-102 战斗设计：catalog + 权威 PvE seed/command 结算（无 feature flag，设计数据始终可读）
-			if db != nil {
-				battleH := handlers.NewBattleHandler(db, deviceRepo)
+			if appDB != nil {
+				battleH := handlers.NewBattleHandler(appDB, deviceRepo)
 				auth.GET("/battle/catalog", battleH.Catalog)
 				auth.POST("/battle/pve/start", middleware.BodyLimit(middleware.MaxBodyDefault), battleH.Start)
 				auth.POST("/battle/pve/settle", middleware.BodyLimit(middleware.MaxBodyDefault), battleH.Settle)
@@ -298,10 +311,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/battle/simulate", unavailable("db_unavailable"))
 			}
 			// AP-083 社交：有 DB 时挂载完整图谱；否则保留 product 骨架（flag 关 501 / 无库 503）
-			if db != nil && animalRepo != nil {
+			if appDB != nil && animalRepo != nil {
 				socialH := handlers.NewSocialHandler(handlers.SocialOptions{
 					Flags:   cfg.FeatureFlags,
-					Social:  repo.NewSocialRepo(db),
+					Social:  repo.NewSocialRepo(appDB),
 					Animals: animalRepo,
 				})
 				socialG := auth.Group("/social")
@@ -339,8 +352,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			auth.GET("/content/manifest", contentH.GetManifest)
 			liveopsH := handlers.NewLiveOpsHandler(nil, cfg.OpsToken)
 			auth.GET("/liveops/instances", liveopsH.ListInstances)
-			if db != nil {
-				notifH := handlers.NewNotificationHandler(db)
+			if appDB != nil {
+				notifH := handlers.NewNotificationHandler(appDB)
 				auth.GET("/notifications/inbox", notifH.ListInbox)
 				auth.POST("/notifications/inbox/:id/read", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.ReadMessage)
 				auth.POST("/notifications/inbox/:id/ack", middleware.BodyLimit(middleware.MaxBodyDefault), notifH.AckMessage)
@@ -426,21 +439,21 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			}
 
 			// 隐私 / 安全 / 商业化 / 内容审核
-			safetyH := handlers.NewSafetyHandler(db, cfg.StrictMinorDefaults)
+			safetyH := handlers.NewSafetyHandler(appDB, cfg.StrictMinorDefaults)
 			auth.GET("/account/defaults", safetyH.AccountDefaults)
 			// safety report only needs structured metadata; always registered
 			auth.POST("/safety/report", middleware.BodyLimit(middleware.MaxBodyDefault), safetyH.Report)
-			if db != nil && deviceRepo != nil {
-				privacy := handlers.NewPrivacyHandlerFull(db, deviceRepo, animalRepo, inferenceRepo, auditRepo, accountRepo)
+			if appDB != nil && deviceRepo != nil {
+				privacy := handlers.NewPrivacyHandlerFull(appDB, deviceRepo, animalRepo, inferenceRepo, auditRepo, accountRepo)
 				auth.POST("/privacy/consent", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.PutConsent)
 				auth.POST("/privacy/export", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.ExportData)
 				auth.POST("/privacy/delete", middleware.BodyLimit(middleware.MaxBodyDefault), privacy.DeleteData)
 				auth.GET("/privacy/requests/:id", privacy.GetDataRequest)
 
-				sec := handlers.NewSecurityHandler(db, auditRepo, sharedCounter)
+				sec := handlers.NewSecurityHandler(appDB, auditRepo, sharedCounter)
 				auth.POST("/security/report", middleware.BodyLimit(middleware.MaxBodyDefault), sec.Report)
 
-				commerce := handlers.NewCommerceHandler(db)
+				commerce := handlers.NewCommerceHandler(appDB)
 				auth.POST("/commerce/orders", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.CreateOrder)
 				auth.POST("/commerce/orders/fulfill", middleware.BodyLimit(middleware.MaxBodyReceipt), commerce.FulfillOrder)
 				auth.POST("/commerce/orders/refund", middleware.BodyLimit(middleware.MaxBodyDefault), commerce.RefundOrder)
@@ -448,7 +461,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/commerce/entitlements", commerce.ListEntitlements)
 
 				// AP-082 钱包 / 库存 / 不可变流水
-				walletRepo := repo.NewWalletRepo(db)
+				walletRepo := repo.NewWalletRepo(appDB)
 				walletH := handlers.NewWalletHandler(walletRepo)
 				auth.GET("/wallet", walletH.GetWallet)
 				auth.POST("/wallet/credit", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.Credit)
@@ -460,7 +473,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/inventory/consume", middleware.BodyLimit(middleware.MaxBodyDefault), walletH.ConsumeInventory)
 
 				// AP-096 数据驱动任务 / 进度 / 幂等领取
-				questRepo := repo.NewQuestRepo(db, walletRepo)
+				questRepo := repo.NewQuestRepo(appDB, walletRepo)
 				_ = questRepo.SeedDefinitions()
 				questH := handlers.NewQuestHandler(questRepo)
 				auth.GET("/quests", questH.ListQuests)
@@ -470,9 +483,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.POST("/quests/:quest_id/claim", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Claim)
 				auth.POST("/quests/compensate", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Compensate)
 				// AP-099 研究员成长 / 虚拟伙伴
-				growthRepo := repo.NewGrowthRepo(db)
+				growthRepo := repo.NewGrowthRepo(appDB)
 				growthH := handlers.NewGrowthHandler(growthRepo)
-				narrRepo := repo.NewNarrativeRepo(db)
+				narrRepo := repo.NewNarrativeRepo(appDB)
 				_ = narrRepo.SeedContent()
 				narrH := handlers.NewNarrativeHandler(narrRepo)
 				auth.GET("/narrative/catalog", narrH.GetCatalog)
@@ -495,7 +508,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				auth.GET("/growth/companions/:animal_uuid", growthH.GetCompanion)
 				auth.POST("/growth/reset", middleware.BodyLimit(middleware.MaxBodyDefault), growthH.Reset)
 				// AP-098 摄影质量技巧：校准 / 评分 / 个人最佳 / 每日主题
-				photoH := handlers.NewPhotoHandler(repo.NewPhotoRepo(db), cfg.StatsHMACKey)
+				photoH := handlers.NewPhotoHandler(repo.NewPhotoRepo(appDB), cfg.StatsHMACKey)
 				photoG := auth.Group("/photo")
 				photoG.Use(middleware.RateLimitByDevice(rateLimiter))
 				{
@@ -552,7 +565,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		if adminEnv == "" {
 			adminEnv = "development"
 		}
-		adminSessions := admin.NewSessionStore(db)
+		adminSessions := admin.NewSessionStore(appDB)
 		adminSessions.RevokeGrace = cfg.AdminSessionRevokeGrace
 		adminTokens := admin.NewTokenService(admin.TokenConfig{
 			Secret:         cfg.AdminJWTSecret,
@@ -562,7 +575,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			Env:            adminEnv,
 			TTL:            cfg.AdminTokenTTL,
 		}, adminSessions)
-		adminAuditor := admin.NewActionAuditor(db, cfg.AdminJWTSecret)
+		adminAuditor := admin.NewActionAuditor(appDB, cfg.AdminJWTSecret)
 		adminAuthCfg := middleware.AdminAuthConfig{
 			Tokens:               adminTokens,
 			Sessions:             adminSessions,
@@ -581,7 +594,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 			Tokens:      adminTokens,
 			Sessions:    adminSessions,
 			Auditor:     adminAuditor,
-			DB:          db,
+			DB:          appDB,
 			AdminAPIKey: cfg.AdminAPIKey,
 			BreakGlass:  cfg.AdminBreakGlassEnabled,
 			Production:  cfg.IsProduction(),
@@ -633,8 +646,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					secured.POST("/audit/logs/:id/ack", unavailable("db_unavailable"))
 				}
 
-				if db != nil {
-					commerceAdmin := handlers.NewCommerceHandlerWithOptions(db, handlers.CommerceOptions{
+				if appDB != nil {
+					commerceAdmin := handlers.NewCommerceHandlerWithOptions(appDB, handlers.CommerceOptions{
 						Production:  cfg.IsProduction(),
 						Enabled:     cfg.CommerceEnabled,
 						StoreVerify: cfg.CommerceStoreVerify,

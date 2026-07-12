@@ -57,6 +57,9 @@ export default defineConfig({
     video: ci ? 'retain-on-failure' : 'off',
     screenshot: 'only-on-failure',
     locale: 'zh-CN',
+    // API hard-gate specs use page.route(); service-worker-owned requests
+    // bypass that interception and would leak to the local backend proxy.
+    serviceWorkers: 'block',
     launchOptions: {
       args: [
         '--use-fake-ui-for-media-stream',
@@ -70,12 +73,15 @@ export default defineConfig({
       ? 'npx vite build --outDir dist-e2e --emptyOutDir false && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 4173 --strictPort'
       : 'npx vite --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !ci,
+    // The suite relies on build-time-only E2E hooks. Reusing an arbitrary
+    // server can silently run a non-test bundle and invalidate the result.
+    reuseExistingServer: false,
     timeout: 180_000,
     env: {
       ...process.env,
       VITE_API_BASE_URL: '',
       VITE_VISION_MOCK: '0',
+      VITE_ENABLE_E2E_HOOKS: '1',
     },
   },
   // AP-075: snapshot base directory for visual regression

@@ -5,6 +5,22 @@ export interface AnimalRecord extends CardEntry {
   /** Numeric flag for IndexedDB indexing (0 = locked, 1 = unlocked).
    *  Auto-synced with `unlocked` boolean on add/update. */
   isUnlocked?: number
+  /** Capture pipeline fields retained for collection detail and sync recovery. */
+  uuid?: string
+  breed?: string
+  hp?: number
+  atk?: number
+  def?: number
+  spd?: number
+  className?: string
+  element?: string
+  narrative?: string
+  fiction?: boolean
+  disclaimer?: string
+  layer?: string
+  capturedAt?: number
+  inferenceRequestId?: string
+  synced?: boolean
 }
 
 /** 应用设置（单条记录，key 固定为 'prefs'） */

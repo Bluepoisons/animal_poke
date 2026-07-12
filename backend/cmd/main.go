@@ -42,14 +42,18 @@ func main() {
 		slog.Warn("配置校验告警", "err", err)
 	}
 
+	var schemaOK *bool
 	db, err := repo.InitDB(cfg.Database)
 	if err != nil {
 		slog.Error("数据库连接失败, 服务以降级模式启动(部分接口将不可用)", "err", err)
 	} else {
+		checkedSchemaOK := true
+		schemaOK = &checkedSchemaOK
 		slog.Info("数据库连接成功")
 		autoMigrate := os.Getenv("AUTO_MIGRATE")
 		if autoMigrate != "false" {
 			if err := migrate.Apply(db); err != nil {
+				checkedSchemaOK = false
 				slog.Error("数据库迁移失败", "err", err)
 				if cfg.IsProduction() {
 					os.Exit(1)
@@ -59,6 +63,7 @@ func main() {
 			}
 		} else {
 			if err := migrate.CheckVersion(db, migrate.CurrentVersion); err != nil {
+				checkedSchemaOK = false
 				slog.Error("schema 版本不匹配", "err", err)
 				if cfg.IsProduction() {
 					os.Exit(1)
@@ -70,7 +75,7 @@ func main() {
 		}
 	}
 
-	r := routes.NewRouter(cfg, db)
+	r := routes.NewRouterWithSchemaStatus(cfg, db, schemaOK)
 
 	srv := &http.Server{
 		Addr:              cfg.ServerAddr,

@@ -53,9 +53,13 @@ export function createCaptureSession(input: {
   }
 }
 
-export function successProbability(power: number): number {
-  if (power >= BEST_MIN && power <= BEST_MAX) return 0.78
-  const dist = power < BEST_MIN ? BEST_MIN - power : power - BEST_MAX
+export function successProbability(
+  power: number,
+  bestMin = BEST_MIN,
+  bestMax = BEST_MAX,
+): number {
+  if (power >= bestMin && power <= bestMax) return 0.78
+  const dist = power < bestMin ? bestMin - power : power - bestMax
   return Math.max(0.15, 0.78 - dist * 0.02)
 }
 

@@ -6,6 +6,7 @@ import { useBattle } from '../../../battle/useBattle'
 import type { CardEntry, SpeciesType } from '../../../types'
 import type { StrategyType } from '../../../battle/types'
 import { BATTLE_ARCHETYPES, RECOMMENDED_TEAMS } from '../../../battle/designCatalog'
+import { MAX_ENERGY } from '../../../battle/constants'
 import { ProgressBar } from '../../../a11y'
 
 const strategies: { id: StrategyType; label: string }[] = [
@@ -122,18 +123,27 @@ export default function BattleArenaScreen() {
         </div>
       </div>
 
-      <div className="ap-strategy-row" aria-label="策略">
+      <div className="ap-battle-actions ap-strategy-row" aria-label="策略与技能">
         {strategies.map((s) => (
           <button
             key={s.id}
             type="button"
             className={state.strategy === s.id ? 'is-active' : ''}
-            disabled={state.phase === 'result' || state.phase === 'idle'}
+            disabled={state.phase !== 'battling'}
             onClick={() => handleStrategy(s.id)}
           >
             {s.label}
           </button>
         ))}
+        <button
+          type="button"
+          data-testid="battle-ultimate"
+          className={`ap-battle-ultimate ${state.playerPet?.energy === MAX_ENERGY ? 'is-active' : ''}`}
+          disabled={state.phase !== 'battling' || (state.playerPet?.energy ?? 0) < MAX_ENERGY}
+          onClick={() => battle.useUltimate()}
+        >
+          必杀技 {state.playerPet?.energy ?? 0}/{MAX_ENERGY}
+        </button>
       </div>
 
       <BattleLog lines={logLines.length ? logLines : ['等待战斗…']} />

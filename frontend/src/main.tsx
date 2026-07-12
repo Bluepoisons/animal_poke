@@ -10,6 +10,7 @@ import { GlobalErrorBoundary, setupGlobalErrorHandlers, installOnlineListener } 
 import { onNeedRefresh, applyPendingUpdate, getUpdateGateState } from './pwa/updateGate'
 import './index.css'
 import './a11y/a11y.css'
+import './features/animal-poke/animalPoke.css'
 
 setupGlobalErrorHandlers()
 installOnlineListener()

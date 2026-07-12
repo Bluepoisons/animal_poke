@@ -106,7 +106,8 @@ test.describe('AP-075 map dead-end and empty states', () => {
     await page.goto('/#map')
     await expect(page.locator('.ap-phone, [data-phone-frame]').first()).toBeVisible({ timeout: 15_000 })
 
-    await page.goto('/#discover')
+    await page.getByRole('button', { name: /返回手账|Back/i }).click()
+    await expect(page).toHaveURL(/#discover$/)
     await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
   })
 })

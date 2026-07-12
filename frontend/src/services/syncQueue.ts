@@ -16,6 +16,7 @@ import { pullAnimalsFromServer } from './syncPull'
 
 const MAX_ATTEMPTS = 8
 const BASE_DELAY_MS = 1000
+export const SYNCING_LEASE_MS = 30_000
 
 function backoffMs(attempts: number): number {
   const exp = Math.min(attempts, 6)
@@ -117,7 +118,7 @@ export async function flushSyncQueue(now = Date.now()): Promise<{ synced: number
   let synced = 0
   let failed = 0
   try {
-    const ready = await SyncQueueRepository.listReady(now)
+    const ready = await SyncQueueRepository.listReady(now, now - SYNCING_LEASE_MS)
     for (const item of ready) {
       const ok = await processQueueItem(item)
       if (ok) synced += 1

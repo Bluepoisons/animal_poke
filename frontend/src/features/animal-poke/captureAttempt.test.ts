@@ -85,4 +85,26 @@ describe('captureAttempt', () => {
     })
     expect(spent).toBe(1)
   })
+
+  it('uses each species optimal range for the capture roll', () => {
+    const settle = (species: string, power: number, roll: number) => {
+      let enc = createEncounter(species, 1)
+      enc = beginCharge(enc)
+      enc = updatePower(enc, power)
+      return settleAttempt(enc, {
+        online: true,
+        stamina: 100,
+        consumeStamina: () => true,
+        rng: () => roll,
+      })
+    }
+
+    // Power 82 is inside dog [45, 85], but outside cat [40, 80].
+    expect(settle('dog', 82, 0.76).ok).toBe(true)
+    expect(settle('cat', 82, 0.76).ok).toBe(false)
+
+    // Power 40 is inside cat [40, 80], but outside dog [45, 85].
+    expect(settle('cat', 40, 0.7).ok).toBe(true)
+    expect(settle('dog', 40, 0.7).ok).toBe(false)
+  })
 })

@@ -31,6 +31,14 @@ import { setCaptureActive } from '../../pwa/updateGate'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'journal', 'battle', 'store', 'settings']
 
+const SCREEN_FEATURES: Partial<Record<ScreenId, FeatureId>> = {
+  discover: 'discover',
+  map: 'map',
+  pokedex: 'pokedex',
+  battle: 'battle',
+  store: 'store',
+}
+
 const ROUTE_TITLES: Record<ScreenId, string> = {
   discover: '发现',
   map: '猎取地图',
@@ -54,15 +62,24 @@ function newAttemptId(): string {
   return `attempt-${Date.now()}`
 }
 
+function isScreenUnlocked(
+  screen: ScreenId,
+  checkFeature: (feature: FeatureId) => boolean,
+): boolean {
+  const feature = SCREEN_FEATURES[screen]
+  return feature ? checkFeature(feature) : true
+}
+
 export default function AnimalPokeApp() {
+  const progression = useProgression()
   const [screen, setScreen] = useState<ScreenId>(() => {
     const h = parseHashScreen()
     // 直接访问 #capture 无状态时回 discover
-    return h === 'capture' ? 'discover' : h
+    if (h === 'capture') return 'discover'
+    return isScreenUnlocked(h, progression.isFeatureUnlocked) ? h : 'discover'
   })
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
   const { state: staminaState, addGold } = useStamina()
-const progression = useProgression()
   const level = staminaState.level
   const exp = staminaState.exp
   const lbs = useLbs()
@@ -101,17 +118,7 @@ const progression = useProgression()
   const navigate = useCallback(
     (nextScreen: ScreenId, opts?: { replace?: boolean }) => {
       // Hide locked features instead of toast spam
-      const feature = nextScreen as FeatureId
-      if (
-        (feature === 'battle' ||
-          feature === 'map' ||
-          feature === 'pokedex' ||
-          feature === 'store' ||
-          feature === 'discover') &&
-        !progression.isFeatureUnlocked(feature)
-      ) {
-        return
-      }
+      if (!isScreenUnlocked(nextScreen, progression.isFeatureUnlocked)) return
       setScreen(nextScreen)
       if (typeof history === 'undefined') return
       const url = `#${nextScreen}`
@@ -147,6 +154,10 @@ const progression = useProgression()
           return
         }
       }
+      if (!isScreenUnlocked(h, progression.isFeatureUnlocked)) {
+        navigate('discover', { replace: true })
+        return
+      }
       if ((TAB_SCREENS as string[]).includes(h) || h === 'capture') {
         setScreen(h)
       }
@@ -155,14 +166,13 @@ const progression = useProgression()
     const onPop = () => applyRoute(parseHashScreen())
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onPop)
-    if (typeof location !== 'undefined' && !location.hash) {
-      history.replaceState({ screen: 'discover' }, '', '#discover')
-    }
+    if (typeof location !== 'undefined' && !location.hash) navigate('discover', { replace: true })
+    else onHash()
     return () => {
       window.removeEventListener('hashchange', onHash)
       window.removeEventListener('popstate', onPop)
     }
-  }, [navigate, showToast])
+  }, [navigate, progression.isFeatureUnlocked, showToast])
 
   useEffect(() => {
     if (screen !== 'capture' && flow.phase === 'capturing') {

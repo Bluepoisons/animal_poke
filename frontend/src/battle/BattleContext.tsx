@@ -74,6 +74,7 @@ function battleReducer(state: BattleState, action: BattleAction): BattleState {
         ...state,
         playerPet: action.playerPet,
         enemyPet: action.enemyPet,
+        round: action.round,
         log: [...state.log.slice(-47), ...action.log], // 最多 50 条日志
       }
 
@@ -167,10 +168,10 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
           state.round
         )
 
-        dispatch({ type: 'EXECUTE_ROUND', log: logs, playerPet: player, enemyPet: enemy })
-
         // 回合数 +1
         const nextRound = state.round + 1
+        dispatch({ type: 'EXECUTE_ROUND', log: logs, playerPet: player, enemyPet: enemy, round: nextRound })
+
         const nextEndResult = checkBattleEnd(player, enemy, nextRound)
         if (nextEndResult) {
           const rewards = computeRewards(nextEndResult, enemy.rarity, 1.0)
@@ -190,7 +191,15 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
         timerRef.current = null
       }
     }
-  }, [state.phase, state.isAutoPlaying, state.playerPet?.energy])
+  }, [
+    state.phase,
+    state.isAutoPlaying,
+    state.playerPet,
+    state.enemyPet,
+    state.round,
+    state.strategy,
+    state.weather,
+  ])
 
   // 进入选宠
   const enterSelect = useCallback(() => {
@@ -247,9 +256,9 @@ export const BattleProvider: React.FC<{ children: React.ReactNode; weather?: Wea
       state.round
     )
 
-    dispatch({ type: 'EXECUTE_ROUND', log: logs, playerPet: player, enemyPet: enemy })
-
     const nextRound = state.round + 1
+    dispatch({ type: 'EXECUTE_ROUND', log: logs, playerPet: player, enemyPet: enemy, round: nextRound })
+
     const nextEndResult = checkBattleEnd(player, enemy, nextRound)
     if (nextEndResult) {
       const rewards = computeRewards(nextEndResult, enemy.rarity, 1.0)

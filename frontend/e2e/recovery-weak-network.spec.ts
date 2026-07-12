@@ -43,8 +43,10 @@ test.describe('AP-075 recovery and resilience', () => {
 
   test('weak network shows offline banner and degrades gracefully', async ({ page }) => {
     // Simulate offline + browser mocks
-    await page.route(/\/api\/v1\//, () => {
-      // Abort all API calls to simulate offline
+    await page.route(/\/api\/v1\//, async (route) => {
+      // Always settle intercepted requests; leaving a route pending can hang
+      // navigation and accidentally hide an offline-regression timeout.
+      await route.abort('internetdisconnected')
     })
 
     await page.addInitScript(() => {
@@ -65,14 +67,12 @@ test.describe('AP-075 recovery and resilience', () => {
 
     await page.goto('/')
 
-    // Offline banner or fallback should be visible
-    const offlineIndicator = page.getByText(/离线|offline|网络不可用/i)
-    const discover = page.getByText('DISCOVER MODE')
-    const ok = await Promise.any([
-      offlineIndicator.isVisible().then(() => true),
-      discover.isVisible({ timeout: 15_000 }).then(() => true),
-    ]).catch(() => false)
-    expect(ok).toBeTruthy()
+    // Assert the real offline UI. Promise.any over isVisible() is a false
+    // positive because a resolved `false` still wins the race.
+    await expect(page.getByRole('status').filter({ hasText: /离线|offline|网络不可用/i })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
 
     // Axe on offline state
     const axeResult = await scanA11y(page)

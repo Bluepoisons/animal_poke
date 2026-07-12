@@ -5,6 +5,7 @@ import {
   flushSyncQueue,
   buildIdempotencyKey,
   enqueueGeneratedAnimal,
+  SYNCING_LEASE_MS,
 } from './syncQueue'
 import { SyncQueueRepository } from '../db/repositories/sync-queue-repository'
 import { __resetAuthForTests } from '../auth/deviceAuth'
@@ -126,7 +127,6 @@ describe('syncQueue', () => {
     expect(item.payload.breed).toBe('Tabby')
     expect(item.payload.class).toBe('Assassin')
   })
-})
 
   it('does not treat inference_invalid 409 as synced', async () => {
     await enqueueAnimalSync({
@@ -148,6 +148,60 @@ describe('syncQueue', () => {
     // authedRequest may wrap fetch — if tests use authedRequest path, mock may differ
     const r = await flushSyncQueue()
     const item = await SyncQueueRepository.getByIdempotencyKey(buildIdempotencyKey('u-inf-bad'))
-    // either failed permanent or still pending depending on ApiError shape
-    expect(item?.status === 'failed' || item?.status === 'pending' || r.failed >= 0).toBe(true)
+    expect(r.failed).toBe(1)
+    expect(item?.status).toBe('failed')
+    expect(item?.nextAttemptAt).toBe(Number.MAX_SAFE_INTEGER)
   })
+
+  it('retries an abandoned syncing item with the same idempotency key', async () => {
+    const now = Date.now()
+    const queued = await enqueueAnimalSync({
+      uuid: 'u-stale-syncing',
+      species: 'cat',
+      rarity: 2,
+      generated_at: new Date(now).toISOString(),
+      inference_request_id: 'inf-stale',
+    })
+    await SyncQueueRepository.put({
+      ...queued,
+      status: 'syncing',
+      updatedAt: now - SYNCING_LEASE_MS - 1,
+    })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      json: async () => ({ status: 'synced', uuid: queued.payload.uuid }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await flushSyncQueue(now)
+
+    expect(result).toEqual({ synced: 1, failed: 0 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][1].headers['Idempotency-Key']).toBe(queued.idempotencyKey)
+    expect((await SyncQueueRepository.getById(queued.id))?.status).toBe('synced')
+  })
+
+  it('does not steal an active syncing lease', async () => {
+    const now = Date.now()
+    const queued = await enqueueAnimalSync({
+      uuid: 'u-active-syncing',
+      species: 'dog',
+      rarity: 1,
+      generated_at: new Date(now).toISOString(),
+    })
+    await SyncQueueRepository.put({
+      ...queued,
+      status: 'syncing',
+      updatedAt: now - SYNCING_LEASE_MS + 1,
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await flushSyncQueue(now)
+
+    expect(result).toEqual({ synced: 0, failed: 0 })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})

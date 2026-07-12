@@ -29,11 +29,19 @@ export const SyncQueueRepository = {
     return db.getAllFromIndex(STORE, 'by-status', status)
   },
 
-  /** 取出到期可发送的 pending/failed 项 */
-  async listReady(now = Date.now()): Promise<SyncQueueItem[]> {
+  /** 取出到期项，以及发送租约已经过期的 syncing 项。 */
+  async listReady(
+    now = Date.now(),
+    staleSyncingBefore = now - 30_000,
+  ): Promise<SyncQueueItem[]> {
     const all = await this.getAll()
     return all
-      .filter((i) => (i.status === 'pending' || i.status === 'failed') && i.nextAttemptAt <= now)
+      .filter((i) => {
+        const scheduled =
+          (i.status === 'pending' || i.status === 'failed') && i.nextAttemptAt <= now
+        const abandoned = i.status === 'syncing' && i.updatedAt <= staleSyncingBefore
+        return scheduled || abandoned
+      })
       .sort((a, b) => a.createdAt - b.createdAt)
   },
 

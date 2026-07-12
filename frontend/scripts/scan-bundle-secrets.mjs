@@ -29,6 +29,8 @@ const PROD_FORBIDDEN_LITERALS = [
   'Mock OAuth',
   'dev-user',
   'dev-secret-token',
+  '__AP_FORCE_CAMERA_READY',
+  '__AP_FORCE_CAPTURE_SUCCESS',
 ]
 
 const TEXT_EXTS = new Set(['.js', '.css', '.html', '.map', '.json', '.txt', '.svg'])

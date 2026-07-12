@@ -16,6 +16,8 @@ import { isForceCaptureSuccess } from '../../../e2eFlags'
 import { runCaptureGeneration, type GeneratedAnimal } from '../../../services/capturePipeline'
 import { enqueueGeneratedAnimal, flushSyncQueue } from '../../../services/syncQueue'
 import { AnimalRepository } from '../../../db/repositories/animal-repository'
+import { SyncQueueRepository } from '../../../db/repositories/sync-queue-repository'
+import { generatedAnimalToRecord } from '../../../db/animal-record-mapper'
 import {
   createPostHitTask,
   isRevealAllowed,
@@ -72,13 +74,18 @@ export default function CaptureScreen({
   const profile = SPECIES_THROW_PROFILES[species] ?? {
     species,
     chargeSpeed: 1,
-    bestMin: 40,
-    bestMax: 80,
+    bestMin: BEST_MIN,
+    bestMax: BEST_MAX,
     label: '标准',
   }
   const lbs = useLbs()
   const weather = useWeather()
   const [enc, setEnc] = useState<EncounterState>(() => createEncounter(species, 3))
+  // Keep the latest encounter available to event handlers without relying on a
+  // state updater callback. State updater callbacks must stay pure: settling a
+  // throw consumes stamina and starts async work, both of which are side effects.
+  const encRef = useRef(enc)
+  encRef.current = enc
   const [battery, setBattery] = useState<{ level: number | null; charging: boolean | null }>({
     level: null,
     charging: null,
@@ -144,7 +151,26 @@ export default function CaptureScreen({
 
   const att = currentAttempt(enc)
   const power = att?.power ?? 0
-  const captureRate = useMemo(() => successProbability(power), [power])
+  const captureRate = useMemo(
+    () => successProbability(power, profile.bestMin, profile.bestMax),
+    [power, profile.bestMin, profile.bestMax],
+  )
+
+  const syncGeneratedAnimal = useCallback(
+    async (generated: GeneratedAnimal) => {
+      const position = lbs.state.playerLocation
+      const queued = await enqueueGeneratedAnimal(generated, {
+        lat: position?.lat,
+        lng: position?.lng,
+      })
+      await flushSyncQueue()
+      const persisted = await SyncQueueRepository.getById(queued.id)
+      if (persisted?.status !== 'synced') {
+        throw new Error(persisted?.lastError || 'sync_pending')
+      }
+    },
+    [lbs.state.playerLocation],
+  )
 
   const runPipeline = useCallback(
     async (task: PostHitTask) => {
@@ -195,26 +221,14 @@ export default function CaptureScreen({
           patchPostHit({ stage: 'saving' })
           const existing = await AnimalRepository.getById(generated.sessionId).catch(() => undefined)
           if (!existing) {
-            await AnimalRepository.add({
-              id: generated.sessionId,
-              uuid: generated.sessionId,
-              species: generated.species as SpeciesType,
-              rarity: generated.value.rarity,
-              breed: generated.analysis.breed,
-              hp: generated.value.hp,
-              atk: generated.value.atk,
-              def: generated.value.def,
-              spd: generated.value.spd,
-              className: generated.value.class,
-              element: generated.value.element,
-              narrative: generated.value.narrative,
-              fiction: generated.value.fiction ?? true,
-              disclaimer: generated.value.disclaimer ?? '虚构花絮，非真实个体传记',
-              layer: generated.value.layer ?? 'fictional_vignette',
-              capturedAt: Date.now(),
-              inferenceRequestId: generated.valueInferenceId || generated.inferenceRequestId,
-              synced: false,
-            } as never)
+            const position = lbs.state.playerLocation
+            await AnimalRepository.add(
+              generatedAnimalToRecord(generated, {
+                location: lbs.state.cityName,
+                latitude: position?.lat,
+                longitude: position?.lng,
+              }),
+            )
           }
           working = savePostHitTask({ ...working, stage: 'syncing', saved: true })
           setPostHit(working)
@@ -229,8 +243,7 @@ export default function CaptureScreen({
         if (working.saved && !working.synced && generated) {
           patchPostHit({ stage: 'syncing' })
           try {
-            await enqueueGeneratedAnimal(generated)
-            await flushSyncQueue()
+            await syncGeneratedAnimal(generated)
             working = savePostHitTask({
               ...working,
               stage: 'completed',
@@ -256,8 +269,7 @@ export default function CaptureScreen({
 
         if (working.stage === 'saved_pending_sync' && generated && !working.synced) {
           try {
-            await enqueueGeneratedAnimal(generated)
-            await flushSyncQueue()
+            await syncGeneratedAnimal(generated)
             working = savePostHitTask({ ...working, stage: 'completed', synced: true, errorCode: null })
             setPostHit(working)
             onToast('同步完成')
@@ -284,11 +296,14 @@ export default function CaptureScreen({
       captureAttemptId,
       detectInferenceId,
       detection,
+      lbs.state.cityName,
+      lbs.state.playerLocation,
       onSettled,
       onToast,
       patchPostHit,
       photoBlob,
       species,
+      syncGeneratedAnimal,
       targetId,
     ],
   )
@@ -321,7 +336,9 @@ export default function CaptureScreen({
     chargingRef.current = true
     powerRef.current = 0
     dirRef.current = 1
-    setEnc((e) => beginCharge(e))
+    const next = beginCharge(encRef.current)
+    encRef.current = next
+    setEnc(next)
     const tick = () => {
       if (!chargingRef.current) return
       const speed = 1.8 * profile.chargeSpeed
@@ -334,14 +351,18 @@ export default function CaptureScreen({
         dirRef.current = 1
       }
       powerRef.current = next
-      setEnc((e) => updatePower(e, next))
+      const nextEncounter = updatePower(encRef.current, next)
+      encRef.current = nextEncounter
+      setEnc(nextEncounter)
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
   }, [profile.chargeSpeed])
 
   const throwNow = useCallback(() => {
-    if (!chargingRef.current && att?.phase !== 'charging') return
+    const currentEncounter = encRef.current
+    const activeAttempt = currentAttempt(currentEncounter)
+    if (!chargingRef.current && activeAttempt?.phase !== 'charging') return
     if (postHit.stage !== 'idle' && postHit.stage !== 'failed') return
     stopChargeLoop()
 
@@ -350,52 +371,40 @@ export default function CaptureScreen({
       powerRef.current = Math.round((profile.bestMin + profile.bestMax) / 2)
     }
 
-    // Pure settlement inside setState; stamina consume deferred (AP-062)
-    setEnc((e) => {
-      const powered = markThrown(updatePower(e, powerRef.current))
-      const result = settleAttempt(powered, {
-        online: typeof navigator === 'undefined' ? true : navigator.onLine,
-        stamina: currentStamina,
-        consumeStamina: () => true,
-        skipConsume: true,
-        rng: forceOk ? () => 0 : undefined,
-      })
-
-      queueMicrotask(() => {
-        if (result.staminaCostApplied && result.staminaCostApplied > 0) {
-          if (!consumeStamina(result.staminaCostApplied)) {
-            onToast('体力不足')
-            return
-          }
-        }
-        if (result.ok) {
-          onToast(`力度 ${Math.round(powerRef.current)}`)
-          const task = savePostHitTask({
-            ...createPostHitTask(captureAttemptId, species),
-            stage: 'hit',
-            staminaConsumed: true,
-          })
-          setPostHit(task)
-          void runPipeline(task)
-        } else if (result.reason === 'no_stamina') {
-          onToast('体力不足')
-        } else if (result.reason === 'offline') {
-          onToast('离线无法捕获')
-        } else if (result.reason === 'max_attempts') {
-          onToast('本轮机会已用尽')
-          onSettled?.(false)
-        } else if (result.reason === 'already_settled') {
-          onToast('本轮已结算')
-        } else {
-          const left = result.enc.maxAttempts - result.enc.attempts.length
-          onToast(`未命中 · 还可尝试 ${left} 次`)
-        }
-      })
-
-      return result.enc
+    const powered = markThrown(updatePower(currentEncounter, powerRef.current))
+    const result = settleAttempt(powered, {
+      online: typeof navigator === 'undefined' ? true : navigator.onLine,
+      stamina: currentStamina,
+      consumeStamina,
+      rng: forceOk ? () => 0 : undefined,
     })
+
+    encRef.current = result.enc
+    setEnc(result.enc)
+
+    if (result.ok) {
+      onToast(`力度 ${Math.round(powerRef.current)}`)
+      const task = savePostHitTask({
+        ...createPostHitTask(captureAttemptId, species),
+        stage: 'hit',
+        staminaConsumed: true,
+      })
+      setPostHit(task)
+      void runPipeline(task)
+    } else if (result.reason === 'no_stamina') {
+      onToast('体力不足')
+    } else if (result.reason === 'offline') {
+      onToast('离线无法捕获')
+    } else if (result.reason === 'max_attempts') {
+      onToast('本轮机会已用尽')
+      onSettled?.(false)
+    } else if (result.reason === 'already_settled') {
+      onToast('本轮已结算')
+    } else {
+      const left = result.enc.maxAttempts - result.enc.attempts.length
+      onToast(`未命中 · 还可尝试 ${left} 次`)
+    }
   }, [
-    att?.phase,
     captureAttemptId,
     consumeStamina,
     currentStamina,
@@ -439,7 +448,9 @@ export default function CaptureScreen({
   const handleRetry = () => {
     if (!canRetry(enc)) return
     if (postHit.stage !== 'idle' && postHit.stage !== 'failed') return
-    setEnc((e) => startNextAttempt(e))
+    const next = startNextAttempt(encRef.current)
+    encRef.current = next
+    setEnc(next)
     setPostHit(createPostHitTask(captureAttemptId, species))
     onToast('新的一次投掷机会')
   }
@@ -493,8 +504,8 @@ export default function CaptureScreen({
         <CaptureProbabilityBar
           title={att?.phase === 'charging' ? `蓄力 ${power}` : '捕获判定'}
           successRate={captureRate}
-          bestMin={BEST_MIN}
-          bestMax={BEST_MAX}
+          bestMin={profile.bestMin}
+          bestMax={profile.bestMax}
         />
         <div style={{ fontSize: 12, marginTop: 8, opacity: 0.75 }}>
           置信度 {Math.round(detection.confidence * 100)}% · 按住蓄力 / 空格键

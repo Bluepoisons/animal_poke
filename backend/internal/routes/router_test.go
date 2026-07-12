@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
 
 func testConfig() *config.Config {
@@ -56,6 +57,38 @@ func TestLivezReadyz(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	// 开发无 DB 仍 ready
 	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+func TestReadyzReportsSchemaMismatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	schemaOK := false
+	r := NewRouterWithSchemaStatus(testConfig(), nil, &schemaOK)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var body map[string]interface{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "mismatch", body["schema"])
+}
+
+func TestSchemaMismatchDoesNotReachBusinessRepositories(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	schemaOK := false
+	// A non-nil handle proves that schema status, rather than connectivity alone,
+	// controls whether repositories are exposed to business routes.
+	r := NewRouterWithSchemaStatus(testConfig(), &gorm.DB{}, &schemaOK)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var body map[string]interface{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "db_unavailable", body["reason_code"])
 }
 
 func TestPingRoute_DBNil(t *testing.T) {

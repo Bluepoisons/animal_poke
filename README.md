@@ -338,7 +338,7 @@ GitHub Actions 覆盖：
 
 - **backend** — gofmt · vet · test · race · staticcheck · govulncheck  
 - **frontend** — install · build · vitest（**硬失败**，无 soft-fail）· 生产路径 coverage floor  
-- **frontend-e2e** — Playwright Chromium 全链路硬门禁（consent→detect→capture→analyze→value→sync）  
+- **frontend-e2e** — Playwright Chromium + WebKit 全链路硬门禁（consent→detect→capture→analyze→value→sync）
 - **openapi** — lint + 生成物校验  
 - **container** — Docker build + `/livez` smoke  
 - **k8s** — kustomize build  

@@ -47,7 +47,7 @@ async function readIdbSnapshot(page: import('@playwright/test').Page) {
           const q = tx.objectStore('sync_queue').getAll()
           q.onsuccess = () => {
             const items = (q.result || []) as Array<{ status?: string }>
-            pending = items.filter((i) => i.status === 'pending' || i.status === 'failed').length
+            pending = items.filter((i) => i.status !== 'synced').length
             done()
           }
           q.onerror = () => reject(q.error)
@@ -62,7 +62,7 @@ async function waitCameraReadyAndScan(page: import('@playwright/test').Page) {
   try {
     await expect(ready).toBeVisible({ timeout: 10_000 })
   } catch {
-    const reset = page.getByRole('button', { name: /重新开始/ })
+    const reset = page.getByTestId('camera-retry')
     if (await reset.isVisible().catch(() => false)) {
       await reset.click()
     }
@@ -74,6 +74,12 @@ async function waitCameraReadyAndScan(page: import('@playwright/test').Page) {
     .poll(async () => scanBtn.isDisabled(), { timeout: 15_000 })
     .toBe(false)
   await scanBtn.click()
+}
+
+async function expectCapturedCatCard(page: import('@playwright/test').Page) {
+  await expect(page.getByTestId('pokedex-screen')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: /cat.*Tabby/i })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('???', { exact: true })).toHaveCount(0)
 }
 
 test.describe('AP-014 production capture hard gate', () => {
@@ -127,10 +133,10 @@ test.describe('AP-014 production capture hard gate', () => {
     // Hard gate counters from route mock
     expect(log.auth).toBeGreaterThanOrEqual(1)
     expect(log.consent).toBeGreaterThanOrEqual(1)
-    expect(log.detect).toBeGreaterThanOrEqual(1)
-    expect(log.analyze).toBeGreaterThanOrEqual(1)
-    expect(log.value).toBeGreaterThanOrEqual(1)
-    expect(log.sync).toBeGreaterThanOrEqual(1)
+    expect(log.detect).toBe(1)
+    expect(log.analyze).toBe(1)
+    expect(log.value).toBe(1)
+    expect(log.sync).toBe(1)
 
     const detectCount = log.detect
     const analyzeCount = log.analyze
@@ -146,22 +152,17 @@ test.describe('AP-014 production capture hard gate', () => {
     expect(log.sync).toBe(syncCount)
 
     await page.getByRole('button', { name: /图鉴/ }).click()
+    await expectCapturedCatCard(page)
 
     const beforeReload = await readIdbSnapshot(page)
-    expect(beforeReload.animals).toBeGreaterThanOrEqual(1)
+    expect(beforeReload.animals).toBe(1)
     expect(beforeReload.pending).toBe(0)
 
     await page.reload()
-    // After i18n (AP-069) default locale is zh; multiple nodes may contain 图鉴
-    // (route announcer + tab + subtitle). Use .first() to avoid strict-mode multi-match.
-    await expect(
-      page.getByRole('button', { name: /图鉴|POKEDEX|Collection/i }).or(page.getByText('DISCOVER MODE')).first(),
-    ).toBeVisible({
-      timeout: 20_000,
-    })
+    await expectCapturedCatCard(page)
 
     const afterReload = await readIdbSnapshot(page)
-    expect(afterReload.animals).toBeGreaterThanOrEqual(1)
+    expect(afterReload.animals).toBe(1)
     expect(afterReload.pending).toBe(0)
   })
 

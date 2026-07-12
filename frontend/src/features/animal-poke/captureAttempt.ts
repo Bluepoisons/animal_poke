@@ -164,8 +164,8 @@ export function settleAttempt(
     staminaSpent = true
   }
   const profile = SPECIES_THROW_PROFILES[enc.species] ?? buildThrowProfile(enc.species)
-  // 使用物种区间微调概率：落在 best 内用标准曲线
-  const p = successProbability(att.power)
+  // 使用内容包提供的物种最佳力度区间计算概率。
+  const p = successProbability(att.power, profile.bestMin, profile.bestMax)
   const roll = (opts.rng || Math.random)()
   const ok = roll <= p
   const attempts = enc.attempts.map((a) =>

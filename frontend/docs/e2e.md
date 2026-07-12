@@ -20,7 +20,7 @@ Optional browser mocks: camera, geolocation, permission denial, forced capture s
 ```bash
 cd frontend
 npm ci
-npx playwright install chromium
+npx playwright install chromium webkit
 ```
 
 Node 22 LTS required (see `package.json` engines).
@@ -28,8 +28,14 @@ Node 22 LTS required (see `package.json` engines).
 ## Run locally
 
 ```bash
-# full e2e (builds + vite preview + chromium)
+# full local e2e (Vite dev server + Chromium)
 npm run test:e2e
+
+# CI-equivalent browser matrix
+CI=1 PLAYWRIGHT_WEBKIT=1 npm run test:e2e
+
+# production artifact entry
+E2E_USE_PREVIEW=1 PLAYWRIGHT_WEBKIT=1 npm run test:e2e
 
 # headed
 npm run test:e2e -- --headed
@@ -44,7 +50,7 @@ Specs: `e2e/*.spec.ts`
 
 ## CI
 
-GitHub Actions job **Frontend E2E** runs `npm run test:e2e` and **fails the PR** if the core flow breaks. Frontend unit tests no longer use `continue-on-error`.
+GitHub Actions job **Frontend E2E** runs Chromium + WebKit and **fails the PR** if the core flow breaks. Frontend unit tests no longer use `continue-on-error`.
 
 ## Full docker stack (optional, local)
 

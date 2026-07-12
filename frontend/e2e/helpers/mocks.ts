@@ -302,7 +302,12 @@ export async function installBrowserMocks(page: Page): Promise<void> {
     })
   })
 
-  await page.context().grantPermissions(['camera', 'geolocation'], {
+  // Playwright WebKit does not expose the `camera` permission through
+  // BrowserContext.grantPermissions. The media stream itself is fully mocked
+  // above, so WebKit only needs the supported geolocation permission.
+  const browserName = page.context().browser()?.browserType().name()
+  const permissions = browserName === 'webkit' ? ['geolocation'] : ['camera', 'geolocation']
+  await page.context().grantPermissions(permissions, {
     origin: 'http://127.0.0.1:4173',
   })
 }

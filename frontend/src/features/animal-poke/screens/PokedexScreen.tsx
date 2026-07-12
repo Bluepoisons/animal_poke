@@ -1,12 +1,11 @@
-import { useVirtualList, pickThumbnailSrc } from '../../../performance'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PokedexFilter, AnimalEntry, Rarity, Species } from '../data/types'
 import PageTitle from '../components/PageTitle'
 import RarityCard from '../components/RarityCard'
 import { filterAnimals } from '../data/animals'
 import { AnimalRepository } from '../../../db/repositories/animal-repository'
+import { rarityValueToTier } from '../../../db/animal-record-mapper'
 import type { AnimalRecord } from '../../../db/types'
-import type { RarityTier, SpeciesType } from '../../../types'
 import AccessibleDialog from '../../../a11y/AccessibleDialog'
 import { useI18n } from '../../../i18n'
 import { LoadingState, EmptyState, ErrorState } from '../../../components/states'
@@ -18,14 +17,16 @@ interface PokedexScreenProps {
 const filters: PokedexFilter[] = ['all', 'cat', 'goose', 'dog']
 
 function mapRecord(r: AnimalRecord): AnimalEntry {
-  const rarity = (r.rarity || 'common') as Rarity
+  const rarity = rarityValueToTier(r.rarity) as Rarity
   const species = (r.species || 'cat') as Species
+  const speciesLabel = r.species ? String(r.species) : r.no || r.id
+  const name = r.breed ? `${speciesLabel} · ${r.breed}` : speciesLabel
   return {
     id: r.id,
-    name: r.species ? String(r.species) : r.no || r.id,
+    name,
     species,
     rarity,
-    collected: Boolean(r.unlocked),
+    collected: Boolean(r.unlocked || r.isUnlocked === 1),
     region: r.location,
     location: r.location,
     captureRate: undefined,
@@ -39,26 +40,31 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<AnimalEntry | null>(null)
+  const loadGeneration = useRef(0)
   const { t } = useI18n()
 
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const rows = await AnimalRepository.getAll()
-        if (cancelled) return
-        setEntries(rows.map(mapRecord))
-      } catch {
-        if (!cancelled) setLoadError(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+  const loadEntries = useCallback(async () => {
+    const generation = ++loadGeneration.current
+    setLoading(true)
+    setLoadError(false)
+    try {
+      const rows = await AnimalRepository.getAll()
+      if (generation !== loadGeneration.current) return
+      setEntries(rows.map(mapRecord))
+    } catch {
+      if (generation !== loadGeneration.current) return
+      setLoadError(true)
+    } finally {
+      if (generation === loadGeneration.current) setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void loadEntries()
+    return () => {
+      loadGeneration.current += 1
+    }
+  }, [loadEntries])
 
   const filtered = useMemo(
     () => filterAnimals(entries as Parameters<typeof filterAnimals>[0], filter),
@@ -89,7 +95,7 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
         <ErrorState
           title={t('state.error')}
           body={t('state.error_body')}
-          primary={{ label: t('state.error_retry'), onClick: () => { setLoading(true); setLoadError(false) } }}
+          primary={{ label: t('state.error_retry'), onClick: () => void loadEntries() }}
         />
       )}
 

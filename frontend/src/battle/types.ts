@@ -77,7 +77,7 @@ export type BattleAction =
   | { type: 'START_MATCHING' }
   | { type: 'MATCH_COMPLETE'; enemy: BattlePet }
   | { type: 'BATTLE_START' }
-  | { type: 'EXECUTE_ROUND'; log: BattleLogEntry[]; playerPet: BattlePet; enemyPet: BattlePet }
+  | { type: 'EXECUTE_ROUND'; log: BattleLogEntry[]; playerPet: BattlePet; enemyPet: BattlePet; round: number }
   | { type: 'USE_ULTIMATE'; log: BattleLogEntry[]; playerPet: BattlePet; enemyPet: BattlePet }
   | { type: 'SET_STRATEGY'; strategy: StrategyType }
   | { type: 'USE_ITEM'; log: BattleLogEntry[]; playerPet: BattlePet }

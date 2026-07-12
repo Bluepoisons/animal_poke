@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   /** AP-063: enable Mock OAuth UI in development only (never production) */
   readonly VITE_AUTH_MOCK_OAUTH?: string
   readonly VITE_LOG_LEVEL?: string
+  /** Build-time switch for deterministic Playwright hooks; never set in release builds. */
+  readonly VITE_ENABLE_E2E_HOOKS?: string
 }
 
 interface ImportMeta {

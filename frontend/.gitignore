@@ -1,10 +1,12 @@
 node_modules
 dist
+dist-e2e
 coverage
 coverage-ap014
 test-results
 playwright-report
 blob-report
 playwright/.cache
+.playwright-cli
 .env
 *.local
