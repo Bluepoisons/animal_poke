@@ -207,8 +207,14 @@ export async function installBrowserMocks(
           JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
         )
       } else {
-        localStorage.removeItem('animal-poke-onboarding-v2')
-        localStorage.removeItem('animal-poke-onboarding-v1')
+        // Only seed a fresh tutorial once per browser context — never wipe on reload
+        // (AP-066 resume / persistence E2E).
+        const seeded = sessionStorage.getItem('__AP_ONB_FRESH_SEEDED')
+        if (!seeded) {
+          localStorage.removeItem('animal-poke-onboarding-v2')
+          localStorage.removeItem('animal-poke-onboarding-v1')
+          sessionStorage.setItem('__AP_ONB_FRESH_SEEDED', '1')
+        }
       }
     } catch {}
 

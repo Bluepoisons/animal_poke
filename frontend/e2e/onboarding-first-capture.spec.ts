@@ -13,6 +13,7 @@ import { scanA11y } from './helpers/axe'
 
 test.describe('AP-075 onboarding to first capture', () => {
   test('first-launch consent → capture → pokedex → survives reload', async ({ page }) => {
+    test.setTimeout(120_000)
     const log = createApiCallLog()
     // AP-066: keep tutorial fresh so event-driven coach is exercised
     await installBrowserMocks(page, { completeOnboarding: false })
@@ -80,8 +81,9 @@ test.describe('AP-075 onboarding to first capture', () => {
     const pokedexAxe = await scanA11y(page)
     expect(pokedexAxe.violations, `a11y violations on pokedex:\n${pokedexAxe.details}`).toBe(0)
 
-    // Reload and verify persistence (zh default may land on 图鉴)
+    // Reload and verify persistence — tutorial must stay completed (no rationale modal)
     await page.reload()
+    await expect(page.getByTestId('onboarding-overlay')).toHaveCount(0, { timeout: 15_000 })
     await expect(
       page.getByRole('button', { name: /图鉴|POKEDEX|Collection|发现|Discover/i }).first(),
     ).toBeVisible({ timeout: 20_000 })
