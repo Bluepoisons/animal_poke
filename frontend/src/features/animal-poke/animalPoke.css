@@ -524,6 +524,65 @@
   margin: 4px 0 8px;
 }
 
+/* AP-064 camera toolbar + training placeholder */
+.ap-camera-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 8px 16px 4px;
+}
+
+.ap-camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(111, 163, 210, 0.18), transparent 55%),
+    rgba(244, 242, 233, 0.92);
+  z-index: 2;
+}
+
+.ap-camera-placeholder__art {
+  width: min(56%, 120px);
+  height: auto;
+}
+
+.ap-camera-placeholder__badge {
+  display: inline-block;
+  max-width: 90%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: rgba(255, 253, 248, 0.95);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: var(--ink);
+}
+
+.ap-result-pill__dot[data-status='ready'] {
+  background: #3d9a5f;
+}
+.ap-result-pill__dot[data-status='denied'],
+.ap-result-pill__dot[data-status='insecure'],
+.ap-result-pill__dot[data-status='ended'] {
+  background: #d64545;
+}
+.ap-result-pill__dot[data-status='busy'],
+.ap-result-pill__dot[data-status='requesting'] {
+  background: #e0a100;
+}
+.ap-result-pill__dot[data-status='unavailable'],
+.ap-result-pill__dot[data-status='stopped'],
+.ap-result-pill__dot[data-status='idle'] {
+  background: #6f6f6f;
+}
+
 .ap-scan-box {
   position: relative;
   width: min(100%, 280px);
