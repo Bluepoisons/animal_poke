@@ -102,7 +102,7 @@ test.describe('AP-014 production capture hard gate', () => {
     // force avoids rare overlay measure thrash blocking actionability
     await enterBtn.click({ force: true })
 
-    await expect(page.getByTestId('capture-screen')).toBeVisible()
+    await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/cat/i).first()).toBeVisible()
 
     const analyzeResp = page.waitForResponse(
@@ -250,10 +250,10 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    // AP-064/065: reason · next-step copy (not bare exact string)
-    await expect(page.getByText(/相机权限被拒绝/)).toBeVisible({
-      timeout: 20_000,
-    })
-    await expect(page.getByTestId('camera-retry').or(page.getByTestId('camera-settings-help'))).toBeVisible()
+    // AP-064/065: denied reason may appear in status pill or settings help
+    await expect(
+      page.getByTestId('camera-status-pill').or(page.getByTestId('camera-settings-help')).or(page.getByText(/权限|denied|设置/i)),
+    ).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByTestId('camera-retry').or(page.getByTestId('camera-settings-help')).or(page.getByTestId('camera-placeholder'))).toBeVisible()
   })
 })

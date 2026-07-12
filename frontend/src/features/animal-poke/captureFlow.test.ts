@@ -15,6 +15,22 @@ function animal(partial: Partial<DetectedAnimal> & Pick<DetectedAnimal, 'id' | '
 }
 
 describe('captureFlow state machine', () => {
+  it('CAMERA_READY does not clobber target_confirmed', () => {
+    let s = createInitialCaptureFlow()
+    s = reduceCaptureFlow(s, { type: 'START_DETECT', photoBlob: new Blob(['x']) })
+    s = reduceCaptureFlow(s, {
+      type: 'DETECT_SUCCESS',
+      detectInferenceId: 'inf-keep',
+      detections: [animal({ id: 'a1', species: 'cat', confidence: 0.92 })],
+    })
+    expect(s.phase).toBe('target_confirmed')
+    s = reduceCaptureFlow(s, { type: 'CAMERA_READY' })
+    expect(s.phase).toBe('target_confirmed')
+    expect(s.selectedBox?.species).toBe('cat')
+    s = reduceCaptureFlow(s, { type: 'CAMERA_ERROR', code: 'camera_busy' })
+    expect(s.phase).toBe('target_confirmed')
+  })
+
   it('starts idle and becomes camera_ready', () => {
     let s = createInitialCaptureFlow()
     expect(s.phase).toBe('idle')
