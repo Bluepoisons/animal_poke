@@ -20,6 +20,7 @@ export function normalizeSettings(raw: Partial<UserSettings> | null | undefined)
   if (typeof raw.reduceMotion === 'boolean') base.reduceMotion = raw.reduceMotion
   if (typeof raw.dataSaver === 'boolean') base.dataSaver = raw.dataSaver
   if (typeof raw.syncNonSensitive === 'boolean') base.syncNonSensitive = raw.syncNonSensitive
+  if (typeof raw.homeMode === 'boolean') base.homeMode = raw.homeMode
   return base
 }
 

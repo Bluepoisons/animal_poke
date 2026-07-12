@@ -98,6 +98,8 @@ export const zh = {
   'settings.haptics': '触觉反馈',
   'settings.motion': '减少动效',
   'settings.dataSaver': '节省流量',
+  'settings.homeMode': '居家模式 (Home Mode)',
+  'settings.homeMode.hint': '关闭相机/定位依赖：训练观察、知识任务与手账路径；收益与户外等价，不是刷分捷径。',
   'settings.permissions': '系统权限说明',
   'settings.permissions.desc': '相机用于发现与捕获；定位用于附近发现点。可在系统设置中管理。',
   'settings.export': '导出本地数据',

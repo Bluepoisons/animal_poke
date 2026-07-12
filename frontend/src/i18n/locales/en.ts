@@ -89,6 +89,8 @@ export const en: Record<TranslationKey, string> = {
   'settings.haptics': 'Haptics',
   'settings.motion': 'Reduce motion',
   'settings.dataSaver': 'Data saver',
+  'settings.homeMode': 'Home Mode',
+  'settings.homeMode.hint': 'No camera/GPS required: training observe, knowledge tasks, journal routes. Rewards match outdoor — not a farm shortcut.',
   'settings.permissions': 'System permissions',
   'settings.permissions.desc': 'Camera is used for discover/capture; location for nearby points. Manage in system settings.',
   'settings.export': 'Export local data',
