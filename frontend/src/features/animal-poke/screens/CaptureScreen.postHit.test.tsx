@@ -23,7 +23,7 @@ describe('CaptureScreen post-hit stages (AP-062)', () => {
     localStorage.clear()
     sessionStorage.clear()
     localStorage.setItem(
-      'animal-poke-onboarding-v1',
+      'animal-poke-onboarding-v2',
       JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
     )
     grantConsent()

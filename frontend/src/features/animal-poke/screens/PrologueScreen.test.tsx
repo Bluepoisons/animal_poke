@@ -9,7 +9,7 @@ describe('AP-124 prologue entry', () => {
     localStorage.clear()
     sessionStorage.clear()
     localStorage.setItem(
-      'animal-poke-onboarding-v1',
+      'animal-poke-onboarding-v2',
       JSON.stringify({ step: 'done', skipped: true, completedAt: Date.now() }),
     )
     grantConsent()

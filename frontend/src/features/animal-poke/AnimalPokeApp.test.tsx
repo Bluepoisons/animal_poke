@@ -7,6 +7,7 @@ import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-libra
 import { grantConsent } from '../../compliance'
 import { AppProviders } from '../../providers/AppProviders'
 import AnimalPokeApp from './AnimalPokeApp'
+import { skipOnboarding } from './onboarding'
 import * as vision from '../../services/visionDetect'
 import { AnimalRepository } from '../../db/repositories/animal-repository'
 import { SyncQueueRepository } from '../../db/repositories/sync-queue-repository'
@@ -56,6 +57,8 @@ describe('AnimalPokeApp production entry', () => {
     localStorage.clear()
     sessionStorage.clear()
     grantConsent()
+    // AP-066: production-entry tests focus on capture loop, not first-run coach
+    skipOnboarding()
     mockCameraReady()
     location.hash = ''
   })

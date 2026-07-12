@@ -28,6 +28,13 @@ import {
 } from './captureFlow'
 import { RouteAnnouncerElement, useRouteAnnouncer } from '../../a11y'
 import OnboardingOverlay from './components/OnboardingOverlay'
+import {
+  applyOnboardingEvent,
+  isOnboardingActive,
+  loadOnboarding,
+  shouldBlockEconomyForCapture,
+  shouldDeferSensors,
+} from './onboarding'
 import { setCaptureActive } from '../../pwa/updateGate'
 
 const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'journal', 'battle', 'store', 'settings']
@@ -89,12 +96,21 @@ export default function AnimalPokeApp() {
   const gold = staminaState.gold
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [showAccount, setShowAccount] = useState(false)
+  // AP-066: re-render when tutorial advances so Discover can start camera after rationale.
+  const [onboardingTick, setOnboardingTick] = useState(0)
   useRouteAnnouncer(showAccount ? '账户设置' : ROUTE_TITLES[screen])
   const toastTimer = useRef<number | null>(null)
 
   const [flow, dispatchFlow] = useReducer(reduceCaptureFlow, undefined, createInitialCaptureFlow)
   const flowRef = useRef(flow)
   flowRef.current = flow
+
+  useEffect(() => {
+    const onOnb = () => setOnboardingTick((n) => n + 1)
+    window.addEventListener('animal-poke-onboarding-changed', onOnb)
+    return () => window.removeEventListener('animal-poke-onboarding-changed', onOnb)
+  }, [])
+
   // AP-040: block SW apply mid-capture
   useEffect(() => {
     const phase = String((flow as { phase?: string }).phase || '')
@@ -109,6 +125,10 @@ export default function AnimalPokeApp() {
   const dispatch = useCallback((event: CaptureFlowEvent) => {
     dispatchFlow(event)
   }, [])
+
+  const deferCamera = shouldDeferSensors(loadOnboarding())
+  // silence unused when only used for re-render trigger
+  void onboardingTick
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message)
@@ -152,6 +172,10 @@ export default function AnimalPokeApp() {
       return
     }
     flowRef.current = f
+    if (isOnboardingActive()) {
+      applyOnboardingEvent('throw_started')
+      window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+    }
     flushSync(() => {
       dispatchFlow({ type: 'HYDRATE', state: f })
       setScreen('capture')
@@ -232,7 +256,14 @@ export default function AnimalPokeApp() {
 
   const handleNavigateWithProgress = useCallback(
     (next: ScreenId) => {
-      if (next === 'pokedex') progression.openPokedex()
+      if (next === 'pokedex') {
+        progression.openPokedex()
+        // AP-066: opening pokedex completes the final tutorial step
+        if (isOnboardingActive() || loadOnboarding().step === 'pokedex' || loadOnboarding().step === 'reveal') {
+          applyOnboardingEvent('pokedex_opened')
+          window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+        }
+      }
       if (next === 'map') {
         // Map open counts as free safe-explore activity
         progression.safeExplore()
@@ -275,6 +306,7 @@ export default function AnimalPokeApp() {
         onNavigate={handleNavigateWithProgress}
         onEnterCapture={handleEnterCapture}
         onOpenAccount={() => setShowAccount(true)}
+        deferCamera={deferCamera}
         city={cityLabel}
         weather={weatherLabel}
       />
@@ -349,8 +381,20 @@ export default function AnimalPokeApp() {
             onSettled={(ok) => {
               if (ok) {
                 dispatch({ type: 'COMPLETE' })
-                progression.recordCapture(true)
+                // AP-066: first training capture must not feed formal economy / ranking
+                const blockEconomy = shouldBlockEconomyForCapture()
+                if (isOnboardingActive() || blockEconomy) {
+                  applyOnboardingEvent('capture_success')
+                  window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+                }
+                if (!blockEconomy) {
+                  progression.recordCapture(true)
+                }
               } else {
+                if (isOnboardingActive()) {
+                  applyOnboardingEvent('capture_failed')
+                  window.dispatchEvent(new CustomEvent('animal-poke-onboarding-changed'))
+                }
                 dispatch({ type: 'FAIL', code: 'capture_failed', message: '捕获失败' })
               }
             }}
@@ -387,7 +431,13 @@ export default function AnimalPokeApp() {
   return (
     <div className="ap-root">
       <RouteAnnouncerElement />
-      <OnboardingOverlay />
+      <OnboardingOverlay
+        onRationaleDone={() => {
+          setOnboardingTick((n) => n + 1)
+          if (screen !== 'discover') navigate('discover')
+        }}
+        onOpenPokedex={() => handleNavigateWithProgress('pokedex')}
+      />
       <a className="ap-skip-link" href="#ap-main-content">
         跳到主要内容
       </a>
