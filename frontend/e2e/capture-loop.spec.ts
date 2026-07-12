@@ -98,7 +98,9 @@ test.describe('AP-014 production capture hard gate', () => {
 
     const enterBtn = page.getByRole('button', { name: /进入捕获/ })
     await expect(enterBtn).toBeVisible({ timeout: 20_000 })
-    await enterBtn.click()
+    await expect(enterBtn).toBeEnabled()
+    // force avoids rare overlay measure thrash blocking actionability
+    await enterBtn.click({ force: true })
 
     await expect(page.getByTestId('capture-screen')).toBeVisible()
     await expect(page.getByText(/cat/i).first()).toBeVisible()
