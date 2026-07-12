@@ -129,8 +129,13 @@ export function settleAttempt(
     consumeStamina: (n: number) => boolean
     staminaCost?: number
     rng?: () => number
+    /**
+     * AP-062: when true, only check stamina and mark spent — do not call consumeStamina.
+     * Caller must consume once outside React setState to avoid render-phase updates.
+     */
+    skipConsume?: boolean
   },
-): { enc: EncounterState; ok: boolean; reason?: string } {
+): { enc: EncounterState; ok: boolean; reason?: string; staminaCostApplied?: number } {
   const att = currentAttempt(enc)
   if (!att || att.settled) {
     return { enc, ok: false, reason: 'already_settled' }
@@ -143,12 +148,18 @@ export function settleAttempt(
   }
   const cost = opts.staminaCost ?? 20
   let staminaSpent = att.staminaSpent
+  let staminaCostApplied = 0
   if (!staminaSpent) {
     if (opts.stamina < cost) {
       return { enc, ok: false, reason: 'no_stamina' }
     }
-    if (!opts.consumeStamina(cost)) {
-      return { enc, ok: false, reason: 'no_stamina' }
+    if (!opts.skipConsume) {
+      if (!opts.consumeStamina(cost)) {
+        return { enc, ok: false, reason: 'no_stamina' }
+      }
+      staminaCostApplied = cost
+    } else {
+      staminaCostApplied = cost
     }
     staminaSpent = true
   }
@@ -171,6 +182,7 @@ export function settleAttempt(
     return {
       enc: { ...enc, attempts, success: true, locked: true },
       ok: true,
+      staminaCostApplied,
     }
   }
   const locked = attempts.length >= enc.maxAttempts
@@ -178,6 +190,7 @@ export function settleAttempt(
     enc: { ...enc, attempts, locked },
     ok: false,
     reason: locked ? 'max_attempts' : 'failed',
+    staminaCostApplied,
   }
 }
 
