@@ -14,6 +14,7 @@ interface BottomTabBarProps {
 const tabs: { id: ScreenId | 'achievement'; feature: FeatureId | 'settings'; labelKey: string; icon: string; always?: boolean }[] = [
   { id: 'discover', feature: 'discover', labelKey: 'tab.camera', icon: '◎' },
   { id: 'pokedex', feature: 'pokedex', labelKey: 'tab.collection', icon: '▣' },
+  { id: 'journal', feature: 'pokedex', labelKey: 'tab.journal', icon: '📔', always: true },
   { id: 'battle', feature: 'battle', labelKey: 'tab.fight', icon: '✦' },
   { id: 'store', feature: 'store', labelKey: 'tab.store', icon: '◇' },
   { id: 'achievement', feature: 'achievement', labelKey: 'tab.achievement', icon: '☆' },

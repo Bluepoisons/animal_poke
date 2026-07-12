@@ -10,6 +10,7 @@ import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
 import SettingsScreen from '../../settings/SettingsScreen'
+import JournalScreen from './screens/JournalScreen'
 import AccountSettingsPanel from './screens/AccountSettingsPanel'
 import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
@@ -27,7 +28,7 @@ import { RouteAnnouncerElement, useRouteAnnouncer } from '../../a11y'
 import OnboardingOverlay from './components/OnboardingOverlay'
 import { setCaptureActive } from '../../pwa/updateGate'
 
-const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'battle', 'store', 'settings']
+const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'journal', 'battle', 'store', 'settings']
 
 const ROUTE_TITLES: Record<ScreenId, string> = {
   discover: '发现',
@@ -37,11 +38,12 @@ const ROUTE_TITLES: Record<ScreenId, string> = {
   battle: '对战竞技场',
   store: '商店',
   settings: '设置',
+  journal: '城市手账',
 }
 
 function parseHashScreen(): ScreenId {
   const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
-  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'battle', 'store', 'settings']
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'journal', 'battle', 'store', 'settings']
   return allowed.includes(h) ? h : 'discover'
 }
 
@@ -295,6 +297,8 @@ const progression = useProgression()
       }
       case 'pokedex':
         return <PokedexScreen onToast={showToast} />
+      case 'journal':
+        return <JournalScreen onToast={showToast} />
       case 'battle':
         return <BattleArenaScreen />
       case 'store':
