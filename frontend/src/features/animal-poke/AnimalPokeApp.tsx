@@ -11,6 +11,7 @@ import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
 import SettingsScreen from '../../settings/SettingsScreen'
 import JournalScreen from './screens/JournalScreen'
+import PrologueScreen from './screens/PrologueScreen'
 import AccountSettingsPanel from './screens/AccountSettingsPanel'
 import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
@@ -39,11 +40,12 @@ const ROUTE_TITLES: Record<ScreenId, string> = {
   store: '商店',
   settings: '设置',
   journal: '城市手账',
+  prologue: '序章',
 }
 
 function parseHashScreen(): ScreenId {
   const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
-  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'journal', 'battle', 'store', 'settings']
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'journal', 'prologue', 'battle', 'store', 'settings']
   return allowed.includes(h) ? h : 'discover'
 }
 
@@ -298,7 +300,14 @@ const progression = useProgression()
       case 'pokedex':
         return <PokedexScreen onToast={showToast} />
       case 'journal':
-        return <JournalScreen onToast={showToast} />
+        return <JournalScreen onToast={showToast} onOpenPrologue={() => navigate('prologue')} />
+      case 'prologue':
+        return (
+          <PrologueScreen
+            onToast={showToast}
+            onFinished={() => navigate('journal')}
+          />
+        )
       case 'battle':
         return <BattleArenaScreen />
       case 'store':

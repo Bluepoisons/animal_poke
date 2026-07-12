@@ -21,13 +21,14 @@ type Tab = 'overview' | 'clues' | 'relations' | 'chapters' | 'echoes'
 
 interface JournalScreenProps {
   onToast?: (msg: string) => void
+  onOpenPrologue?: () => void
 }
 
 /**
  * AP-121 城市手账：章节目标、线索板、关系回顾、选择回响。
  * 与图鉴分工：图鉴=动物事实；手账=人与城市故事。
  */
-export default function JournalScreen({ onToast }: JournalScreenProps) {
+export default function JournalScreen({ onToast, onOpenPrologue }: JournalScreenProps) {
   const [state, setState] = useState<JournalState>(() => loadJournal())
   const [tab, setTab] = useState<Tab>('overview')
   const [spoilerOn, setSpoilerOn] = useState(false)
@@ -118,6 +119,16 @@ export default function JournalScreen({ onToast }: JournalScreenProps) {
               ? influences.map((i) => i.label).join('、')
               : '暂无（完成选择后会出现）'}
           </p>
+          {onOpenPrologue && state.currentChapterId === 'prologue.blank_page' && (
+            <button
+              type="button"
+              data-testid="journal-start-prologue"
+              style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, border: '2px solid #FF8A4C', background: '#FFE0C8' }}
+              onClick={onOpenPrologue}
+            >
+              开始序章《第一张空白页》
+            </button>
+          )}
           {chapter && (
             <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: '#FFF3E0' }}>
               <p style={{ margin: 0, fontSize: 13 }}>Home Mode：{chapter.routes.homeMode}</p>
