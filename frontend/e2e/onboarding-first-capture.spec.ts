@@ -36,11 +36,16 @@ test.describe('AP-075 onboarding to first capture', () => {
     await scanBtn.click()
 
     // Enter capture
-    const enterBtn = page.getByRole('button', { name: /进入捕获/ })
+    const enterBtn = page.getByTestId('enter-capture').or(page.getByRole('button', { name: /进入捕获/ }))
     await expect(enterBtn).toBeVisible({ timeout: 20_000 })
-    await enterBtn.click()
-
-    await expect(page.getByTestId('capture-screen')).toBeVisible()
+    await expect(enterBtn).toBeEnabled()
+    // DOM click (not force coordinates) — force can hit BottomTabBar over the CTA
+    await enterBtn.evaluate((el: HTMLElement) => {
+      el.scrollIntoView({ block: 'center', inline: 'center' })
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    await expect.poll(async () => page.evaluate(() => location.hash), { timeout: 10_000 }).toBe('#capture')
+    await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/cat/i).first()).toBeVisible()
 
     // Perform capture

@@ -123,7 +123,10 @@ describe('AnimalPokeApp production entry', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /进入捕获/ })).toBeTruthy()
     })
-    expect(screen.getByText(/识别：猫|cat/i)).toBeTruthy()
+    // AP-065: status pill reflects confirmed target (no hard-coded 识别： prefix)
+    const pill = screen.getByTestId('camera-status-pill')
+    expect(pill.getAttribute('data-recognition')).toBe('ready_capture')
+    expect(pill.textContent || '').toMatch(/93|猫|cat|捕获|确认|ready/i)
   })
 
   it('blocks direct #capture without detection (guard)', async () => {

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import type { ScreenId } from './data/types'
 import PhoneFrame from './components/PhoneFrame'
 import BottomTabBar from './components/BottomTabBar'
@@ -129,26 +130,52 @@ export default function AnimalPokeApp() {
   )
 
   const handleEnterCapture = useCallback(() => {
-    const f = flowRef.current
+    let f = flowRef.current
     if (!f.selectedBox || !f.detectInferenceId || !f.photoBlob) {
       showToast('识别数据不完整')
       navigate('discover', { replace: true })
       return
     }
-    if (!canEnterCapture(f) && f.phase !== 'target_confirmed') {
-      dispatch({ type: 'CONFIRM_TARGET' })
+    // Build the full post-enter snapshot offline, then HYDRATE + setScreen in one
+    // flushSync so CaptureScreen never mounts on a lagging reducer state.
+    if (f.phase !== 'target_confirmed' && f.phase !== 'capturing') {
+      f = reduceCaptureFlow(f, { type: 'CONFIRM_TARGET' })
+      if (f.phase === 'failed') {
+        showToast(f.errorMessage || '无法确认目标')
+        return
+      }
     }
     const attemptId = newAttemptId()
-    dispatch({ type: 'ENTER_CAPTURE', attemptId })
-    navigate('capture')
-  }, [dispatch, navigate, showToast])
+    f = reduceCaptureFlow(f, { type: 'ENTER_CAPTURE', attemptId })
+    if (f.phase === 'failed' || !f.captureAttemptId || !f.selectedBox) {
+      showToast(f.errorMessage || '无法进入捕获')
+      return
+    }
+    flowRef.current = f
+    flushSync(() => {
+      dispatchFlow({ type: 'HYDRATE', state: f })
+      setScreen('capture')
+    })
+    flowRef.current = f
+    if (typeof history !== 'undefined') {
+      history.pushState({ screen: 'capture' }, '', '#capture')
+    }
+  }, [showToast, navigate])
 
   // 路由守卫：#capture 必须有确认目标
   useEffect(() => {
     const applyRoute = (h: ScreenId) => {
       if (h === 'capture') {
         const f = flowRef.current
-        if (!canEnterCapture(f) && f.phase !== 'capturing' && f.phase !== 'completed') {
+        const ready =
+          !!f.captureAttemptId &&
+          !!f.selectedBox &&
+          !!f.detectInferenceId &&
+          (canEnterCapture(f) ||
+            f.phase === 'capturing' ||
+            f.phase === 'completed' ||
+            f.phase === 'target_confirmed')
+        if (!ready) {
           showToast('请先完成发现与识别')
           navigate('discover', { replace: true })
           return
@@ -282,19 +309,42 @@ export default function AnimalPokeApp() {
           />
         )
       case 'capture': {
-        if (!flow.selectedBox || !flow.detectInferenceId || !flow.captureAttemptId) {
+        // Prefer flowRef: ENTER_CAPTURE updates the ref before navigate, while
+        // useReducer state may lag one paint (E2E enter-capture race).
+        let cap = flowRef.current.captureAttemptId
+          ? flowRef.current
+          : flow.captureAttemptId
+            ? flow
+            : flowRef.current.selectedBox
+              ? flowRef.current
+              : flow
+        if (!cap.selectedBox || !cap.detectInferenceId || !cap.photoBlob) {
+          queueMicrotask(() => handleInvalidCapture())
+          return discoverBlock
+        }
+        // Last-resort: materialize attempt id if navigation won the race
+        if (!cap.captureAttemptId) {
+          const attemptId = newAttemptId()
+          cap = reduceCaptureFlow(cap, { type: 'ENTER_CAPTURE', attemptId })
+          flowRef.current = cap
+          queueMicrotask(() => dispatchFlow({ type: 'ENTER_CAPTURE', attemptId }))
+        }
+        const selected = cap.selectedBox
+        const inferenceId = cap.detectInferenceId
+        const attemptId = cap.captureAttemptId
+        if (!selected || !inferenceId || !attemptId) {
           queueMicrotask(() => handleInvalidCapture())
           return discoverBlock
         }
         return (
           <CaptureScreen
             onToast={showToast}
-            species={flow.selectedBox.species}
-            detection={flow.selectedBox}
-            detectInferenceId={flow.detectInferenceId}
-            photoBlob={flow.photoBlob}
-            targetId={flow.targetId}
-            captureAttemptId={flow.captureAttemptId}
+            species={selected.species}
+            detection={selected}
+            detectInferenceId={inferenceId}
+            photoBlob={cap.photoBlob}
+            targetId={cap.targetId}
+            captureAttemptId={attemptId}
             onInvalidAccess={handleInvalidCapture}
             onSettled={(ok) => {
               if (ok) {

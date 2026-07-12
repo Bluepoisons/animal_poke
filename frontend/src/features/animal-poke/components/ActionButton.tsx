@@ -3,6 +3,7 @@ interface ActionButtonProps {
   onClick?: () => void
   disabled?: boolean
   tone?: 'pink' | 'blue' | 'yellow'
+  'data-testid'?: string
 }
 
 export default function ActionButton({
@@ -10,6 +11,7 @@ export default function ActionButton({
   onClick,
   disabled = false,
   tone = 'pink',
+  'data-testid': testId,
 }: ActionButtonProps) {
   const toneClass =
     tone === 'blue'
@@ -24,6 +26,7 @@ export default function ActionButton({
       onClick={onClick}
       disabled={disabled}
       type="button"
+      data-testid={testId}
     >
       {children}
     </button>

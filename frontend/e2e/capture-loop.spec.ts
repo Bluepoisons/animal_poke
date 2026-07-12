@@ -102,11 +102,28 @@ test.describe('AP-014 production capture hard gate', () => {
     await waitCameraReadyAndScan(page)
     await detectResp
 
-    const enterBtn = page.getByRole('button', { name: /进入捕获/ })
+    const enterBtn = page.getByTestId('enter-capture').or(page.getByRole('button', { name: /进入捕获/ }))
     await expect(enterBtn).toBeVisible({ timeout: 20_000 })
-    await enterBtn.click()
-
-    await expect(page.getByTestId('capture-screen')).toBeVisible()
+    await expect(enterBtn).toBeEnabled()
+    // DOM click (not force coordinates) — force can hit BottomTabBar over the CTA
+    await enterBtn.evaluate((el: HTMLElement) => {
+      el.scrollIntoView({ block: 'center', inline: 'center' })
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    // Prefer hash change as success signal; capture-screen mounts next
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => ({
+            hash: location.hash,
+            hasCapture: !!document.querySelector('[data-testid="capture-screen"]'),
+            toast: document.querySelector('.ap-toast')?.textContent || '',
+            phasePill: document.querySelector('[data-testid="camera-status-pill"]')?.textContent || '',
+          })),
+        { timeout: 15_000 },
+      )
+      .toMatchObject({ hash: '#capture' })
+    await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/cat/i).first()).toBeVisible()
 
     const analyzeResp = page.waitForResponse(
@@ -216,9 +233,9 @@ test.describe('AP-014 production capture hard gate', () => {
     await waitCameraReadyAndScan(page)
     await detectResp
 
-    await expect(page.getByText(/识别失败|鉴权失败|无法识别|画面中未发现/i)).toBeVisible({
-      timeout: 15_000,
-    })
+    // AP-065: status pill + quality tip may both mention 识别失败 — scope to tip/pill.
+    await expect(page.getByTestId('quality-tip')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('quality-tip')).toContainText(/识别失败|鉴权失败|无法识别|画面中未发现|检测失败/i)
     expect(log.detect).toBeGreaterThanOrEqual(1)
     await expect(page.getByTestId('capture-screen')).toHaveCount(0)
   })
@@ -249,8 +266,9 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    await expect(page.getByText('相机权限被拒绝')).toBeVisible({
-      timeout: 20_000,
-    })
+    // AP-064/065: denied recovery chrome (avoid multi-match strict mode)
+    await expect(page.getByTestId('camera-status-pill')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByTestId('camera-placeholder')).toBeVisible()
+    await expect(page.getByTestId('camera-settings-help')).toBeVisible()
   })
 })

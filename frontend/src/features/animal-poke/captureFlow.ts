@@ -56,6 +56,8 @@ export type CaptureFlowEvent =
   | { type: 'COMPLETE' }
   | { type: 'FAIL'; code: string; message?: string }
   | { type: 'RESET' }
+  /** Replace full flow snapshot (enter-capture race / recovery). */
+  | { type: 'HYDRATE'; state: CaptureFlowState }
 
 export const SUPPORTED_SPECIES: readonly SpeciesType[] = capturableSpeciesIds()
 
@@ -112,11 +114,40 @@ export function reduceCaptureFlow(
     case 'RESET':
       return createInitialCaptureFlow()
 
+    case 'HYDRATE':
+      return { ...event.state, updatedAt: Date.now() }
+
     case 'CAMERA_READY':
-      if (state.phase === 'detecting' || state.phase === 'capturing') return state
+      // Never clobber an in-progress recognition / capture pipeline.
+      // Re-firing CAMERA_READY (effect re-run, remount, facing switch) used to
+      // reset target_confirmed → camera_ready and break Enter Capture (AP-065 E2E).
+      if (
+        state.phase === 'detecting' ||
+        state.phase === 'capturing' ||
+        state.phase === 'target_confirmed' ||
+        state.phase === 'completed' ||
+        state.phase === 'generating' ||
+        state.phase === 'saving' ||
+        state.phase === 'syncing'
+      ) {
+        return state
+      }
       return touch({ phase: 'camera_ready', errorCode: null, errorMessage: null })
 
     case 'CAMERA_ERROR':
+      // Keep detection payload if we already confirmed a target; only surface
+      // camera faults when idle / preparing / already failed.
+      if (
+        state.phase === 'target_confirmed' ||
+        state.phase === 'capturing' ||
+        state.phase === 'detecting' ||
+        state.phase === 'completed' ||
+        state.phase === 'generating' ||
+        state.phase === 'saving' ||
+        state.phase === 'syncing'
+      ) {
+        return state
+      }
       return touch({
         phase: 'failed',
         errorCode: event.code,
