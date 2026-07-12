@@ -42,8 +42,7 @@ export function rarityValueToTier(value: unknown): RarityTier {
 export interface GeneratedAnimalRecordOptions {
   capturedAt?: number
   location?: string
-  latitude?: number
-  longitude?: number
+  coords?: { lat?: number; lng?: number }
   seed?: number
 }
 
@@ -53,8 +52,8 @@ export function generatedAnimalToRecord(
   options: GeneratedAnimalRecordOptions = {},
 ): AnimalRecord {
   const capturedAt = finiteNumber(options.capturedAt, Date.now())
-  const latitude = finiteNumber(options.latitude, 0)
-  const longitude = finiteNumber(options.longitude, 0)
+  const latitude = finiteNumber(options.coords?.lat, 0)
+  const longitude = finiteNumber(options.coords?.lng, 0)
   const id = animal.sessionId
 
   return {

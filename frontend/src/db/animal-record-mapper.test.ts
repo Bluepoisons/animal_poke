@@ -52,8 +52,7 @@ describe('animal record mapping', () => {
     const record = generatedAnimalToRecord(generatedAnimal(), {
       capturedAt: Date.UTC(2026, 6, 12, 3, 4, 5),
       location: '宁波',
-      latitude: 29.87,
-      longitude: 121.55,
+      coords: { lat: 29.87, lng: 121.55 },
       seed: 42,
     })
 

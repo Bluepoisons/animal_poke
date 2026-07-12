@@ -251,12 +251,16 @@ jobs:
           echo "Pushed backend@${BE_DIGEST}"
           echo "Pushed frontend@${FE_DIGEST}"
       - name: Optional cosign sign
-        if: ${{ github.event.inputs.skip_push != 'true' && secrets.COSIGN_PRIVATE_KEY != '' }}
+        if: ${{ github.event.inputs.skip_push != 'true' }}
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "${COSIGN_PRIVATE_KEY:-}" ]; then
+            echo "COSIGN_PRIVATE_KEY unset - skipping image signing"
+            exit 0
+          fi
           curl -sL "https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64" -o /tmp/cosign
           chmod +x /tmp/cosign
           TAG="${{ needs.resolve.outputs.image_tag }}"
@@ -378,12 +382,16 @@ jobs:
             --previous-tag "${IMAGE_TAG}" \
             --reason "staging-smoke-hook"
       - name: Optional kubectl apply staging
-        if: ${{ github.event.inputs.deploy_staging == 'true' && github.event.inputs.dry_run_only != 'true' && secrets.KUBECONFIG_STAGING != '' }}
+        if: ${{ github.event.inputs.deploy_staging == 'true' && github.event.inputs.dry_run_only != 'true' }}
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_STAGING }}
           IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
         run: |
           set -euo pipefail
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "KUBECONFIG_STAGING unset - skipping staging apply"
+            exit 0
+          fi
           echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
           export KUBECONFIG=/tmp/kubeconfig
           curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz
@@ -476,13 +484,16 @@ jobs:
             --previous-tag "${IMAGE_TAG}" \
             --reason "canary-plan"
       - name: Apply canary (when kubeconfig present)
-        if: ${{ secrets.KUBECONFIG_PRODUCTION != '' }}
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_PRODUCTION }}
           IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
           CANARY_PCT: ${{ github.event.inputs.canary_percent }}
         run: |
           set -euo pipefail
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "KUBECONFIG_PRODUCTION unset - skipping canary apply"
+            exit 0
+          fi
           echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
           export KUBECONFIG=/tmp/kubeconfig
           # Annotate for canary percentage; full mesh/ingress split is env-specific.
@@ -520,7 +531,7 @@ jobs:
   production:
     name: Production promote
     runs-on: ubuntu-latest
-    needs: [resolve, build-images, canary]
+    needs: [resolve, build-images, canary-gate, canary]
     if: ${{ github.event.inputs.promote_production == 'true' && needs.canary-gate.outputs.approved == 'true' && github.event.inputs.dry_run_only != 'true' }}
     steps:
       - uses: actions/checkout@v7
@@ -547,12 +558,15 @@ jobs:
           runbook: docs/runbooks/release.md
           EOF
       - name: Apply production (when kubeconfig present)
-        if: ${{ secrets.KUBECONFIG_PRODUCTION != '' }}
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_PRODUCTION }}
           IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
         run: |
           set -euo pipefail
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "KUBECONFIG_PRODUCTION unset - skipping production apply"
+            exit 0
+          fi
           echo "${KUBECONFIG_B64}" | base64 -d > /tmp/kubeconfig
           export KUBECONFIG=/tmp/kubeconfig
           curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar xz

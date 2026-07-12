@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/test'
 
 /**
  * AP-014 / AP-040 / AP-075 E2E — production entry via Vite + page.route API mocks.
@@ -12,10 +12,19 @@ const usePreview = process.env.E2E_USE_PREVIEW === '1'
 const enableMobile = process.env.PLAYWRIGHT_MOBILE === '1'
 const ci = !!process.env.CI
 
-const projects: { name: string; use: (typeof devices)[string] }[] = [
+const chromiumCameraUse = {
+  launchOptions: {
+    args: [
+      '--use-fake-ui-for-media-stream',
+      '--use-fake-device-for-media-stream',
+    ],
+  },
+}
+
+const projects: NonNullable<PlaywrightTestConfig['projects']> = [
   {
     name: 'chromium',
-    use: { ...devices['Desktop Chrome'] },
+    use: { ...devices['Desktop Chrome'], ...chromiumCameraUse },
   },
 ]
 
@@ -31,7 +40,7 @@ if (enableMobile) {
   projects.push(
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 7'] },
+      use: { ...devices['Pixel 7'], ...chromiumCameraUse },
     },
     {
       name: 'mobile-safari',
@@ -60,12 +69,6 @@ export default defineConfig({
     // API hard-gate specs use page.route(); service-worker-owned requests
     // bypass that interception and would leak to the local backend proxy.
     serviceWorkers: 'block',
-    launchOptions: {
-      args: [
-        '--use-fake-ui-for-media-stream',
-        '--use-fake-device-for-media-stream',
-      ],
-    },
   },
   projects,
   webServer: {

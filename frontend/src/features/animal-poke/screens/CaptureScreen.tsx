@@ -225,8 +225,7 @@ export default function CaptureScreen({
             await AnimalRepository.add(
               generatedAnimalToRecord(generated, {
                 location: lbs.state.cityName,
-                latitude: position?.lat,
-                longitude: position?.lng,
+                coords: position ?? undefined,
               }),
             )
           }
