@@ -56,6 +56,8 @@ export type CaptureFlowEvent =
   | { type: 'COMPLETE' }
   | { type: 'FAIL'; code: string; message?: string }
   | { type: 'RESET' }
+  /** Replace full flow snapshot (enter-capture race / recovery). */
+  | { type: 'HYDRATE'; state: CaptureFlowState }
 
 export const SUPPORTED_SPECIES: readonly SpeciesType[] = capturableSpeciesIds()
 
@@ -111,6 +113,9 @@ export function reduceCaptureFlow(
   switch (event.type) {
     case 'RESET':
       return createInitialCaptureFlow()
+
+    case 'HYDRATE':
+      return { ...event.state, updatedAt: Date.now() }
 
     case 'CAMERA_READY':
       // Never clobber an in-progress recognition / capture pipeline.

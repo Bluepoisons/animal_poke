@@ -129,8 +129,8 @@ const progression = useProgression()
       navigate('discover', { replace: true })
       return
     }
-    // Advance flow state + ref in the same paint as screen switch so CaptureScreen
-    // never mounts without captureAttemptId (E2E enter-capture race).
+    // Build the full post-enter snapshot offline, then HYDRATE + setScreen in one
+    // flushSync so CaptureScreen never mounts on a lagging reducer state.
     if (f.phase !== 'target_confirmed' && f.phase !== 'capturing') {
       f = reduceCaptureFlow(f, { type: 'CONFIRM_TARGET' })
       if (f.phase === 'failed') {
@@ -140,20 +140,16 @@ const progression = useProgression()
     }
     const attemptId = newAttemptId()
     f = reduceCaptureFlow(f, { type: 'ENTER_CAPTURE', attemptId })
-    if (f.phase === 'failed' || !f.captureAttemptId) {
+    if (f.phase === 'failed' || !f.captureAttemptId || !f.selectedBox) {
       showToast(f.errorMessage || '无法进入捕获')
       return
     }
     flowRef.current = f
     flushSync(() => {
-      // Apply ENTER_CAPTURE against latest reducer state; if still missing attempt, force via ref path
-      dispatchFlow({ type: 'ENTER_CAPTURE', attemptId })
+      dispatchFlow({ type: 'HYDRATE', state: f })
       setScreen('capture')
     })
-    // Keep ref authoritative after flushSync (reducer may have been one event behind)
-    if (!flowRef.current.captureAttemptId) {
-      flowRef.current = f
-    }
+    flowRef.current = f
     if (typeof history !== 'undefined') {
       history.pushState({ screen: 'capture' }, '', '#capture')
     }
