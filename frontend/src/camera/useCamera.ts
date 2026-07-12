@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { isForceCameraReady } from '../e2eFlags'
+import { mapMediaError, oppositeFacing } from './cameraStatus'
 
 export type CameraStatus =
   | 'idle'
@@ -10,6 +11,8 @@ export type CameraStatus =
   | 'busy'
   | 'stopped'
   | 'insecure'
+  /** Live track ended (OS preempted, unplug, or browser released). */
+  | 'ended'
 
 export type CameraFacing = 'environment' | 'user'
 
@@ -23,6 +26,8 @@ export type UseCameraResult = {
   switchFacing: () => Promise<void>
   captureFrame: (maxEdge?: number, quality?: number) => Promise<Blob | null>
   isReady: boolean
+  /** Soft restart after busy / track ended / visibility return. */
+  retry: () => Promise<void>
 }
 
 function stopStream(stream: MediaStream | null) {
@@ -35,6 +40,17 @@ function stopStream(stream: MediaStream | null) {
   })
 }
 
+function isInsecureHttpContext(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.isSecureContext === false &&
+    typeof location !== 'undefined' &&
+    location.protocol === 'http:' &&
+    location.hostname !== 'localhost' &&
+    location.hostname !== '127.0.0.1'
+  )
+}
+
 export function useCamera(): UseCameraResult {
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [error, setError] = useState<string | undefined>()
@@ -44,32 +60,67 @@ export function useCamera(): UseCameraResult {
   /** 每次 start 递增；过期 generation 的 Promise 结果必须丢弃并 stop tracks */
   const genRef = useRef(0)
   const mountedRef = useRef(true)
+  const facingRef = useRef<CameraFacing>('environment')
+  const statusRef = useRef<CameraStatus>('idle')
+
+  useEffect(() => {
+    facingRef.current = facing
+  }, [facing])
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
+  const detachTrackEnded = useRef<(() => void) | null>(null)
+
+  const clearTrackEnded = useCallback(() => {
+    detachTrackEnded.current?.()
+    detachTrackEnded.current = null
+  }, [])
+
+  const bindTrackEnded = useCallback(
+    (stream: MediaStream, gen: number) => {
+      clearTrackEnded()
+      const onEnded = () => {
+        if (gen !== genRef.current || !mountedRef.current) return
+        // Another track may still be live; only fail if all video tracks ended.
+        const live = stream.getVideoTracks().some((t) => t.readyState === 'live')
+        if (live) return
+        stopStream(stream)
+        if (streamRef.current === stream) streamRef.current = null
+        if (videoRef.current) videoRef.current.srcObject = null
+        setStatus('ended')
+        setError('track_ended')
+      }
+      const tracks = stream.getVideoTracks()
+      tracks.forEach((t) => t.addEventListener('ended', onEnded))
+      detachTrackEnded.current = () => {
+        tracks.forEach((t) => t.removeEventListener('ended', onEnded))
+      }
+    },
+    [clearTrackEnded],
+  )
 
   const stop = useCallback(() => {
     genRef.current += 1 // invalidate in-flight start
+    clearTrackEnded()
     stopStream(streamRef.current)
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     if (mountedRef.current) setStatus('stopped')
-  }, [])
+  }, [clearTrackEnded])
 
   const start = useCallback(async (nextFacing?: CameraFacing) => {
     // E2E hard-gate: skip real media devices
     if (isForceCameraReady()) {
-      if (nextFacing) setFacing(nextFacing)
+      if (nextFacing) {
+        setFacing(nextFacing)
+        facingRef.current = nextFacing
+      }
       setStatus('ready')
       setError(undefined)
       return
     }
-    // 生产 HTTPS 要求；jsdom/测试环境 isSecureContext 常为 false，仅在明确 http 远程时拦截
-    if (
-      typeof window !== 'undefined' &&
-      window.isSecureContext === false &&
-      typeof location !== 'undefined' &&
-      location.protocol === 'http:' &&
-      location.hostname !== 'localhost' &&
-      location.hostname !== '127.0.0.1'
-    ) {
+    if (isInsecureHttpContext()) {
       setStatus('insecure')
       setError('insecure_context')
       return
@@ -80,10 +131,14 @@ export function useCamera(): UseCameraResult {
       return
     }
 
-    const facingMode = nextFacing || facing
-    if (nextFacing) setFacing(nextFacing)
+    const facingMode = nextFacing || facingRef.current
+    if (nextFacing) {
+      setFacing(nextFacing)
+      facingRef.current = nextFacing
+    }
 
-    // 先停旧流，再开新 generation
+    // 先停旧流，再开新 generation — 切换镜头不遗留 track
+    clearTrackEnded()
     stopStream(streamRef.current)
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
@@ -114,7 +169,10 @@ export function useCamera(): UseCameraResult {
               height: { ideal: 720 },
             },
           })
-          if (gen === genRef.current) setFacing('user')
+          if (gen === genRef.current) {
+            setFacing('user')
+            facingRef.current = 'user'
+          }
         } else {
           throw first
         }
@@ -127,40 +185,37 @@ export function useCamera(): UseCameraResult {
       }
 
       streamRef.current = stream
+      bindTrackEnded(stream, gen)
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => {})
       }
 
       if (gen !== genRef.current || !mountedRef.current) {
+        clearTrackEnded()
         stopStream(stream)
         streamRef.current = null
         return
       }
       setStatus('ready')
+      setError(undefined)
     } catch (e: unknown) {
       if (gen !== genRef.current) return
       const name = (e as { name?: string })?.name || ''
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        setStatus('denied')
-        setError('permission_denied')
-      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-        setStatus('busy')
-        setError('camera_busy')
-      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        setStatus('unavailable')
-        setError('no_camera')
-      } else {
-        setStatus('unavailable')
-        setError(name || 'camera_error')
-      }
+      const mapped = mapMediaError(name)
+      setStatus(mapped.status)
+      setError(mapped.error)
     }
-  }, [facing])
+  }, [bindTrackEnded, clearTrackEnded])
 
   const switchFacing = useCallback(async () => {
-    const next: CameraFacing = facing === 'environment' ? 'user' : 'environment'
+    const next = oppositeFacing(facingRef.current)
     await start(next)
-  }, [facing, start])
+  }, [start])
+
+  const retry = useCallback(async () => {
+    await start(facingRef.current)
+  }, [start])
 
   const captureFrame = useCallback(
     async (maxEdge = 1280, quality = 0.85) => {
@@ -175,7 +230,7 @@ export function useCamera(): UseCameraResult {
         return new Blob([bytes], { type: 'image/jpeg' })
       }
       const video = videoRef.current
-      if (!video || status !== 'ready') return null
+      if (!video || statusRef.current !== 'ready') return null
       const vw = video.videoWidth || 640
       const vh = video.videoHeight || 480
       const scale = Math.min(1, maxEdge / Math.max(vw, vh))
@@ -191,16 +246,30 @@ export function useCamera(): UseCameraResult {
         canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
       })
     },
-    [status],
+    [],
   )
 
   useEffect(() => {
     mountedRef.current = true
     const onVis = () => {
-      const enable = !document.hidden
-      streamRef.current?.getTracks().forEach((t) => {
-        t.enabled = enable
+      const stream = streamRef.current
+      if (document.hidden) {
+        stream?.getTracks().forEach((t) => {
+          t.enabled = false
+        })
+        return
+      }
+      // Returning to foreground
+      stream?.getTracks().forEach((t) => {
+        t.enabled = true
       })
+      // If tracks died while backgrounded, recover
+      if (statusRef.current === 'ready' || statusRef.current === 'ended') {
+        const live = stream?.getVideoTracks().some((t) => t.readyState === 'live')
+        if (!live) {
+          void start(facingRef.current)
+        }
+      }
     }
     document.addEventListener('visibilitychange', onVis)
     return () => {
@@ -208,7 +277,7 @@ export function useCamera(): UseCameraResult {
       document.removeEventListener('visibilitychange', onVis)
       stop()
     }
-  }, [stop])
+  }, [start, stop])
 
   return {
     status,
@@ -220,5 +289,6 @@ export function useCamera(): UseCameraResult {
     switchFacing,
     captureFrame,
     isReady: status === 'ready',
+    retry,
   }
 }
