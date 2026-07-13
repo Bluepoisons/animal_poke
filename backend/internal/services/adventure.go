@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+	"time"
 	"unicode/utf8"
 
 	"animalpoke/backend/internal/ai/prompts"
@@ -16,6 +17,12 @@ import (
 )
 
 const adventureDisclaimer = "人工智能生成的全中文幻想冒险，仅用于虚构玩法，不是现实记录"
+
+const (
+	adventureGenerationAttempts = 2
+	adventureMaxOutputTokens    = 2048
+	adventureGenerationTimeout  = 50 * time.Second
+)
 
 var adventureThemeNames = map[string]string{
 	"mistwood":   "雾灯森径",
@@ -169,44 +176,14 @@ func (s *AIService) GenerateAdventureContext(ctx context.Context, input Adventur
 	if err != nil {
 		return nil, err
 	}
-	body, model, err := s.callText(ctx, prompt)
-	if err != nil {
+	generated, model, reasonCode, generationErr := s.generateAdventure(ctx, prompt, input.Nickname)
+	if generationErr != nil {
 		if !s.mock {
-			return nil, fmt.Errorf("adventure provider failed: %w", err)
+			return nil, generationErr
 		}
 		fallback.Source = "template"
 		fallback.Degraded = true
-		fallback.ReasonCode = "adventure_fallback"
-		fallback.Model = model
-		return fallback, nil
-	}
-	jsonText, err := s.parseResponsesResponse(body)
-	if err != nil {
-		if !s.mock {
-			return nil, fmt.Errorf("adventure response parse failed: %w", err)
-		}
-		fallback.Source = "template"
-		fallback.Degraded = true
-		fallback.ReasonCode = "adventure_parse_failed"
-		fallback.Model = model
-		return fallback, nil
-	}
-
-	var generated generatedAdventure
-	validationErr := json.Unmarshal([]byte(jsonText), &generated)
-	if validationErr == nil {
-		validationErr = simplifyGeneratedAdventure(&generated)
-	}
-	if validationErr == nil {
-		validationErr = validateGeneratedAdventure(generated, input.Nickname)
-	}
-	if validationErr != nil {
-		if !s.mock {
-			return nil, fmt.Errorf("adventure response failed validation")
-		}
-		fallback.Source = "template"
-		fallback.Degraded = true
-		fallback.ReasonCode = "adventure_invalid"
+		fallback.ReasonCode = reasonCode
 		fallback.Model = model
 		return fallback, nil
 	}
@@ -230,6 +207,54 @@ func (s *AIService) GenerateAdventureContext(ctx context.Context, input Adventur
 		PromptVersion:  prompts.AdventurePromptVersion,
 	}
 	return result, nil
+}
+
+func (s *AIService) generateAdventure(ctx context.Context, prompt, nickname string) (generatedAdventure, string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, adventureGenerationTimeout)
+	defer cancel()
+
+	var (
+		generated generatedAdventure
+		model     string
+		reason    string
+		lastErr   error
+	)
+	for attempt := 0; attempt < adventureGenerationAttempts; attempt++ {
+		attemptPrompt := prompt
+		if lastErr != nil {
+			attemptPrompt += fmt.Sprintf("\n\nThe previous attempt was rejected: %s. Generate a complete new JSON object that fixes this issue and follows every original rule.", lastErr)
+		}
+
+		body, attemptModel, err := s.callTextWithMaxOutputTokens(ctx, attemptPrompt, adventureMaxOutputTokens)
+		model = attemptModel
+		if err != nil {
+			return generatedAdventure{}, model, "adventure_fallback", fmt.Errorf("adventure provider failed: %w", err)
+		}
+		generated, reason, err = s.parseAndValidateAdventure(body, nickname)
+		if err == nil {
+			return generated, model, "", nil
+		}
+		lastErr = err
+	}
+	return generatedAdventure{}, model, reason, fmt.Errorf("adventure response failed validation after %d attempts: %w", adventureGenerationAttempts, lastErr)
+}
+
+func (s *AIService) parseAndValidateAdventure(body []byte, nickname string) (generatedAdventure, string, error) {
+	jsonText, err := s.parseResponsesResponse(body)
+	if err != nil {
+		return generatedAdventure{}, "adventure_parse_failed", fmt.Errorf("parse response: %w", err)
+	}
+	var generated generatedAdventure
+	if err := json.Unmarshal([]byte(jsonText), &generated); err != nil {
+		return generatedAdventure{}, "adventure_invalid", fmt.Errorf("decode JSON: %w", err)
+	}
+	if err := simplifyGeneratedAdventure(&generated); err != nil {
+		return generatedAdventure{}, "adventure_invalid", fmt.Errorf("normalize Chinese text: %w", err)
+	}
+	if err := validateGeneratedAdventure(generated, nickname); err != nil {
+		return generatedAdventure{}, "adventure_invalid", err
+	}
+	return generated, "", nil
 }
 
 func simplifyGeneratedAdventure(g *generatedAdventure) error {

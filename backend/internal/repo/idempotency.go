@@ -68,7 +68,13 @@ func (r *IdempotencyRepo) BeginOrGet(deviceID, route, key, requestHash string, t
 		}
 		return nil, false, err
 	}
-	return rec, true, nil
+	// Databases may store timestamps at lower precision than Go. Reload the
+	// persisted lease so CompleteClaim's fencing comparison uses the exact value.
+	var persisted models.IdempotencyRecord
+	if err := r.db.Where("id = ?", rec.ID).First(&persisted).Error; err != nil {
+		return nil, false, err
+	}
+	return &persisted, true, nil
 }
 
 // TryTakeover atomically replaces one observed record with a new processing

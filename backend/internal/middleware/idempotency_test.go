@@ -111,6 +111,37 @@ func TestIdempotency_DoesNotCacheQuotaResponse(t *testing.T) {
 	assert.Equal(t, int64(2), atomic.LoadInt64(&hits))
 }
 
+func TestIdempotency_ServerFailureCanRetryImmediately(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open("file:idem_failure_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&models.IdempotencyRecord{}))
+
+	var hits int64
+	r := gin.New()
+	r.POST("/api/v1/adventures", func(c *gin.Context) {
+		c.Set("device_id", "dev-1")
+	}, Idempotency(repo.NewIdempotencyRepo(db), "adventure.generate"), func(c *gin.Context) {
+		if atomic.AddInt64(&hits, 1) == 1 {
+			c.JSON(http.StatusGatewayTimeout, gin.H{"reason_code": "upstream_timeout"})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"ok": true})
+	})
+
+	do := func() *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/adventures", bytes.NewBufferString(`{"operation_id":"timeout-retry"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(HeaderIdempotencyKey, "timeout-retry")
+		r.ServeHTTP(w, req)
+		return w
+	}
+	assert.Equal(t, http.StatusGatewayTimeout, do().Code)
+	assert.Equal(t, http.StatusCreated, do().Code)
+	assert.Equal(t, int64(2), atomic.LoadInt64(&hits))
+}
+
 func TestIdempotency_ConcurrentSingleExecution(t *testing.T) {
 	r, hits := setupIdemRouter(t)
 	var wg sync.WaitGroup

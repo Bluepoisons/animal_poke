@@ -88,7 +88,7 @@ export async function generateAdventure(
     body: JSON.stringify({ animal_uuid: animalUUID, theme, operation_id: operationId }),
     idempotencyKey: operationId,
     allowRetry: true,
-    timeoutMs: 30_000,
+    timeoutMs: 55_000,
     signal,
   })
   return assertAdventureStory(story)

@@ -100,6 +100,13 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.True(t, cfg.FeatureFlags.Ops)
 }
 
+func TestDefaultUpstreamConfigAllowsLongerTextGeneration(t *testing.T) {
+	cfg := DefaultUpstreamConfig()
+	assert.Equal(t, 25*time.Second, cfg.Vision.Timeout)
+	assert.Equal(t, 40*time.Second, cfg.LLM.Timeout)
+	assert.Equal(t, 50*time.Second, cfg.LLM.TotalDeadline)
+}
+
 func TestLoad_Overrides(t *testing.T) {
 	clearProviderEnv(t)
 	t.Setenv("APP_ENV", "development")

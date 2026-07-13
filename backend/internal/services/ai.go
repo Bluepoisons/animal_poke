@@ -23,6 +23,8 @@ import (
 	"animalpoke/backend/internal/taxonomy"
 )
 
+const defaultMaxAIOutputTokens = 1024
+
 // ---------- VLM 相关类型 ----------
 
 // DetectBox 检测框。
@@ -480,28 +482,38 @@ func (s *AIService) callVision(ctx context.Context, imageData []byte, filename, 
 		},
 	}}
 	_ = filename
-	return s.callResponses(ctx, input)
+	return s.callResponsesWithProvider(ctx, input, s.visionProvider, defaultMaxAIOutputTokens, "")
 }
 
 func (s *AIService) callText(ctx context.Context, prompt string) ([]byte, string, error) {
+	return s.callTextWithMaxOutputTokens(ctx, prompt, defaultMaxAIOutputTokens)
+}
+
+func (s *AIService) callTextWithMaxOutputTokens(ctx context.Context, prompt string, maxOutputTokens int) ([]byte, string, error) {
 	input := []map[string]interface{}{{
 		"role": "user",
 		"content": []map[string]interface{}{
 			{"type": "input_text", "text": prompt},
 		},
 	}}
-	return s.callResponses(ctx, input)
+	endpoint, _, model := s.cfg.ActiveAI()
+	return s.callResponsesWithProvider(ctx, input, s.llmProvider, maxOutputTokens, reasoningEffortFor(endpoint, model))
 }
 
-// callResponses is the sole model transport. The configured provider must
-// implement the OpenAI Responses API, including input_text/input_image and
-// output_text response items.
-func (s *AIService) callResponses(ctx context.Context, input interface{}) ([]byte, string, error) {
+// callResponsesWithProvider is the sole model transport. Vision and text calls
+// share the wire protocol while retaining their own timeout and concurrency budgets.
+func (s *AIService) callResponsesWithProvider(ctx context.Context, input interface{}, provider *Provider, maxOutputTokens int, reasoningEffort string) ([]byte, string, error) {
 	endpoint, key, model := s.cfg.ActiveAI()
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = defaultMaxAIOutputTokens
+	}
 	body := map[string]interface{}{
 		"model":             model,
 		"input":             input,
-		"max_output_tokens": 1024,
+		"max_output_tokens": maxOutputTokens,
+	}
+	if reasoningEffort != "" {
+		body["reasoning"] = map[string]string{"effort": reasoningEffort}
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -516,12 +528,6 @@ func (s *AIService) callResponses(ctx context.Context, input interface{}) ([]byt
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
-	}
-
-	// One unified multimodal Provider budget/circuit now covers every AI call.
-	provider := s.visionProvider
-	if provider == nil {
-		provider = s.llmProvider
 	}
 
 	var (
@@ -544,6 +550,18 @@ func (s *AIService) callResponses(ctx context.Context, input interface{}) ([]byt
 		return nil, "", fmt.Errorf("ai returned status %d: %s", resp.StatusCode, truncate(string(respBody), 200))
 	}
 	return respBody, model, nil
+}
+
+func reasoningEffortFor(endpoint, model string) string {
+	endpoint = strings.ToLower(strings.TrimSpace(endpoint))
+	model = strings.ToLower(strings.TrimSpace(model))
+	if strings.Contains(endpoint, "aliyuncs.com") && strings.HasPrefix(model, "qwen") {
+		// Qwen hybrid-thinking models require non-thinking mode for synchronous,
+		// non-streaming Responses calls. Adventure generation needs concise JSON,
+		// not hidden chain-of-thought latency.
+		return "none"
+	}
+	return ""
 }
 
 func (s *AIService) parseResponsesResponse(body []byte) (string, error) {

@@ -30,6 +30,31 @@ func adventureInputFixture() AdventureInput {
 	}
 }
 
+func generatedAdventureFixture() generatedAdventure {
+	return generatedAdventure{
+		Title:          "霧燈森林的風鈴",
+		Location:       "萤光岔路",
+		Opening:        "Luna踩亮了林间第一块苔藓。风属性的光点一路跟在身后。",
+		EncounterTitle: "沉默的风铃精灵",
+		Encounter:      "一只风铃精灵忘记了自己的旋律。它把三枚发光音符交到你们面前。",
+		CompanionLine:  "Luna抬头望着你，尾巴轻轻扫过光点。",
+		Choices: []AdventureChoice{
+			{ID: "courage", Label: "先唱第一声", Description: "和伙伴一起勇敢打破寂静", Outcome: "你们的第一声并不完美，却让整片森林亮了起来。Luna靠近一步，记住了这份勇气。"},
+			{ID: "curiosity", Label: "寻找旧旋律", Description: "观察四周隐藏的音符规律", Outcome: "你们在树影里拼出失落的旋律，风铃精灵重新唱起歌。Luna与你交换了一个得意的眼神。"},
+			{ID: "kindness", Label: "陪它慢慢想", Description: "先安静陪伴再轻轻回应", Outcome: "你们没有催促，遗忘的旋律终于自己浮上来。Luna安静贴近你，共享这段温柔时刻。"},
+		},
+		Souvenir: AdventureSouvenir{Name: "风铃叶", Description: "叶片会奏出你们共同找到的旋律。"},
+	}
+}
+
+func writeAdventureProviderResponse(t *testing.T, w http.ResponseWriter, generated generatedAdventure) {
+	t.Helper()
+	output, err := json.Marshal(generated)
+	require.NoError(t, err)
+	w.Header().Set("Content-Type", "application/json")
+	require.NoError(t, json.NewEncoder(w).Encode(map[string]string{"output_text": string(output)}))
+}
+
 func TestGenerateAdventureMockIsChineseAndEqualBond(t *testing.T) {
 	svc := NewAIService(&config.ThirdPartyConfig{})
 	result, err := svc.GenerateAdventureContext(context.Background(), adventureInputFixture())
@@ -81,9 +106,11 @@ func TestAdventureValidationNormalizesAndRejectsAnimalIdentity(t *testing.T) {
 
 func TestGenerateAdventureConfiguredProviderUsesChineseProfile(t *testing.T) {
 	var prompt string
+	var maxOutputTokens int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
-			Input []struct {
+			MaxOutputTokens int `json:"max_output_tokens"`
+			Input           []struct {
 				Content []struct {
 					Text string `json:"text"`
 				} `json:"content"`
@@ -91,8 +118,8 @@ func TestGenerateAdventureConfiguredProviderUsesChineseProfile(t *testing.T) {
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		prompt = payload.Input[0].Content[0].Text
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"output_text":"{\"title\":\"霧燈森林的風鈴\",\"location\":\"萤光岔路\",\"opening\":\"Luna踩亮了林间第一块苔藓。风属性的光点一路跟在身后。\",\"encounter_title\":\"沉默的风铃精灵\",\"encounter\":\"一只风铃精灵忘记了自己的旋律。它把三枚发光音符交到你们面前。\",\"companion_line\":\"Luna抬头望着你，尾巴轻轻扫过光点。\",\"choices\":[{\"id\":\"courage\",\"label\":\"先唱第一声\",\"description\":\"和伙伴一起勇敢打破寂静\",\"outcome\":\"你们的第一声并不完美，却让整片森林亮了起来。Luna靠近一步，记住了这份勇气。\"},{\"id\":\"curiosity\",\"label\":\"寻找旧旋律\",\"description\":\"观察四周隐藏的音符规律\",\"outcome\":\"你们在树影里拼出失落的旋律，风铃精灵重新唱起歌。Luna与你交换了一个得意的眼神。\"},{\"id\":\"kindness\",\"label\":\"陪它慢慢想\",\"description\":\"先安静陪伴再轻轻回应\",\"outcome\":\"你们没有催促，遗忘的旋律终于自己浮上来。Luna安静贴近你，共享这段温柔时刻。\"}],\"souvenir\":{\"name\":\"风铃叶\",\"description\":\"叶片会奏出你们共同找到的旋律。\"}}"}`))
+		maxOutputTokens = payload.MaxOutputTokens
+		writeAdventureProviderResponse(t, w, generatedAdventureFixture())
 	}))
 	defer server.Close()
 
@@ -110,11 +137,89 @@ func TestGenerateAdventureConfiguredProviderUsesChineseProfile(t *testing.T) {
 	assert.Contains(t, prompt, "游侠")
 	assert.Contains(t, prompt, "风")
 	assert.NotContains(t, prompt, "British Shorthair")
+	assert.Equal(t, adventureMaxOutputTokens, maxOutputTokens)
 	assert.False(t, containsUnexpectedLetters(result.Opening, "Luna"))
 }
 
-func TestGenerateAdventureProductionRejectsNonChineseOutput(t *testing.T) {
+func TestGenerateAdventureUsesLLMProviderBudget(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeAdventureProviderResponse(t, w, generatedAdventureFixture())
+	}))
+	defer server.Close()
+
+	vision := NewProvider(ProviderOptions{
+		Name: "vision",
+		Budget: config.ProviderBudget{
+			MaxConcurrent: 1,
+		},
+		Client: server.Client(),
+	})
+	require.NoError(t, vision.Bulkhead.TryAcquire())
+	defer vision.Bulkhead.Release()
+	llm := NewProvider(ProviderOptions{Name: "llm", Client: server.Client()})
+	svc := NewAIServiceWithProviders(&config.ThirdPartyConfig{
+		LLMEndpoint: server.URL,
+		LLMKey:      "test-key",
+		LLMModel:    "story-model",
+	}, false, vision, llm)
+
+	result, err := svc.GenerateAdventureContext(context.Background(), adventureInputFixture())
+	require.NoError(t, err)
+	assert.Equal(t, "ai", result.Source)
+}
+
+func TestReasoningEffortForAlibabaQwenResponses(t *testing.T) {
+	assert.Equal(t, "none", reasoningEffortFor(
+		"https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/responses",
+		"qwen3.6-flash",
+	))
+	assert.Empty(t, reasoningEffortFor("https://api.openai.com/v1/responses", "gpt-5"))
+	assert.Empty(t, reasoningEffortFor("https://example.com/v1/responses", "qwen3.6-flash"))
+}
+
+func TestGenerateAdventureRetriesInvalidOutputWithValidationFeedback(t *testing.T) {
+	requests := 0
+	prompts := make([]string, 0, adventureGenerationAttempts)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var payload struct {
+			MaxOutputTokens int `json:"max_output_tokens"`
+			Input           []struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"input"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, adventureMaxOutputTokens, payload.MaxOutputTokens)
+		prompts = append(prompts, payload.Input[0].Content[0].Text)
+		generated := generatedAdventureFixture()
+		if requests == 1 {
+			generated.Choices = nil
+		}
+		writeAdventureProviderResponse(t, w, generated)
+	}))
+	defer server.Close()
+
+	svc := NewAIServiceWithOptions(&config.ThirdPartyConfig{
+		LLMEndpoint: server.URL,
+		LLMKey:      "test-key",
+		LLMModel:    "story-model",
+	}, false, server.Client())
+	result, err := svc.GenerateAdventureContext(context.Background(), adventureInputFixture())
+
+	require.NoError(t, err)
+	assert.Equal(t, "ai", result.Source)
+	assert.Equal(t, adventureGenerationAttempts, requests)
+	require.Len(t, prompts, adventureGenerationAttempts)
+	assert.NotContains(t, prompts[0], "previous attempt")
+	assert.Contains(t, prompts[1], "adventure must have three choices")
+}
+
+func TestGenerateAdventureProductionRejectsNonChineseOutput(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"output_text":"{\"title\":\"English title\",\"location\":\"place\",\"opening\":\"English opening\",\"encounter_title\":\"encounter\",\"encounter\":\"English\",\"companion_line\":\"English\",\"choices\":[],\"souvenir\":{\"name\":\"item\",\"description\":\"English\"}}"}`))
 	}))
@@ -126,6 +231,7 @@ func TestGenerateAdventureProductionRejectsNonChineseOutput(t *testing.T) {
 	}, false, server.Client())
 	_, err := svc.GenerateAdventureContext(context.Background(), adventureInputFixture())
 	assert.Error(t, err)
+	assert.Equal(t, adventureGenerationAttempts, requests)
 }
 
 func TestAdventureInputRejectsPromptInjection(t *testing.T) {
@@ -135,20 +241,8 @@ func TestAdventureInputRejectsPromptInjection(t *testing.T) {
 }
 
 func TestAdventureValidationAllowsOnlyEnglishNickname(t *testing.T) {
-	generated := generatedAdventure{
-		Title:          "雾灯森林的风铃",
-		Location:       "萤光岔路",
-		Opening:        "Luna踩亮了林间的苔藓。",
-		EncounterTitle: "沉默的风铃精灵",
-		Encounter:      "一只风铃精灵忘记了旋律，正等待你们回应。",
-		CompanionLine:  "Luna望向你，轻轻摇了摇尾巴。",
-		Choices: []AdventureChoice{
-			{ID: "courage", Label: "并肩向前", Description: "一起勇敢踏出第一步", Outcome: "你们的脚步让森林亮了起来。"},
-			{ID: "curiosity", Label: "观察线索", Description: "一起寻找藏起来的规律", Outcome: "你们找到了失落的旋律。"},
-			{ID: "kindness", Label: "温柔回应", Description: "先陪伴它再轻轻开口", Outcome: "精灵在安心中找回了歌声。"},
-		},
-		Souvenir: AdventureSouvenir{Name: "风铃叶", Description: "叶片记住了你们共同的旋律。"},
-	}
+	generated := generatedAdventureFixture()
+	require.NoError(t, simplifyGeneratedAdventure(&generated))
 
 	require.NoError(t, validateGeneratedAdventure(generated, "Luna"))
 	generated.Opening += " heroic"

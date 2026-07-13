@@ -176,8 +176,8 @@ func DefaultUpstreamConfig() UpstreamConfig {
 			MaxConcurrent: 8,
 		},
 		LLM: ProviderBudget{
-			TotalDeadline: 45 * time.Second,
-			Timeout:       25 * time.Second,
+			TotalDeadline: 50 * time.Second,
+			Timeout:       40 * time.Second,
 			MaxRetries:    1,
 			MaxConcurrent: 8,
 		},

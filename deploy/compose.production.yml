@@ -1,0 +1,137 @@
+name: animal-poke
+
+services:
+  mysql-certs:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-euc"]
+    command:
+      - |
+        if [ ! -s /ca/ca.pem ] || [ ! -s /certs/server-cert.pem ] || [ ! -s /certs/server-key.pem ]; then
+          rm -f /certs/*
+          rm -f /ca/*
+          openssl genrsa -out /certs/ca-key.pem 4096
+          openssl req -x509 -new -nodes -key /certs/ca-key.pem -sha256 -days 3650 \
+            -subj "/CN=animal-poke-mysql-ca" -out /ca/ca.pem
+          openssl genrsa -out /certs/server-key.pem 4096
+          openssl req -new -key /certs/server-key.pem -subj "/CN=mysql" -out /certs/server.csr
+          printf 'subjectAltName=DNS:mysql\nextendedKeyUsage=serverAuth\n' > /certs/server.ext
+          openssl x509 -req -in /certs/server.csr -CA /ca/ca.pem -CAkey /certs/ca-key.pem \
+            -CAcreateserial -out /certs/server-cert.pem -days 825 -sha256 -extfile /certs/server.ext
+          rm -f /certs/server.csr /certs/server.ext /ca/ca.srl
+          chmod 0644 /ca/ca.pem /certs/server-cert.pem
+          chmod 0600 /certs/ca-key.pem /certs/server-key.pem
+          chown -R mysql:mysql /ca
+          chown -R mysql:mysql /certs
+        fi
+    volumes:
+      - mysql_ca:/ca
+      - mysql_tls:/certs
+    restart: "no"
+    networks:
+      - db_private
+
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    restart: unless-stopped
+    depends_on:
+      mysql-certs:
+        condition: service_completed_successfully
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-animal_poke}
+      MYSQL_USER: ${DB_USER:-animal_poke}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --require-secure-transport=ON
+      - --ssl-ca=/etc/mysql/ca/ca.pem
+      - --ssl-cert=/etc/mysql/tls/server-cert.pem
+      - --ssl-key=/etc/mysql/tls/server-key.pem
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - mysql_ca:/etc/mysql/ca:ro
+      - mysql_tls:/etc/mysql/tls:ro
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --ssl-mode=REQUIRED --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - db_private
+
+  backend:
+    image: ${BACKEND_IMAGE:-docker.cnb.cool/pvzcs/docker-images:animal-poke-backend}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      GIN_MODE: release
+      SERVER_ADDR: :8080
+      METRICS_ADDR: "off"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-animal_poke}
+      DB_USER: ${DB_USER:-animal_poke}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      DB_TLS: verify-ca
+      DB_TLS_CA: /etc/mysql/ca/ca.pem
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY}
+      ACCOUNT_TOKEN_PEPPER: ${ACCOUNT_TOKEN_PEPPER:?set ACCOUNT_TOKEN_PEPPER}
+      STATS_HMAC_KEY: ${STATS_HMAC_KEY:?set STATS_HMAC_KEY}
+      TIME_SIGNING_KEY: ${TIME_SIGNING_KEY:?set TIME_SIGNING_KEY}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:?set ADMIN_JWT_SECRET}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?set ADMIN_API_KEY}
+      ADMIN_BREAK_GLASS_ENABLED: ${ADMIN_BREAK_GLASS_ENABLED:-false}
+      AUTH_MOCK_OAUTH_ENABLED: "false"
+      AI_MOCK_ENABLED: "false"
+      AI_ENDPOINT: ${AI_ENDPOINT:?set AI_ENDPOINT}
+      AI_KEY: ${AI_KEY:?set AI_KEY}
+      AI_MODEL: ${AI_MODEL:?set AI_MODEL}
+      TENCENT_MAP_KEY: ${TENCENT_MAP_KEY:-}
+      TENCENT_MAP_SK: ${TENCENT_MAP_SK:-}
+      CAIYUN_WEATHER_KEY: ${CAIYUN_WEATHER_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      FEATURE_RANKING: ${FEATURE_RANKING:-false}
+      FEATURE_PVP: ${FEATURE_PVP:-false}
+      FEATURE_SOCIAL: ${FEATURE_SOCIAL:-false}
+      FEATURE_OPS: ${FEATURE_OPS:-false}
+      COMMERCE_ENABLED: ${COMMERCE_ENABLED:-false}
+      COMMERCE_STORE_VERIFY: ${COMMERCE_STORE_VERIFY:-false}
+      RELEASE_SHA: ${RELEASE_SHA:-unknown}
+    volumes:
+      - mysql_ca:/etc/mysql/ca:ro
+    ports:
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_egress
+      - db_private
+
+volumes:
+  mysql_data:
+    name: animal-poke-mysql-data
+  mysql_ca:
+    name: animal-poke-mysql-ca
+  mysql_tls:
+    name: animal-poke-mysql-tls
+
+networks:
+  app_egress:
+    name: animal-poke-app-egress
+  db_private:
+    name: animal-poke-db-private
+    internal: true
