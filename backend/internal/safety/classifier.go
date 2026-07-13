@@ -3,6 +3,8 @@ package safety
 import (
 	"path/filepath"
 	"strings"
+
+	"animalpoke/backend/internal/speciespack"
 )
 
 // classify merges fixture labels, filename heuristics, and free-text label stubs.
@@ -102,12 +104,9 @@ func applyKeywordSignals(s *signals, text, source string) {
 			break
 		}
 	}
-	for _, kw := range []string{"cat", "dog", "goose", "kitten", "puppy", "animal", "pet", "猫", "狗", "鹅"} {
-		if strings.Contains(text, kw) {
-			s.animal = true
-			s.internal = append(s.internal, source+":animal")
-			break
-		}
+	if strings.Contains(text, "animal") || strings.Contains(text, "pet") || speciespack.Default().MatchesAnimalLabel(text) {
+		s.animal = true
+		s.internal = append(s.internal, source+":animal")
 	}
 	// person_animal composite token
 	if strings.Contains(text, "person_animal") || strings.Contains(text, "human_animal") {

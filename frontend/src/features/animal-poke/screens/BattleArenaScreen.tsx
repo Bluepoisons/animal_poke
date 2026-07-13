@@ -3,17 +3,24 @@ import PageTitle from '../components/PageTitle'
 import AnimalIcon from '../components/AnimalIcon'
 import BattleLog from '../components/BattleLog'
 import { useBattle } from '../../../battle/useBattle'
-import type { CardEntry, SpeciesType } from '../../../types'
+import { UNKNOWN_SPECIES, type CardEntry, type SpeciesType } from '../../../types'
 import type { StrategyType } from '../../../battle/types'
 import { BATTLE_ARCHETYPES, RECOMMENDED_TEAMS } from '../../../battle/designCatalog'
 import { MAX_ENERGY } from '../../../battle/constants'
 import { ProgressBar } from '../../../a11y'
+import { chineseSpeciesName } from '../petLocalization'
 
 const strategies: { id: StrategyType; label: string }[] = [
   { id: 'aggressive', label: '激进' },
   { id: 'balanced', label: '平衡' },
   { id: 'defensive', label: '防守' },
 ]
+
+const resultNames = {
+  win: '胜利',
+  lose: '落败',
+  draw: '平局',
+} as const
 
 const DEMO_PET: CardEntry = {
   id: 'battle-demo-cat',
@@ -46,8 +53,8 @@ export default function BattleArenaScreen() {
     }
   }, [state.phase, state.playerPet, battle])
 
-  const playerSpecies = (state.playerPet?.species || 'cat') as SpeciesType
-  const enemySpecies = (state.enemyPet?.species || 'dog') as SpeciesType
+  const playerSpecies = (state.playerPet?.species || UNKNOWN_SPECIES) as SpeciesType
+  const enemySpecies = (state.enemyPet?.species || UNKNOWN_SPECIES) as SpeciesType
   const playerHpPct = state.playerPet
     ? Math.round((state.playerPet.currentHp / state.playerPet.stats.hp) * 100)
     : 100
@@ -70,7 +77,7 @@ export default function BattleArenaScreen() {
           : state.phase === 'battling'
             ? `第 ${state.round} 回合`
             : state.phase === 'result'
-              ? `结果 ${state.result ?? ''}`
+              ? `结果 ${state.result ? resultNames[state.result] : ''}`
               : state.phase
 
   const handleStrategy = (strategy: StrategyType) => {
@@ -82,8 +89,8 @@ export default function BattleArenaScreen() {
   return (
     <div className="ap-screen">
       <PageTitle
-        title="BATTLE"
-        subtitle="ARENA · 队伍技能与权威结算 (AP-102)"
+        title="伙伴对战"
+        subtitle="竞技场 · 队伍技能与权威结算"
         rightText={phaseLabel}
         rightTone="blue"
       />
@@ -93,14 +100,14 @@ export default function BattleArenaScreen() {
           <div className="ap-animal-badge ap-animal-badge--pink" style={{ width: 112, height: 112 }}>
             <AnimalIcon species={playerSpecies} size={88} />
           </div>
-          <span className="ap-fighter__name">我的{playerSpecies}</span>
+          <span className="ap-fighter__name">我的{chineseSpeciesName(playerSpecies)}</span>
         </div>
         <div className="ap-vs">VS</div>
         <div className="ap-fighter">
           <div className="ap-animal-badge ap-animal-badge--blue" style={{ width: 112, height: 112 }}>
             <AnimalIcon species={enemySpecies} size={88} />
           </div>
-          <span className="ap-fighter__name">野生{enemySpecies}</span>
+          <span className="ap-fighter__name">对手{chineseSpeciesName(enemySpecies)}</span>
         </div>
       </div>
 

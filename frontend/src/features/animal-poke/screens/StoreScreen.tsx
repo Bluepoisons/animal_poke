@@ -72,7 +72,7 @@ export default function StoreScreen({ onToast }: StoreScreenProps) {
     <div className="ap-screen">
       <PageTitle
         title="商店"
-        subtitle="STORE · 手账补给站"
+        subtitle="商店 · 伙伴补给站"
         rightText={`金币 ${gold}`}
         rightTone="yellow"
       />

@@ -12,6 +12,7 @@ function generatedAnimal(rarity = 3): GeneratedAnimal {
     inferenceRequestId: 'value-inf-1',
     valueInferenceId: 'value-inf-1',
     species: 'cat',
+    speciesLabelZh: '猫',
     analysis: {
       breed: 'Tabby',
       color: 'orange',
@@ -61,6 +62,7 @@ describe('animal record mapping', () => {
       uuid: 'capture-123456789',
       no: 'capture-',
       species: 'cat',
+      speciesLabelZh: '猫',
       rarity: 'rare',
       unlocked: true,
       isUnlocked: 1,
@@ -80,6 +82,7 @@ describe('animal record mapping', () => {
     const record = serverAnimalToRecord({
       uuid: 'server-1',
       species: 'dog',
+      species_label_zh: '狗',
       rarity: 5,
       generated_at: '2026-07-10T12:00:00.000Z',
       city: '杭州',
@@ -90,6 +93,7 @@ describe('animal record mapping', () => {
 
     expect(record).toMatchObject({
       id: 'server-1',
+      speciesLabelZh: '狗',
       rarity: 'legendary',
       unlocked: true,
       isUnlocked: 1,
@@ -97,5 +101,14 @@ describe('animal record mapping', () => {
       location: '杭州',
       seed: 17,
     })
+  })
+
+  it('does not invent cat for missing or unknown species', () => {
+    expect(serverAnimalToRecord({ uuid: 'missing-species' }).species).toBe('unknown')
+    expect(serverAnimalToRecord({ uuid: 'unknown-species', species: 'fox' }).species).toBe('unknown')
+
+    const invalidGenerated = generatedAnimal()
+    invalidGenerated.species = 'not_registered'
+    expect(generatedAnimalToRecord(invalidGenerated).species).toBe('unknown')
   })
 })

@@ -1,6 +1,7 @@
 package speciespack
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Registry 内容包注册表：ID/别名/状态查询的唯一入口。
@@ -77,8 +80,20 @@ func (r *Registry) LoadDir(dir string) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", e.Name(), err)
 		}
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) > 0 && trimmed[0] == '[' {
+			var bundle []Pack
+			if err := json.Unmarshal(trimmed, &bundle); err != nil {
+				return fmt.Errorf("parse %s: %w", e.Name(), err)
+			}
+			for i := range bundle {
+				p := bundle[i]
+				packs = append(packs, &p)
+			}
+			continue
+		}
 		var p Pack
-		if err := json.Unmarshal(raw, &p); err != nil {
+		if err := json.Unmarshal(trimmed, &p); err != nil {
 			return fmt.Errorf("parse %s: %w", e.Name(), err)
 		}
 		packs = append(packs, &p)
@@ -169,6 +184,12 @@ func buildAliasIndex(packs map[string]*Pack) (map[string]string, error) {
 				return nil, err
 			}
 		}
+		// contains 词本身也应可精确识别；模糊阶段才施加单汉字限制。
+		for _, c := range p.Names.Contains {
+			if err := register(c, id); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return exact, nil
 }
@@ -176,9 +197,51 @@ func buildAliasIndex(packs map[string]*Pack) (map[string]string, error) {
 func normalizeKey(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.ToLower(s)
-	s = strings.ReplaceAll(s, "_", " ")
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return r
+		}
+		return ' '
+	}, s)
 	s = strings.Join(strings.Fields(s), " ")
 	return s
+}
+
+// containsLabelTerm 只用于模糊匹配：中文单字必须走精确别名，避免
+// “海马”命中“马”；拉丁文本则要求完整词边界，避免 horse 命中 seahorse。
+func containsLabelTerm(value, term string) bool {
+	if value == "" || term == "" {
+		return false
+	}
+	if utf8.RuneCountInString(term) == 1 {
+		r, _ := utf8.DecodeRuneInString(term)
+		if unicode.Is(unicode.Han, r) {
+			return false
+		}
+	}
+	for _, r := range term {
+		if unicode.Is(unicode.Han, r) {
+			return strings.Contains(value, term)
+		}
+	}
+
+	valueRunes := []rune(value)
+	termRunes := []rune(term)
+	for i := 0; i+len(termRunes) <= len(valueRunes); i++ {
+		if string(valueRunes[i:i+len(termRunes)]) != term {
+			continue
+		}
+		leftBounded := i == 0 || !isLabelWordRune(valueRunes[i-1])
+		rightBounded := i+len(termRunes) == len(valueRunes) || !isLabelWordRune(valueRunes[i+len(termRunes)])
+		if leftBounded && rightBounded {
+			return true
+		}
+	}
+	return false
+}
+
+func isLabelWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 // Get 按 ID 取包。
@@ -254,6 +317,19 @@ func (r *Registry) IsKnown(species string) bool {
 	return ok
 }
 
+// ResolveExactAlias 仅按完整别名解析内容 ID，不执行 contains 子串匹配。
+// 适用于模型兜底标签纠错，避免“长颈鹿”因包含“鹿”而被误归类。
+func (r *Registry) ResolveExactAlias(raw string) (string, bool) {
+	key := normalizeKey(raw)
+	if key == "" {
+		return "", false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	id, ok := r.exactAlias[key]
+	return id, ok
+}
+
 // EffectiveStatusOf 查询有效状态。
 func (r *Registry) EffectiveStatusOf(species string) string {
 	r.mu.RLock()
@@ -268,7 +344,7 @@ func (r *Registry) EffectiveStatusOf(species string) string {
 }
 
 // Normalize 将模型/客户端原始标签规范为内容 ID 或 unknown/unsupported。
-// 规则：全局拒绝表优先 → 精确别名 → contains 别名 → unknown。
+// 规则：全局精确拒绝 → 精确物种别名 → 全局模糊拒绝 → contains 别名 → unknown。
 // 绝不默认 goose。
 func (r *Registry) Normalize(raw string) (string, string) {
 	original := strings.TrimSpace(raw)
@@ -281,20 +357,24 @@ func (r *Registry) Normalize(raw string) (string, string) {
 	if globalUnsupportedExact[s] {
 		return IDUnsupported, original
 	}
-	// 全局 unsupported 子串（优先于物种匹配，避免 bird→goose 等）
+
+	// 已注册的精确别名优先，避免“食人鱼”被“人”等泛化拒绝词截断。
+	r.mu.RLock()
+	id, exact := r.exactAlias[s]
+	r.mu.RUnlock()
+	if exact {
+		return id, original
+	}
+
+	// 全局 unsupported 模糊词仍优先于物种 contains，例如 "toy dog"。
 	for _, kw := range globalUnsupportedContains {
-		if strings.Contains(s, kw) {
+		if containsLabelTerm(s, normalizeKey(kw)) {
 			return IDUnsupported, original
 		}
 	}
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	// 精确别名
-	if id, ok := r.exactAlias[s]; ok {
-		return id, original
-	}
 
 	// contains 别名：按 ID 稳定顺序；更长 contains 优先（简单实现：全扫取最长命中）
 	type hit struct {
@@ -311,12 +391,12 @@ func (r *Registry) Normalize(raw string) (string, string) {
 		p := r.packs[id]
 		for _, c := range p.Names.Contains {
 			ck := normalizeKey(c)
-			if ck == "" || !strings.Contains(s, ck) {
+			if !containsLabelTerm(s, ck) {
 				continue
 			}
 			excluded := false
 			for _, ex := range p.Names.ContainsExclude {
-				if strings.Contains(s, normalizeKey(ex)) {
+				if containsLabelTerm(s, normalizeKey(ex)) {
 					excluded = true
 					break
 				}
@@ -324,8 +404,9 @@ func (r *Registry) Normalize(raw string) (string, string) {
 			if excluded {
 				continue
 			}
-			if best == nil || len(ck) > best.n || (len(ck) == best.n && id < best.id) {
-				best = &hit{id: id, n: len(ck)}
+			termLen := utf8.RuneCountInString(ck)
+			if best == nil || termLen > best.n || (termLen == best.n && id < best.id) {
+				best = &hit{id: id, n: termLen}
 			}
 		}
 	}
@@ -336,23 +417,54 @@ func (r *Registry) Normalize(raw string) (string, string) {
 	return IDUnknown, original
 }
 
-// 全局拒绝：人像、非目标、易混淆鸟类等（保持 AP-007 语义）。
+// MatchesAnimalLabel 判断文本中是否包含注册物种别名。该方法专供安全
+// 分类器识别“人和动物同框”等复合标签，不应用全局 unsupported 短路。
+func (r *Registry) MatchesAnimalLabel(raw string) bool {
+	s := normalizeKey(raw)
+	if s == "" {
+		return false
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if _, ok := r.exactAlias[s]; ok {
+		return true
+	}
+	for _, p := range r.packs {
+		for _, candidate := range p.Names.Contains {
+			key := normalizeKey(candidate)
+			if !containsLabelTerm(s, key) {
+				continue
+			}
+			excluded := false
+			for _, ex := range p.Names.ContainsExclude {
+				if containsLabelTerm(s, normalizeKey(ex)) {
+					excluded = true
+					break
+				}
+			}
+			if !excluded {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// 全局拒绝仅用于非动物目标。未注册动物应返回 unknown，不能因旧白名单
+// 直接判为 unsupported。
 var globalUnsupportedExact = map[string]bool{
-	"bird": true, "duck": true, "swan": true, "chicken": true, "rooster": true,
-	"hen": true, "pigeon": true, "dove": true, "parrot": true, "eagle": true,
-	"human": true, "person": true, "people": true, "man": true, "woman": true, "child": true, "baby": true,
+	"human": true, "person": true, "people": true, "man": true, "woman": true, "child": true, "kid": true, "baby": true,
 	"toy": true, "doll": true, "plush": true, "statue": true, "screen": true, "phone": true,
 	"car": true, "plant": true, "tree": true, "food": true,
-	"鸟": true, "鸭": true, "鸭子": true, "天鹅": true, "鸡": true, "人": true, "人类": true,
-	"玩偶": true, "玩具": true, "屏幕": true,
-	"mongoose": true,
+	"人": true, "人类": true, "小孩": true, "儿童": true,
+	"玩偶": true, "玩具": true, "木马": true, "屏幕": true, "植物": true, "车辆": true, "汽车": true,
 }
 
 var globalUnsupportedContains = []string{
-	"human", "person", "people", "man ", "woman", "child", "baby", "人", "人类", "儿童",
-	"duck", "swan", "chicken", "pigeon", "parrot", "bird", "鸭", "天鹅", "鸟", "鸡",
+	"human", "person", "people", "man", "woman", "child", "kid", "baby", "人类", "人物", "行人", "男人", "女人", "小孩", "儿童", "婴儿",
 	"toy", "doll", "plush", "玩偶", "玩具", "screen", "屏幕",
-	"mongoose",
+	"plant", "植物", "vehicle", "car", "车辆", "汽车",
 }
 
 // ---- 默认全局注册表 ----

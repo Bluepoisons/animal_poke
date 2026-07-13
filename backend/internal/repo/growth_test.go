@@ -178,6 +178,27 @@ func TestGrowth_UnlockMultipleNodes(t *testing.T) {
 	assert.GreaterOrEqual(t, len(nodes), 3)
 }
 
+func TestGrowth_CompanionUpdateClaimsRowLock(t *testing.T) {
+	r, db := setupGrowthRepo(t)
+	animalID := seedAnimal(t, db, "dev-lock", "")
+	sawLock := false
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("test:companion-row-lock", func(tx *gorm.DB) {
+		if tx.Statement.Table != "companion_profiles" {
+			return
+		}
+		if _, ok := tx.Statement.Clauses["FOR"]; ok {
+			sawLock = true
+		}
+	}))
+
+	_, err := r.ApplyEvent(ApplyGrowthRequest{
+		DeviceID: "dev-lock", EventID: "lock-event", Kind: models.GrowthEventCompanionMemory,
+		AnimalUUID: animalID,
+	})
+	require.NoError(t, err)
+	assert.True(t, sawLock, "companion bond updates must select the snapshot FOR UPDATE")
+}
+
 func TestGrowth_ResetAuditable(t *testing.T) {
 	r, _ := setupGrowthRepo(t)
 	_, err := r.ApplyEvent(ApplyGrowthRequest{

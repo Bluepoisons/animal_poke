@@ -513,6 +513,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vision/detect/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a corrected species and create a derived detect credential
+         * @description Creates an immutable detect inference derived from the original model result.
+         *     Analyze remains strict and accepts the corrected species only with the returned credential.
+         *     A concrete Simplified Chinese species label is always required; unregistered real animals
+         *     use species=other_animal with labels such as 赤狐 or 仓鼠.
+         */
+        post: operations["visionDetectCorrection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vision/analyze": {
         parameters: {
             query?: never;
@@ -543,9 +566,69 @@ export interface paths {
          * Generate pet stats/narrative (deterministic rarity/stats)
          * @description Rarity and battle stats are computed server-side via HMAC-seeded algorithm
          *     (seed = parent/capture inference id + config_version + server secret).
-         *     LLM only supplies narrative. Response includes factors for transparency.
+         *     LLM only supplies narrative. The server persists the animal in the same
+         *     transaction as its value inference; no client-side animal sync is required.
+         *     Response includes factors for transparency and the created animal UUID.
          */
         post: operations["valueGenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/adventures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent companion adventures */
+        get: operations["adventureList"];
+        put?: never;
+        /**
+         * Generate one Simplified Chinese AI companion adventure
+         * @description Loads the owned animal and companion bond from server-authoritative data,
+         *     then asks the configured AI provider for one fully fictional Chinese encounter.
+         *     Production does not silently replace provider failures with authored stories.
+         *     Choice outcomes and the souvenir remain hidden until settlement.
+         */
+        post: operations["adventureCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/adventures/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Restore one generated adventure */
+        get: operations["adventureGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/adventures/{run_id}/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve one adventure choice and grant companion memory XP */
+        post: operations["adventureChoose"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3037,6 +3120,13 @@ export interface components {
             account_id?: string;
             guest?: boolean;
         };
+        PrivacyExportRequest: {
+            /**
+             * @description device 仅导出当前设备数据（省略时默认）；account 导出当前已绑定账号的数据
+             * @enum {string}
+             */
+            scope?: "device" | "account";
+        };
         PrivacyDeleteRequest: {
             /**
              * @default device
@@ -3186,12 +3276,17 @@ export interface components {
             [key: string]: unknown;
         };
         VisionDetectBox: {
-            /** @enum {string} */
-            species: "cat" | "dog" | "goose";
+            /**
+             * @description 注册物种 ID；other_animal 表示已确认是真实动物但未落入具体类别
+             * @enum {string}
+             */
+            species: "cat" | "dog" | "rabbit" | "horse" | "cow" | "sheep" | "goat" | "pig" | "deer" | "squirrel" | "monkey" | "bear" | "elephant" | "big_cat" | "bird" | "goose" | "duck" | "chicken" | "pigeon" | "parrot" | "eagle" | "turtle" | "lizard" | "snake" | "crocodile" | "frog" | "salamander" | "fish" | "shark" | "dolphin" | "whale" | "octopus" | "crab" | "butterfly" | "bee" | "other_animal";
+            /** @description 简体中文物种标签；other_animal 时必须是具体名称，例如“赤狐” */
             label?: string;
             target_id: string;
             confidence: number;
-            bounding_box: {
+            /** @description 旧多目标响应的兼容字段；照片级识别可以省略 */
+            bounding_box?: {
                 x: number;
                 y: number;
                 width: number;
@@ -3210,6 +3305,29 @@ export interface components {
             safety?: components["schemas"]["SafetySummary"];
         } & {
             [key: string]: unknown;
+        };
+        VisionCorrectionRequest: {
+            detect_inference_id: string;
+            /** @description Stable target_id from the original detect result; defaults to the primary target */
+            target_id?: string;
+            /** @description Canonical registered species ID or other_animal */
+            species: string;
+            /** @description Concrete Simplified Chinese animal name */
+            species_label_zh: string;
+        };
+        VisionCorrectionResponse: {
+            inference_id: string;
+            parent_inference_id: string;
+            target_id: string;
+            original_species: string;
+            species: string;
+            /** @description Trusted concrete Simplified Chinese species name */
+            label: string;
+            confidence: number;
+            /** @enum {string} */
+            source: "user_confirmation";
+            /** Format: date-time */
+            expires_at?: string;
         };
         SafetySummary: {
             allowed: boolean;
@@ -3263,6 +3381,7 @@ export interface components {
         };
         VisionAnalyzeResponse: {
             species?: string;
+            species_label_zh?: string;
             breed?: string;
             color?: string;
             body_type?: string;
@@ -3278,6 +3397,8 @@ export interface components {
             /** Format: uuid */
             uuid: string;
             species: string;
+            /** @description Concrete Simplified Chinese species name; required for other_animal */
+            species_label_zh?: string;
             breed?: string;
             rarity: number;
             hp?: number;
@@ -3310,6 +3431,7 @@ export interface components {
             device_id?: string;
             account_id?: string;
             species?: string;
+            species_label_zh?: string;
             breed?: string;
             rarity?: number;
             hp?: number;
@@ -3563,6 +3685,7 @@ export interface components {
             /** @enum {string} */
             acl?: "link" | "friends" | "public";
             species?: string;
+            species_label_zh?: string;
             breed?: string;
             rarity?: number;
             nickname?: string;
@@ -3734,6 +3857,114 @@ export interface components {
             };
             request_id?: string;
         };
+        AdventureGenerateRequest: {
+            /** Format: uuid */
+            animal_uuid: string;
+            /** @enum {string} */
+            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            /** @description Must match the Idempotency-Key request header. */
+            operation_id: string;
+        };
+        AdventureChoice: {
+            /** @enum {string} */
+            id: "courage" | "curiosity" | "kindness";
+            /** @description Simplified Chinese */
+            label: string;
+            /** @description Simplified Chinese */
+            description: string;
+        };
+        AdventureResolvedChoice: components["schemas"]["AdventureChoice"] & {
+            /** @description Simplified Chinese */
+            outcome: string;
+            /** @enum {integer} */
+            bond_delta: 6;
+        };
+        AdventureStory: {
+            /** Format: uuid */
+            adventure_id: string;
+            /** @enum {string} */
+            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            /** @description Simplified Chinese */
+            title: string;
+            /** @description Simplified Chinese */
+            location: string;
+            /** @description Simplified Chinese */
+            opening: string;
+            /** @description Simplified Chinese */
+            encounter_title: string;
+            /** @description Simplified Chinese */
+            encounter: string;
+            /** @description Simplified Chinese */
+            companion_line: string;
+            choices: components["schemas"]["AdventureChoice"][];
+            /** @constant */
+            fiction: true;
+            disclaimer: string;
+            /** @enum {string} */
+            source: "ai" | "mock" | "template";
+            degraded?: boolean;
+            reason_code?: string;
+            prompt_version: string;
+        };
+        AdventureChoiceRequest: {
+            /** @enum {string} */
+            choice_id: "courage" | "curiosity" | "kindness";
+        };
+        AdventureSouvenir: {
+            /** @description Simplified Chinese */
+            name: string;
+            /** @description Simplified Chinese */
+            description: string;
+        };
+        AdventureCompletionResponse: {
+            /** Format: uuid */
+            adventure_id: string;
+            /** @constant */
+            status: "completed";
+            choice: components["schemas"]["AdventureResolvedChoice"];
+            outcome: string;
+            souvenir: components["schemas"]["AdventureSouvenir"];
+            companion?: components["schemas"]["CompanionProfile"];
+            nodes?: components["schemas"]["CompanionMemoryNode"][];
+            unlocked_nodes?: string[];
+            idempotent: boolean;
+            request_id?: string;
+        };
+        AdventureHistoryItem: {
+            /** Format: uuid */
+            adventure_id: string;
+            /** Format: uuid */
+            animal_uuid: string;
+            /** @enum {string} */
+            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            title: string;
+            /** @enum {string} */
+            status: "generated" | "completed";
+            choice_id?: string;
+            outcome?: string;
+            souvenir?: string;
+            bond_delta: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at?: string;
+        };
+        AdventureListResponse: {
+            items: components["schemas"]["AdventureHistoryItem"][];
+            request_id?: string;
+        };
+        AdventureDetailResponse: {
+            story: components["schemas"]["AdventureStory"];
+            /** @enum {string} */
+            status: "generated" | "completed";
+            selected_choice_id?: string;
+            outcome?: string;
+            souvenir?: components["schemas"]["AdventureSouvenir"];
+            bond_delta?: number;
+            /** Format: date-time */
+            completed_at?: string;
+            request_id?: string;
+        };
         ResearcherTrack: {
             /** @enum {string} */
             track?: "photography" | "ecology" | "safe_observation";
@@ -3812,7 +4043,7 @@ export interface components {
             node_id?: string;
             title?: string;
             /** @enum {string} */
-            kind?: "memory" | "decor" | "journal";
+            kind?: "memory" | "decor";
             visible?: boolean;
             unlocked?: boolean;
             /** Format: int64 */
@@ -4098,6 +4329,16 @@ export interface components {
         };
         /** @description Forbidden */
         Forbidden: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Not found */
+        NotFound: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
@@ -4999,6 +5240,36 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    visionDetectCorrection: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisionCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Derived user-confirmed detect credential */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisionCorrectionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     visionAnalyze: {
         parameters: {
             query?: never;
@@ -5017,8 +5288,10 @@ export interface operations {
                     parent_inference_id?: string;
                     /** @description Stable target id from detect.targets */
                     target_id?: string;
-                    /** @description Claimed species; must match locked detect target */
+                    /** @description Claimed species; must match the original or user-confirmed detect credential */
                     species?: string;
+                    /** @description Concrete Simplified Chinese species name inherited from the detect credential */
+                    species_label_zh?: string;
                     /** @description JSON bounding box {x,y,width,height} fractions 0-1 */
                     box?: string;
                     box_x?: number;
@@ -5065,6 +5338,8 @@ export interface operations {
             content: {
                 "application/json": {
                     species: string;
+                    /** @description Concrete Simplified Chinese species name from trusted lineage */
+                    species_label_zh?: string;
                     breed?: string;
                     color?: string;
                     body_type?: string;
@@ -5092,6 +5367,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         rarity?: number;
+                        species_label_zh?: string;
                         hp?: number;
                         atk?: number;
                         def?: number;
@@ -5119,6 +5395,11 @@ export interface operations {
                             quality_band?: string;
                         };
                         inference_id?: string;
+                        /**
+                         * Format: uuid
+                         * @description Server-persisted animal record UUID
+                         */
+                        animal_uuid?: string;
                     } & {
                         [key: string]: unknown;
                     };
@@ -5126,6 +5407,115 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    adventureList: {
+        parameters: {
+            query?: {
+                animal_uuid?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent adventure summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdventureListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    adventureCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdventureGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Adventure generated and persisted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdventureStory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    adventureGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Adventure state without unselected outcome spoilers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdventureDetailResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adventureChoose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdventureChoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent resolved outcome and authoritative companion bond */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdventureCompletionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     photoGetCalibration: {
@@ -5675,7 +6065,12 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description 可选导出范围；省略请求体或 scope 时默认仅导出当前设备数据 */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PrivacyExportRequest"];
+            };
+        };
         responses: {
             /** @description Export completed (or page) */
             200: {

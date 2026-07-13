@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -24,6 +25,17 @@ const (
 	// MaxCachedBodyBytes 缓存响应上限。
 	MaxCachedBodyBytes = 1 << 20 // 1MiB
 )
+
+// RequireIdempotencyKey rejects write requests that cannot be replayed safely.
+func RequireIdempotencyKey() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if strings.TrimSpace(c.GetHeader(HeaderIdempotencyKey)) == "" {
+			AbortBadRequest(c, "idempotency_key_required", "Idempotency-Key is required", nil)
+			return
+		}
+		c.Next()
+	}
+}
 
 // bodyWriter 捕获响应。
 type bodyWriter struct {
@@ -100,37 +112,31 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 				c.Abort()
 				return
 			case "failed":
-				// 5xx 失败允许重试：删除后重新执行
-				_ = store.Delete(deviceID, route, key)
-				// fallthrough to re-create
-				rec, created, err = store.BeginOrGet(deviceID, route, key, reqHash, DefaultIdempotencyTTL)
+				// 5xx 失败允许一个请求通过 CAS 获取新执行权。
+				rec, created, err = store.TryTakeover(rec, reqHash, DefaultIdempotencyTTL)
 				if err != nil {
 					AbortInternal(c, "idempotency_store_failed", "idempotency store failed")
 					return
 				}
-				if !created && rec.Status == "completed" {
-					c.Header("X-Idempotency-Replayed", "true")
-					c.Data(rec.HTTPStatus, "application/json; charset=utf-8", []byte(rec.ResponseBody))
-					c.Abort()
+				if !created {
+					AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
 					return
-				}
-				if !created && rec.Status == "processing" {
-					// still processing by another
-					if time.Since(rec.UpdatedAt) < ProcessingTimeout {
-						AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
-						return
-					}
-					_ = store.Delete(deviceID, route, key)
-					_, _, _ = store.BeginOrGet(deviceID, route, key, reqHash, DefaultIdempotencyTTL)
 				}
 			case "processing":
 				if time.Since(rec.UpdatedAt) < ProcessingTimeout {
 					AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
 					return
 				}
-				// 超时：允许接管
-				_ = store.Delete(deviceID, route, key)
-				_, _, _ = store.BeginOrGet(deviceID, route, key, reqHash, DefaultIdempotencyTTL)
+				// 超时：仅一个请求可通过 CAS 接管。
+				rec, created, err = store.TryTakeover(rec, reqHash, DefaultIdempotencyTTL)
+				if err != nil {
+					AbortInternal(c, "idempotency_store_failed", "idempotency store failed")
+					return
+				}
+				if !created {
+					AbortConflict(c, "idempotency_in_progress", "request in progress", nil)
+					return
+				}
 			default:
 				// unknown status — proceed carefully
 			}
@@ -148,15 +154,18 @@ func Idempotency(store *repo.IdempotencyRepo, route string) gin.HandlerFunc {
 		}
 		body := buf.String()
 
-		// 缓存策略：2xx/4xx 缓存；5xx 标记 failed 允许重试
-		cacheable := true
-		if status >= 500 {
-			cacheable = true // store as failed
-		}
+		// Transient client-facing responses must not outlive their retry window.
+		// In particular, caching 429 for 24h would replay yesterday's quota error
+		// after the daily counter has reset. 5xx remains recorded as failed so a
+		// later request can take over safely.
+		cacheable := status != http.StatusRequestTimeout &&
+			status != http.StatusConflict &&
+			status != http.StatusTooEarly &&
+			status != http.StatusTooManyRequests
 		if len(body) > MaxCachedBodyBytes {
 			body = body[:MaxCachedBodyBytes]
 		}
-		_ = store.Complete(deviceID, route, key, status, body, cacheable)
+		_, _ = store.CompleteClaim(rec, status, body, cacheable)
 		_ = rec // silence
 	}
 }

@@ -24,11 +24,11 @@
 | **expand** | 加列（可空/有默认）、加索引、加 CHECK/FK（数据已清洗）、双写新路径 | 忽略新列/约束即可回滚应用 |
 | **contract** | 删旧列、强制 NOT NULL、去掉兼容代码 | 需确认无旧版流量 |
 
-### 0007_data_constraints（本版本）
+### 0009_check_constraints 与广谱物种迁移
 
 **Expand only（MySQL 8+）**：
 
-- `animals`: species ∈ {cat,dog,goose}；rarity 1–5；hp/atk/def/spd 非负上限
+- `animals`: `species` 列保持 `NOT NULL`；可捕获资格、非空 ID、别名和中文名称由版本化物种内容注册表校验；rarity 1–5
 - `inferences`: status/kind/species 枚举
 - `products` / `orders`: 金额 ≥ 0；状态枚举
 - `data_requests` / `audit_logs`: 类型/状态/风险分
@@ -37,9 +37,9 @@
 **上线前数据清洗（contract 前置）**：
 
 ```sql
--- 非法 rarity / species 先修或隔离
+-- 空物种 ID / 非法 rarity 先修或隔离；不要再用静态三物种白名单清洗
 SELECT id, uuid, species, rarity FROM animals
- WHERE species NOT IN ('cat','dog','goose') OR rarity NOT BETWEEN 1 AND 5;
+ WHERE TRIM(species) = '' OR rarity NOT BETWEEN 1 AND 5;
 
 -- 孤儿 device 引用
 SELECT a.device_id FROM animals a
@@ -70,4 +70,5 @@ go run ./cmd/migrate status   # pending 应为空
 
 - 空库：`up` → `CurrentVersion`，`status` 无 pending
 - 重复 `up`：无副作用
-- `RUN_MYSQL_TESTS=1` 集成测试：非法 species / rarity=99 / 负金额 / 重复 inference_id 被 DB 拒绝
+- `RUN_MYSQL_TESTS=1` 集成测试：NULL species / rarity=99 / 负金额 / 重复 inference_id 被 DB 拒绝
+- 服务测试：未注册或未认证的 species 在进入捕获、发奖和同步前被物种注册表拒绝

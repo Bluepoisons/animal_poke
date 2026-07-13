@@ -43,7 +43,9 @@
       "id": "generated-narrative-policy",
       "paths": [
         "backend/internal/narrativepolicy",
-        "backend/internal/services/ai.go"
+        "backend/internal/services/ai.go",
+        "backend/internal/services/adventure.go",
+        "backend/internal/services/chinese_pet.go"
       ],
       "lint_paths": [],
       "owner": "AI Safety",
@@ -64,7 +66,10 @@
       "id": "narrative-presentation",
       "paths": [
         "frontend/src/narrative",
-        "frontend/src/features/animal-poke/screens/CaptureScreen.tsx"
+        "frontend/src/features/animal-poke/screens/CaptureScreen.tsx",
+        "frontend/src/features/animal-poke/screens/AdventureScreen.tsx",
+        "frontend/src/features/animal-poke/adventureApi.ts",
+        "frontend/src/features/animal-poke/petLocalization.ts"
       ],
       "owner": "Player Experience",
       "review": {
@@ -80,7 +85,10 @@
         }
       },
       "lint_paths": [
-        "frontend/src/narrative"
+        "frontend/src/narrative",
+        "frontend/src/features/animal-poke/screens/AdventureScreen.tsx",
+        "frontend/src/features/animal-poke/adventureApi.ts",
+        "frontend/src/features/animal-poke/petLocalization.ts"
       ]
     }
   ]

@@ -12,7 +12,7 @@ const (
 	SpeciesCat         = "cat"
 	SpeciesDog         = "dog"
 	SpeciesGoose       = "goose"
-	SpeciesRabbit      = "rabbit" // 试点百科物种（catalog_only）
+	SpeciesRabbit      = "rabbit"
 	SpeciesUnknown     = speciespack.IDUnknown
 	SpeciesUnsupported = speciespack.IDUnsupported
 )

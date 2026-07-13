@@ -10,8 +10,8 @@
   "names": {
     "common": { "zh-CN": "鹅", "en": "Goose" },
     "scientific": "Anser sp.",
-    "aliases": ["geese", "gander", "gosling"],
-    "contains": ["goose", "geese", "鹅"],
+    "aliases": ["geese", "gander", "gosling", "大鹅"],
+    "contains": ["大鹅", "goose", "geese", "鹅"],
     "contains_exclude": ["mongoose"]
   },
   "habitat": {

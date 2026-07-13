@@ -12,16 +12,18 @@ import (
 
 // DailyLimitConfig 每日限额配置。
 type DailyLimitConfig struct {
-	DetectLimit  int `json:"detect_limit"`
-	AnalyzeLimit int `json:"analyze_limit"`
-	ValueLimit   int `json:"value_limit"`
+	DetectLimit    int `json:"detect_limit"`
+	AnalyzeLimit   int `json:"analyze_limit"`
+	ValueLimit     int `json:"value_limit"`
+	AdventureLimit int `json:"adventure_limit"`
 }
 
 // DefaultDailyLimits 默认每日调用上限。
 var DefaultDailyLimits = DailyLimitConfig{
-	DetectLimit:  100,
-	AnalyzeLimit: 50,
-	ValueLimit:   20,
+	DetectLimit:    100,
+	AnalyzeLimit:   50,
+	ValueLimit:     20,
+	AdventureLimit: 12,
 }
 
 // DailyCallCounter 每日调用计数器。
@@ -33,9 +35,10 @@ type DailyCallCounter struct {
 }
 
 type deviceCounters struct {
-	detect  dailyCount
-	analyze dailyCount
-	value   dailyCount
+	detect    dailyCount
+	analyze   dailyCount
+	value     dailyCount
+	adventure dailyCount
 }
 
 type dailyCount struct {
@@ -65,6 +68,8 @@ func (dc *DailyCallCounter) limitOf(callType string) int {
 		return dc.limits.AnalyzeLimit
 	case "value":
 		return dc.limits.ValueLimit
+	case "adventure":
+		return dc.limits.AdventureLimit
 	default:
 		return 0
 	}
@@ -111,6 +116,8 @@ func (dc *DailyCallCounter) allow(deviceID, callType string) (bool, int, int) {
 		c = &d.analyze
 	case "value":
 		c = &d.value
+	case "adventure":
+		c = &d.adventure
 	default:
 		return true, -1, 0
 	}

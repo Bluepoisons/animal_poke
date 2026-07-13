@@ -66,7 +66,49 @@ describe('BattleArenaScreen', () => {
 
     const ultimate = screen.getByTestId('battle-ultimate')
     expect(ultimate).toBeEnabled()
+    expect(screen.getByText('我的猫')).toBeInTheDocument()
+    expect(screen.getByText('对手狗')).toBeInTheDocument()
+    expect(screen.getByText('伙伴对战')).toBeInTheDocument()
     fireEvent.click(ultimate)
     expect(useUltimate).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a neutral companion when battle species is missing', () => {
+    const battle: BattleContextValue = {
+      state: {
+        phase: 'matching',
+        playerPet: null,
+        enemyPet: null,
+        round: 0,
+        maxRounds: 30,
+        log: [],
+        result: null,
+        rewards: null,
+        strategy: 'balanced',
+        weather: 'sunny',
+        isAutoPlaying: false,
+      },
+      enterSelect: vi.fn(),
+      selectPet: vi.fn(() => true),
+      startMatching: vi.fn(),
+      executeNextRound: vi.fn(),
+      useUltimate: vi.fn(() => false),
+      setStrategy: vi.fn(),
+      useBattleItem: vi.fn(() => true),
+      toggleAutoPlay: vi.fn(),
+      finishBattle: vi.fn(),
+      reset: vi.fn(),
+    }
+    vi.mocked(useBattle).mockReturnValue(battle)
+
+    render(
+      <I18nProvider>
+        <BattleArenaScreen />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByText('我的动物伙伴')).toBeInTheDocument()
+    expect(screen.getByText('对手动物伙伴')).toBeInTheDocument()
+    expect(screen.queryByText(/我的猫|对手狗/)).toBeNull()
   })
 })

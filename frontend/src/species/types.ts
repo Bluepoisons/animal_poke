@@ -8,6 +8,17 @@ export type RecognitionStatus =
   | 'recognition_certified'
   | 'capturable'
 
+export type SpeciesGroup =
+  | 'companion'
+  | 'farm'
+  | 'wildlife'
+  | 'bird'
+  | 'reptile'
+  | 'amphibian'
+  | 'aquatic'
+  | 'insect'
+  | 'other'
+
 export type Localized = Record<string, string>
 
 export interface SpeciesCertification {
@@ -70,6 +81,8 @@ export interface SpeciesNames {
 /** 物种内容包 */
 export interface SpeciesPack {
   id: string
+  /** Frontend browsing/correction category; unknown values safely fall back to other. */
+  group?: SpeciesGroup
   version: string
   contentId: string
   status: RecognitionStatus

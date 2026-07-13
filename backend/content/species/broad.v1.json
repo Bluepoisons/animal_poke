@@ -1,0 +1,258 @@
+[
+  {
+    "id": "other_animal", "version": "1.0.0", "content_id": "species.other_animal", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "其他动物", "en": "Other animal" }, "scientific": "Animalia", "contains": ["其他动物"] },
+    "habitat": { "zh-CN": "多种自然或人居环境" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不追逐、不投喂、不触碰" },
+    "welfare": { "level": "unknown" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐾", "icon": "species/other_animal.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "horse", "version": "1.0.0", "content_id": "species.horse", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "马", "en": "Horse" }, "scientific": "Equus caballus", "aliases": ["pony", "foal", "stallion", "mare"], "contains": ["马", "horse", "pony"] },
+    "habitat": { "zh-CN": "牧场、农场与草原" }, "observation_tips": { "zh-CN": "征得管理者同意后保持距离观察，不惊扰动物" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐴", "icon": "species/horse.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "cow", "version": "1.0.0", "content_id": "species.cow", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "牛", "en": "Cattle" }, "scientific": "Bos taurus", "aliases": ["cattle", "bull", "calf", "ox"], "contains": ["牛", "cow", "cattle"] },
+    "habitat": { "zh-CN": "农场与牧场" }, "observation_tips": { "zh-CN": "征得管理者同意后保持距离观察，不进入围栏" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐄", "icon": "species/cow.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "sheep", "version": "1.0.0", "content_id": "species.sheep", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "羊", "en": "Sheep" }, "scientific": "Ovis aries", "aliases": ["lamb", "ewe", "ram"], "contains": ["绵羊", "sheep", "lamb"] },
+    "habitat": { "zh-CN": "牧场与丘陵草地" }, "observation_tips": { "zh-CN": "保持安静和距离，不驱赶羊群" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐑", "icon": "species/sheep.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "goat", "version": "1.0.0", "content_id": "species.goat", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "山羊", "en": "Goat" }, "scientific": "Capra hircus", "aliases": ["goat kid", "billy goat"], "contains": ["山羊", "goat"] },
+    "habitat": { "zh-CN": "山地、牧场与农场" }, "observation_tips": { "zh-CN": "保持距离，不用食物吸引或挑逗" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐐", "icon": "species/goat.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "pig", "version": "1.0.0", "content_id": "species.pig", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "猪", "en": "Pig" }, "scientific": "Sus scrofa domesticus", "aliases": ["piglet", "hog", "boar", "swine"], "contains": ["猪", "pig", "boar"] },
+    "habitat": { "zh-CN": "农场与林缘" }, "observation_tips": { "zh-CN": "保持距离，不进入圈舍或干扰进食" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐷", "icon": "species/pig.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "deer", "version": "1.0.0", "content_id": "species.deer", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鹿", "en": "Deer" }, "scientific": "Cervidae", "aliases": ["fawn", "stag", "doe", "reindeer"], "contains": ["鹿", "deer", "reindeer"] },
+    "habitat": { "zh-CN": "森林、草地与湿地边缘" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "none" }, "assets": { "emoji": "🦌", "icon": "species/deer.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "squirrel", "version": "1.0.0", "content_id": "species.squirrel", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "松鼠", "en": "Squirrel" }, "scientific": "Sciuridae", "aliases": ["chipmunk"], "contains": ["松鼠", "squirrel", "chipmunk"] },
+    "habitat": { "zh-CN": "林地、公园与城市绿地" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "none" }, "assets": { "emoji": "🐿️", "icon": "species/squirrel.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "monkey", "version": "1.0.0", "content_id": "species.monkey", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "猴", "en": "Monkey" }, "scientific": "Simiiformes", "aliases": ["ape", "macaque", "baboon", "gibbon"], "contains": ["猴", "猿", "monkey", "macaque"] },
+    "habitat": { "zh-CN": "森林、山地与保护区" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "保护动物仅限远距离观察，不得诱导接近或干扰" } }, "assets": { "emoji": "🐒", "icon": "species/monkey.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "bear", "version": "1.0.0", "content_id": "species.bear", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "熊", "en": "Bear" }, "scientific": "Ursidae", "aliases": ["panda", "polar bear", "brown bear", "black bear", "熊猫"], "contains": ["熊", "熊猫", "bear", "panda"] },
+    "habitat": { "zh-CN": "森林、山地与极地" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "保护动物仅限远距离观察，不得诱导接近或干扰" } }, "assets": { "emoji": "🐻", "icon": "species/bear.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "elephant", "version": "1.0.0", "content_id": "species.elephant", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "大象", "en": "Elephant" }, "scientific": "Elephantidae", "aliases": ["elephant calf"], "contains": ["大象", "elephant"] },
+    "habitat": { "zh-CN": "草原、森林与保护区" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "endangered", "notes": { "zh-CN": "保护动物仅限远距离观察，不得诱导接近或干扰" } }, "assets": { "emoji": "🐘", "icon": "species/elephant.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "big_cat", "version": "1.0.0", "content_id": "species.big_cat", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "大型猫科动物", "en": "Big cat" }, "scientific": "Pantherinae", "aliases": ["lion", "tiger", "leopard", "cheetah", "jaguar", "lynx", "狮子", "老虎", "豹子", "猎豹"], "contains": ["狮子", "老虎", "豹子", "猎豹", "lion", "tiger", "leopard", "cheetah"] },
+    "habitat": { "zh-CN": "森林、草原、山地与保护区" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "endangered", "notes": { "zh-CN": "保护动物仅限远距离观察，不得诱导接近或干扰" } }, "assets": { "emoji": "🐯", "icon": "species/big_cat.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "bird", "version": "1.0.0", "content_id": "species.bird", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鸟", "en": "Bird" }, "scientific": "Aves", "aliases": ["avian", "songbird", "sparrow", "crow", "magpie", "swan", "owl", "turkey", "peacock", "鸟类", "天鹅", "猫头鹰", "麻雀", "乌鸦", "喜鹊", "孔雀"], "contains": ["鸟类", "蜂鸟", "鸟", "bird", "avian"] },
+    "habitat": { "zh-CN": "林地、湿地、草原与城市绿地" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不惊飞、不触碰巢穴" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐦", "icon": "species/bird.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "duck", "version": "1.0.0", "content_id": "species.duck", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鸭", "en": "Duck" }, "scientific": "Anatidae", "aliases": ["duckling", "mallard", "drake", "鸭子"], "contains": ["鸭", "duck", "mallard"] },
+    "habitat": { "zh-CN": "湖泊、河流、湿地与农场" }, "observation_tips": { "zh-CN": "保持距离观察，不投喂面包，不追赶水鸟" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "none" }, "assets": { "emoji": "🦆", "icon": "species/duck.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "chicken", "version": "1.0.0", "content_id": "species.chicken", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鸡", "en": "Chicken" }, "scientific": "Gallus gallus domesticus", "aliases": ["hen", "rooster", "chick"], "contains": ["鸡", "chicken", "rooster"] },
+    "habitat": { "zh-CN": "农场与乡村环境" }, "observation_tips": { "zh-CN": "征得管理者同意后观察，不追赶或惊扰鸡群" },
+    "welfare": { "level": "livestock" }, "protection": { "status": "none" }, "assets": { "emoji": "🐔", "icon": "species/chicken.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "pigeon", "version": "1.0.0", "content_id": "species.pigeon", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鸽子", "en": "Pigeon" }, "scientific": "Columbidae", "aliases": ["dove", "squab"], "contains": ["鸽", "pigeon", "dove"] },
+    "habitat": { "zh-CN": "城市、广场、山崖与林地" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不追逐、不投喂" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "none" }, "assets": { "emoji": "🕊️", "icon": "species/pigeon.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "parrot", "version": "1.0.0", "content_id": "species.parrot", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鹦鹉", "en": "Parrot" }, "scientific": "Psittaciformes", "aliases": ["parakeet", "budgie", "cockatoo", "macaw"], "contains": ["鹦鹉", "parrot", "parakeet"] },
+    "habitat": { "zh-CN": "热带林地与人居环境" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "野生鹦鹉可能受保护，仅限远距离观察" } }, "assets": { "emoji": "🦜", "icon": "species/parrot.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "eagle", "version": "1.0.0", "content_id": "species.eagle", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鹰", "en": "Eagle" }, "scientific": "Accipitridae", "aliases": ["hawk", "falcon", "raptor"], "contains": ["鹰", "隼", "雕", "eagle", "hawk", "falcon"] },
+    "habitat": { "zh-CN": "山地、森林、草原与海岸" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "猛禽仅限远距离观察，不干扰巢区" } }, "assets": { "emoji": "🦅", "icon": "species/eagle.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "turtle", "version": "1.0.0", "content_id": "species.turtle", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "龟", "en": "Turtle" }, "scientific": "Testudines", "aliases": ["tortoise", "terrapin", "sea turtle"], "contains": ["龟", "鳖", "turtle", "tortoise"] },
+    "habitat": { "zh-CN": "河湖、湿地、海洋与陆地" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "部分龟类受严格保护，不得搬动或触碰" } }, "assets": { "emoji": "🐢", "icon": "species/turtle.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "lizard", "version": "1.0.0", "content_id": "species.lizard", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "蜥蜴", "en": "Lizard" }, "scientific": "Lacertilia", "aliases": ["gecko", "iguana", "chameleon"], "contains": ["蜥蜴", "壁虎", "lizard", "gecko"] },
+    "habitat": { "zh-CN": "荒漠、森林、草地与人居边缘" }, "observation_tips": { "zh-CN": "保持距离，用镜头安静观察；不抓取、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🦎", "icon": "species/lizard.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "snake", "version": "1.0.0", "content_id": "species.snake", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "蛇", "en": "Snake" }, "scientific": "Serpentes", "aliases": ["python", "cobra", "viper"], "contains": ["蛇", "snake", "python", "cobra"] },
+    "habitat": { "zh-CN": "森林、草地、湿地与荒漠" }, "observation_tips": { "zh-CN": "仅远距离观察，不靠近、不触碰；遇到不明蛇类及时离开" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐍", "icon": "species/snake.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "crocodile", "version": "1.0.0", "content_id": "species.crocodile", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鳄鱼", "en": "Crocodile" }, "scientific": "Crocodylia", "aliases": ["alligator", "caiman", "croc"], "contains": ["鳄", "crocodile", "alligator"] },
+    "habitat": { "zh-CN": "河流、湖泊、沼泽与河口" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "危险且可能受保护，仅可远距离观察" } }, "assets": { "emoji": "🐊", "icon": "species/crocodile.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "frog", "version": "1.0.0", "content_id": "species.frog", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "青蛙", "en": "Frog" }, "scientific": "Anura", "aliases": ["toad", "tadpole", "bullfrog", "牛蛙"], "contains": ["青蛙", "牛蛙", "蟾蜍", "蛙", "frog", "bullfrog", "toad"] },
+    "habitat": { "zh-CN": "池塘、溪流、湿地与林地" }, "observation_tips": { "zh-CN": "保持距离观察，不徒手触碰，不破坏水边环境" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐸", "icon": "species/frog.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "salamander", "version": "1.0.0", "content_id": "species.salamander", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "蝾螈", "en": "Salamander" }, "scientific": "Urodela", "aliases": ["newt", "axolotl", "娃娃鱼"], "contains": ["蝾螈", "娃娃鱼", "salamander", "newt", "axolotl"] },
+    "habitat": { "zh-CN": "湿润林地、溪流与洞穴" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "部分蝾螈受严格保护，不得捕捉或移动" } }, "assets": { "emoji": "🦎", "icon": "species/salamander.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "fish", "version": "1.0.0", "content_id": "species.fish", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鱼", "en": "Fish" }, "scientific": "Actinopterygii", "aliases": ["goldfish", "koi", "salmon", "tuna", "seahorse", "piranha", "海马", "食人鱼"], "contains": ["海马", "食人鱼", "鱼", "fish", "goldfish", "koi", "seahorse", "piranha"] },
+    "habitat": { "zh-CN": "河湖、湿地与海洋" }, "observation_tips": { "zh-CN": "隔水或在安全岸边观察，不捞取、不投放异物" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐟", "icon": "species/fish.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "shark", "version": "1.0.0", "content_id": "species.shark", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鲨鱼", "en": "Shark" }, "scientific": "Selachimorpha", "aliases": ["shark pup"], "contains": ["鲨鱼", "鲨", "shark"] },
+    "habitat": { "zh-CN": "近岸与远洋海域" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "部分鲨鱼受严格保护，仅可远距离观察" } }, "assets": { "emoji": "🦈", "icon": "species/shark.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "dolphin", "version": "1.0.0", "content_id": "species.dolphin", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "海豚", "en": "Dolphin" }, "scientific": "Delphinidae", "aliases": ["porpoise", "江豚"], "contains": ["海豚", "江豚", "dolphin", "porpoise"] },
+    "habitat": { "zh-CN": "近岸、海湾与远洋" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "protected", "notes": { "zh-CN": "鲸豚类仅限远距离观察，不追船或下水接近" } }, "assets": { "emoji": "🐬", "icon": "species/dolphin.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "whale", "version": "1.0.0", "content_id": "species.whale", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "鲸", "en": "Whale" }, "scientific": "Cetacea", "aliases": ["orca", "killer whale"], "contains": ["鲸", "whale", "orca"] },
+    "habitat": { "zh-CN": "海洋与部分大型河流" }, "observation_tips": { "zh-CN": "仅可远距离观察和拍摄；不靠近、不追逐、不投喂、不触碰" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "endangered", "notes": { "zh-CN": "鲸类仅限远距离观察，不追逐或切断游动路线" } }, "assets": { "emoji": "🐋", "icon": "species/whale.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "仅远距取景，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "octopus", "version": "1.0.0", "content_id": "species.octopus", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "章鱼", "en": "Octopus" }, "scientific": "Octopoda", "aliases": ["octopi", "八爪鱼"], "contains": ["章鱼", "八爪鱼", "octopus"] },
+    "habitat": { "zh-CN": "礁石、海床与近岸海域" }, "observation_tips": { "zh-CN": "隔水保持距离观察，不伸手触碰或移动栖息物" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐙", "icon": "species/octopus.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "crab", "version": "1.0.0", "content_id": "species.crab", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "螃蟹", "en": "Crab" }, "scientific": "Brachyura", "aliases": ["hermit crab"], "contains": ["螃蟹", "蟹", "crab"] },
+    "habitat": { "zh-CN": "海岸、滩涂、河口与淡水" }, "observation_tips": { "zh-CN": "保持距离观察，不翻动礁石，不抓取或带离" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🦀", "icon": "species/crab.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "butterfly", "version": "1.0.0", "content_id": "species.butterfly", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "蝴蝶", "en": "Butterfly" }, "scientific": "Rhopalocera", "aliases": ["moth", "caterpillar"], "contains": ["蝴蝶", "蛾", "butterfly", "moth"] },
+    "habitat": { "zh-CN": "花园、草地与林缘" }, "observation_tips": { "zh-CN": "保持距离观察，不捕捉，不触碰翅膀或幼虫" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🦋", "icon": "species/butterfly.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  },
+  {
+    "id": "bee", "version": "1.0.0", "content_id": "species.bee", "status": "capturable",
+    "certification": { "golden_set_version": "1.0.0", "model_track": "detect" },
+    "names": { "common": { "zh-CN": "蜜蜂", "en": "Bee" }, "scientific": "Anthophila", "aliases": ["bumblebee", "honeybee"], "contains": ["蜜蜂", "bee", "bumblebee"] },
+    "habitat": { "zh-CN": "花园、农田、草地与林缘" }, "observation_tips": { "zh-CN": "保持距离观察，不触碰蜂巢，不挥打或刺激蜂群" },
+    "welfare": { "level": "wildlife" }, "protection": { "status": "unknown" }, "assets": { "emoji": "🐝", "icon": "species/bee.png" },
+    "gameplay": { "throw_item": { "zh-CN": "远距观察标记" }, "capture_mechanics": { "zh-CN": "镜头确认，不接触动物" }, "detect_threshold": 0.72, "stat_modifiers": { "hp": 1, "atk": 1, "def": 1, "spd": 1, "crit": 3, "eva": 3 }, "rarity_weights": [{ "tier": "common", "weight": 65 }, { "tier": "uncommon", "weight": 25 }, { "tier": "rare", "weight": 10 }] }
+  }
+]

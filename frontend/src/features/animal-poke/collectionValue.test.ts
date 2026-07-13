@@ -15,4 +15,12 @@ describe('collectionValue', () => {
     expect(r.researchGained).toBeGreaterThan(0)
     expect(loadCollectionMeta().dog.captureCount).toBe(2)
   })
+
+  it('keeps different concrete other animals as separate discoveries', () => {
+    expect(registerCapture('other_animal', '赤狐').isFirst).toBe(true)
+    expect(registerCapture('other_animal', '仓鼠').isFirst).toBe(true)
+    expect(registerCapture('other_animal', '赤狐').isFirst).toBe(false)
+    expect(loadCollectionMeta()['other_animal:赤狐'].captureCount).toBe(2)
+    expect(loadCollectionMeta()['other_animal:仓鼠'].captureCount).toBe(1)
+  })
 })

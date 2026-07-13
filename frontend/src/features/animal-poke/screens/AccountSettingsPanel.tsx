@@ -74,7 +74,7 @@ export default function AccountSettingsPanel({ onToast, onClose }: AccountSettin
 
   return (
     <div className="ap-screen ap-account-panel" data-testid="account-settings">
-      <PageTitle title="账号与设备" subtitle="ACCOUNT · 绑定 / 安全" rightText="关闭" rightTone="yellow" />
+      <PageTitle title="账号与设备" subtitle="账号 · 绑定 / 安全" rightText="关闭" rightTone="yellow" />
       <button type="button" className="ap-action-button" onClick={onClose} style={{ marginBottom: 12 }}>
         返回
       </button>
@@ -82,7 +82,7 @@ export default function AccountSettingsPanel({ onToast, onClose }: AccountSettin
       <section className="ap-account-card">
         <h3>当前状态</h3>
         {info?.guest !== false ? (
-          <p>游客模式（仅本机设备 ID）。清除数据后无法恢复，建议绑定。</p>
+          <p>游客模式（仅本机设备编号）。清除数据后无法恢复，建议绑定。</p>
         ) : (
           <p>
             已绑定账号 <code>{info?.accountId?.slice(0, 8)}…</code>

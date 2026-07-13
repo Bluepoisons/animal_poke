@@ -1,6 +1,6 @@
 // Package speciespack 实现可扩展物种内容包与识别认证状态（AP-093）。
 //
-// 业务侧应通过 Registry 查询内容 ID / 版本与状态，避免 cat|dog|goose 多处 switch。
+// 业务侧应通过 Registry 查询内容 ID / 版本与状态，避免在各模块维护物种 switch。
 // 未通过黄金集认证或认证过期的物种仅可进入百科（catalog_only），不可捕获/发奖。
 package speciespack
 

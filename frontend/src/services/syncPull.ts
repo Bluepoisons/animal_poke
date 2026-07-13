@@ -75,6 +75,14 @@ export async function pullAnimalsFromServer(opts?: {
         const existing = await AnimalRepository.getById(rec.id)
         if (!existing) {
           await AnimalRepository.add(rec)
+        } else {
+          await AnimalRepository.update({
+            ...existing,
+            ...rec,
+            photoDataUrl: existing.photoDataUrl,
+            narrative: existing.narrative,
+            isNew: existing.isNew,
+          })
         }
       }
       pulled += 1

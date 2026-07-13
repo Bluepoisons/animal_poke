@@ -11,7 +11,7 @@ describe('feedbackPrefs', () => {
     expect(loadFeedbackPrefs().soundEnabled).toBe(false)
   })
   it('announces rare only when enabled', () => {
-    expect(announceRareReveal('legendary')).toContain('稀有')
+    expect(announceRareReveal('legendary')).toBe('稀有揭晓：传说')
     saveFeedbackPrefs({ soundEnabled: true, hapticsEnabled: false, rareRevealEnabled: false })
     expect(announceRareReveal('legendary')).toBeNull()
   })

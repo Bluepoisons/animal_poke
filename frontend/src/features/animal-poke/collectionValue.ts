@@ -2,6 +2,8 @@
  * 重复捕获价值（#210）
  * 首捕解锁图鉴；重复转化为研究点/亲密度
  */
+import { chineseDetectedSpeciesName } from './petLocalization'
+
 const KEY = 'animal-poke-collection-meta'
 
 export interface SpeciesMeta {
@@ -39,9 +41,16 @@ export type CaptureValueResult = {
 }
 
 /** 登记一次捕获结果（按物种） */
-export function registerCapture(species: string, now = Date.now()): CaptureValueResult {
+function collectionSpeciesKey(species: string, speciesLabelZh?: string): string {
+  const label = speciesLabelZh?.trim()
+  return species === 'other_animal' && label ? `${species}:${label}` : species
+}
+
+export function registerCapture(species: string, speciesLabelZh?: string, now = Date.now()): CaptureValueResult {
   const all = loadCollectionMeta()
-  const prev = all[species]
+  const key = collectionSpeciesKey(species, speciesLabelZh)
+  const prev = all[key]
+  const speciesName = chineseDetectedSpeciesName(species, speciesLabelZh)
   if (!prev) {
     const meta: SpeciesMeta = {
       firstCaptureAt: now,
@@ -49,13 +58,13 @@ export function registerCapture(species: string, now = Date.now()): CaptureValue
       researchPoints: 10,
       affinity: 5,
     }
-    all[species] = meta
+    all[key] = meta
     saveCollectionMeta(all)
     return {
       isFirst: true,
       researchGained: 10,
       affinityGained: 5,
-      message: `首次发现 ${species}！图鉴已解锁`,
+      message: `首次发现${speciesName}！动物记录已解锁`,
       meta,
     }
   }
@@ -67,13 +76,13 @@ export function registerCapture(species: string, now = Date.now()): CaptureValue
     researchPoints: prev.researchPoints + researchGained,
     affinity: prev.affinity + affinityGained,
   }
-  all[species] = meta
+  all[key] = meta
   saveCollectionMeta(all)
   return {
     isFirst: false,
     researchGained,
     affinityGained,
-    message: `再次遇见 ${species}：研究点 +${researchGained} · 亲密度 +${affinityGained}`,
+    message: `再次遇见${speciesName}：研究点 +${researchGained} · 亲密度 +${affinityGained}`,
     meta,
   }
 }

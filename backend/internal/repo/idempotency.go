@@ -42,7 +42,7 @@ func (r *IdempotencyRepo) BeginOrGet(deviceID, route, key, requestHash string, t
 	err := r.db.Where("device_id = ? AND route = ? AND key_name = ?", deviceID, route, key).First(&existing).Error
 	if err == nil {
 		if !existing.ExpiresAt.IsZero() && now.After(existing.ExpiresAt) {
-			_ = r.db.Delete(&existing).Error
+			return r.TryTakeover(&existing, requestHash, ttl)
 		} else {
 			return &existing, false, nil
 		}
@@ -71,25 +71,72 @@ func (r *IdempotencyRepo) BeginOrGet(deviceID, route, key, requestHash string, t
 	return rec, true, nil
 }
 
-// Complete 写入最终响应。
-func (r *IdempotencyRepo) Complete(deviceID, route, key string, httpStatus int, body string, cacheable bool) error {
+// TryTakeover atomically replaces one observed record with a new processing
+// lease. The observed status/timestamp/hash form a compare-and-swap token, so
+// concurrent stale retries cannot both obtain execution rights.
+func (r *IdempotencyRepo) TryTakeover(observed *models.IdempotencyRecord, requestHash string, ttl time.Duration) (*models.IdempotencyRecord, bool, error) {
+	if r == nil || r.db == nil {
+		return nil, false, errors.New("idempotency repo unavailable")
+	}
+	if observed == nil || observed.ID == 0 {
+		return nil, false, ErrIdempotencyNotFound
+	}
+	now := time.Now().UTC()
+	res := r.db.Model(&models.IdempotencyRecord{}).
+		Where("id = ? AND status = ? AND request_hash = ? AND updated_at = ?", observed.ID, observed.Status, observed.RequestHash, observed.UpdatedAt).
+		Updates(map[string]interface{}{
+			"request_hash":  requestHash,
+			"status":        "processing",
+			"http_status":   0,
+			"response_body": "",
+			"completed_at":  nil,
+			"updated_at":    now,
+			"expires_at":    now.Add(ttl),
+		})
+	if res.Error != nil {
+		return nil, false, res.Error
+	}
+	var current models.IdempotencyRecord
+	if err := r.db.Where("id = ?", observed.ID).First(&current).Error; err != nil {
+		return nil, false, err
+	}
+	return &current, res.RowsAffected == 1, nil
+}
+
+// CompleteClaim writes the final response only while the caller still owns
+// the processing lease. A timed-out worker cannot overwrite a newer takeover.
+func (r *IdempotencyRepo) CompleteClaim(claim *models.IdempotencyRecord, httpStatus int, body string, cacheable bool) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, errors.New("idempotency repo unavailable")
+	}
+	if claim == nil || claim.ID == 0 {
+		return false, ErrIdempotencyNotFound
+	}
 	now := time.Now().UTC()
 	status := "completed"
 	if httpStatus >= 500 {
 		status = "failed"
 	}
+	query := r.db.Where(
+		"id = ? AND status = ? AND request_hash = ? AND updated_at = ?",
+		claim.ID,
+		"processing",
+		claim.RequestHash,
+		claim.UpdatedAt,
+	)
 	if !cacheable {
-		return r.db.Where("device_id = ? AND route = ? AND key_name = ?", deviceID, route, key).Delete(&models.IdempotencyRecord{}).Error
+		res := query.Delete(&models.IdempotencyRecord{})
+		return res.RowsAffected == 1, res.Error
 	}
-	return r.db.Model(&models.IdempotencyRecord{}).
-		Where("device_id = ? AND route = ? AND key_name = ?", deviceID, route, key).
+	res := query.Model(&models.IdempotencyRecord{}).
 		Updates(map[string]interface{}{
 			"status":        status,
 			"http_status":   httpStatus,
 			"response_body": body,
 			"completed_at":  now,
 			"updated_at":    now,
-		}).Error
+		})
+	return res.RowsAffected == 1, res.Error
 }
 
 // Delete 删除记录。

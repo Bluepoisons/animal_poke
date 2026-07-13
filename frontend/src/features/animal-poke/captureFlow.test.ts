@@ -45,10 +45,31 @@ describe('captureFlow state machine', () => {
     s = reduceCaptureFlow(s, {
       type: 'DETECT_SUCCESS',
       detectInferenceId: 'inf-1',
-      detections: [animal({ id: 'a1', species: 'cat', confidence: 0.92 })],
+      detections: [animal({ id: 'a1', targetId: 'server-target-7', species: 'cat', confidence: 0.92 })],
     })
     expect(s.phase).toBe('target_confirmed')
     expect(s.selectedBox?.species).toBe('cat')
+    expect(s.targetId).toBe('server-target-7')
+    expect(canEnterCapture(s)).toBe(true)
+  })
+
+  it('atomically replaces the species and detect credential after server-confirmed correction', () => {
+    let s = createInitialCaptureFlow()
+    s = reduceCaptureFlow(s, { type: 'START_DETECT', photoBlob: new Blob(['x']) })
+    s = reduceCaptureFlow(s, {
+      type: 'DETECT_SUCCESS',
+      detectInferenceId: 'inf-original',
+      detections: [animal({ id: 'a1', targetId: '0', species: 'cat', label: '猫', confidence: 0.92 })],
+    })
+    s = reduceCaptureFlow(s, {
+      type: 'CORRECTION_SUCCESS',
+      detectInferenceId: 'inf-derived',
+      animal: animal({ id: 'a1', targetId: '0', species: 'other_animal', label: '赤狐', confidence: 0.92 }),
+    })
+    expect(s.phase).toBe('target_confirmed')
+    expect(s.detectInferenceId).toBe('inf-derived')
+    expect(s.selectedBox).toMatchObject({ species: 'other_animal', label: '赤狐', targetId: '0' })
+    expect(s.targetId).toBe('0')
     expect(canEnterCapture(s)).toBe(true)
   })
 
@@ -56,8 +77,10 @@ describe('captureFlow state machine', () => {
     const low = filterEligibleDetections([
       animal({ id: '1', species: 'cat', confidence: 0.5 }),
       animal({ id: '2', species: 'dog', confidence: 0.9 }),
+      animal({ id: '3', species: 'whale', confidence: 0.9 }),
+      animal({ id: '4', species: 'dragon', confidence: 1 }),
     ])
-    expect(low.map((d) => d.species)).toEqual(['dog'])
+    expect(low.map((d) => d.species)).toEqual(['dog', 'whale'])
   })
 
   it('requires selection when multiple animals', () => {

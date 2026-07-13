@@ -1,4 +1,6 @@
 /** 可关闭音效/触觉偏好（#213） */
+import { chineseRarityName } from './petLocalization'
+
 const KEY = 'animal-poke-feedback-prefs'
 
 export interface FeedbackPrefs {
@@ -47,7 +49,7 @@ export function announceRareReveal(
   if (!prefs.rareRevealEnabled) return null
   if (rarity === 'epic' || rarity === 'legendary' || rarity === '4' || rarity === '5') {
     hapticTap(prefs.hapticsEnabled)
-    return `✨ 稀有揭晓：${rarity}`
+    return `稀有揭晓：${chineseRarityName(rarity === '4' ? 'epic' : rarity === '5' ? 'legendary' : rarity)}`
   }
   return null
 }

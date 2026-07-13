@@ -2,12 +2,16 @@
   "id": "rabbit",
   "version": "1.0.0",
   "content_id": "species.rabbit",
-  "status": "catalog_only",
+  "status": "capturable",
+  "certification": {
+    "golden_set_version": "1.0.0",
+    "model_track": "detect"
+  },
   "names": {
     "common": { "zh-CN": "兔", "en": "Rabbit" },
     "scientific": "Oryctolagus cuniculus",
-    "aliases": ["bunny", "hare", "leveret"],
-    "contains": ["兔", "rabbit", "bunny"]
+    "aliases": ["bunny", "hare", "leveret", "野兔"],
+    "contains": ["野兔", "兔", "rabbit", "bunny"]
   },
   "habitat": {
     "zh-CN": "草地、灌丛与公园边缘",
@@ -20,8 +24,8 @@
   "welfare": {
     "level": "wildlife",
     "notes": {
-      "zh-CN": "试点百科物种：未通过识别黄金集认证前不可捕获或发奖",
-      "en": "Pilot encyclopedia species: not capturable or rewardable until recognition-certified"
+      "zh-CN": "可进入动物记录与幻想玩法；野生个体请勿追逐或触碰",
+      "en": "Available for observation records and fictional play; never chase or touch wild individuals"
     }
   },
   "protection": {
@@ -30,19 +34,27 @@
   "assets": {
     "emoji": "🐰",
     "icon": "species/rabbit.png",
-    "placeholder_tone": "muted"
+    "placeholder_tone": "natural"
   },
   "gameplay": {
-    "detect_threshold": 0.85
+    "throw_item": { "zh-CN": "远距观察标记", "en": "Remote observation marker" },
+    "capture_mechanics": { "zh-CN": "镜头确认，不追逐、不接触动物", "en": "Confirm by camera without chasing or touching" },
+    "detect_threshold": 0.8,
+    "stat_modifiers": { "hp": 0.8, "atk": 0.7, "def": 0.8, "spd": 1.3, "crit": 5, "eva": 8 },
+    "rarity_weights": [
+      { "tier": "common", "weight": 65 },
+      { "tier": "uncommon", "weight": 25 },
+      { "tier": "rare", "weight": 10 }
+    ]
   },
   "i18n": {
     "zh-CN": {
-      "blurb": "第四物种试点：仅百科展示",
-      "certification_note": "待黄金集认证后方可开放识别捕获"
+      "blurb": "可进入动物记录与中文幻想探险",
+      "certification_note": "已纳入广谱物种识别"
     },
     "en": {
-      "blurb": "Fourth-species pilot: encyclopedia only",
-      "certification_note": "Capture unlocks only after golden-set certification"
+      "blurb": "Available for observation records and fictional adventures",
+      "certification_note": "Included in broad animal recognition"
     }
   }
 }

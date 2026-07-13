@@ -78,8 +78,8 @@ export const HOME_ACTIVITIES: HomeActivity[] = [
   },
   {
     id: 'home.narrative',
-    title: '手账章节',
-    description: '推进叙事节拍（序章/热线路径）',
+    title: '伙伴远征',
+    description: '与动物伙伴完成一次人工智能生成的中文幻想奇遇',
     kind: 'narrative_beat',
     needsCamera: false,
     needsLocation: false,

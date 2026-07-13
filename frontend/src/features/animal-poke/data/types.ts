@@ -1,4 +1,5 @@
 import type { RarityTier, SpeciesType } from '../../../types'
+import type { SpeciesGroup } from '../../../species'
 
 /**
  * Feature-local aliases for shared domain types (AP-032).
@@ -15,10 +16,9 @@ export type ScreenId =
   | 'battle'
   | 'store'
   | 'settings'
-  | 'journal'
-  | 'prologue'
+  | 'adventure'
 
-export type PokedexFilter = 'all' | 'cat' | 'goose' | 'dog'
+export type PokedexFilter = 'all' | SpeciesGroup
 
 export type Strategy = 'aggressive' | 'balanced' | 'defensive'
 

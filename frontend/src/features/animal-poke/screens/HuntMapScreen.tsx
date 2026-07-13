@@ -8,18 +8,13 @@ import { DISCOVERY_RANGE_M } from '../../../lbs/constants'
 import { discoveryToHuntTarget } from '../lbsMap'
 import type { HuntTarget } from '../data/types'
 import { useI18n } from '../../../i18n'
+import { chineseRarityName, chineseSpeciesName } from '../petLocalization'
 
 interface HuntMapScreenProps {
   selectedTargetId: string
   onSelectTarget: (id: string) => void
   onBack: () => void
 }
-
-const speciesNameKeys = {
-  goose: 'species.goose',
-  cat: 'species.cat',
-  dog: 'species.dog',
-} as const
 
 export default function HuntMapScreen({
   selectedTargetId,
@@ -159,7 +154,7 @@ export default function HuntMapScreen({
           ) : (
             <>
               <h2>
-                {t(speciesNameKeys[selected.species as keyof typeof speciesNameKeys]) ?? selected.species} · {selected.distanceMeters}m · {selected.rarity}
+                {chineseSpeciesName(selected.species)} · {selected.distanceMeters} 米 · {chineseRarityName(selected.rarity)}
               </h2>
               <p>{t('map.target_detail', { label: selected.label })}</p>
             </>
@@ -174,7 +169,7 @@ export default function HuntMapScreen({
           <ul>
             {targets.map((target) => (
               <li key={target.id}>
-                {target.label}：{t(speciesNameKeys[target.species as keyof typeof speciesNameKeys])}，距离 {target.distanceMeters} 米，{target.rarity}
+                {target.label}：距离 {target.distanceMeters} 米，{chineseRarityName(target.rarity)}
               </li>
             ))}
           </ul>

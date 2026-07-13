@@ -14,7 +14,7 @@ import (
 )
 
 // Version 当前 schema 版本。
-const CurrentVersion = "0026_device_install_secret"
+const CurrentVersion = "0030_animal_species_label_zh"
 
 // Apply 按版本顺序应用迁移。开发可用；生产建议由 Job 单独执行。
 func Apply(db *gorm.DB) error {
@@ -92,6 +92,10 @@ func allMigrations() []migrationSpec {
 		{"0024_narrative_schema", migrate0024},
 		{"0025_notification_outbox", migrate0025},
 		{"0026_device_install_secret", migrate0026},
+		{"0027_companion_adventures", migrate0027},
+		{"0028_companion_expedition_nodes", migrate0028},
+		{"0029_drop_species_check", migrate0029},
+		{"0030_animal_species_label_zh", migrate0030},
 	}
 }
 
@@ -373,4 +377,110 @@ func migrate0026(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrate0027 AI 伙伴探险 run 与幂等选择结算。
+func migrate0027(db *gorm.DB) error {
+	return db.AutoMigrate(&models.AdventureRun{})
+}
+
+// migrate0028 将已下线的手账节点迁移为伙伴远征回忆。
+func migrate0028(db *gorm.DB) error {
+	replacements := []struct {
+		from  string
+		to    string
+		title string
+	}{
+		{from: "shared_journal", to: "first_expedition", title: "共同远征印记"},
+		{from: "habitat_note", to: "habitat_encounter", title: "栖息地奇遇"},
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, replacement := range replacements {
+			// A partially upgraded database may already contain the destination
+			// node for the same animal. Remove only the obsolete duplicate before
+			// renaming so the (animal_uuid,node_id) unique key cannot block deploy.
+			var conflicts []struct {
+				LegacyID          uint
+				CurrentID         uint
+				LegacyVisible     bool
+				CurrentVisible    bool
+				LegacyUnlocked    bool
+				CurrentUnlocked   bool
+				LegacyUnlockedAt  *time.Time
+				CurrentUnlockedAt *time.Time
+				LegacyUnlockAtXP  int64
+				CurrentUnlockAtXP int64
+			}
+			if err := tx.Table("companion_memory_nodes AS legacy").
+				Select(`legacy.id AS legacy_id, current.id AS current_id,
+					legacy.visible AS legacy_visible, current.visible AS current_visible,
+					legacy.unlocked AS legacy_unlocked, current.unlocked AS current_unlocked,
+					legacy.unlocked_at AS legacy_unlocked_at, current.unlocked_at AS current_unlocked_at,
+					legacy.unlock_at_xp AS legacy_unlock_at_xp, current.unlock_at_xp AS current_unlock_at_xp`).
+				Joins("JOIN companion_memory_nodes AS current ON current.animal_uuid = legacy.animal_uuid AND current.node_id = ?", replacement.to).
+				Where("legacy.node_id = ?", replacement.from).
+				Scan(&conflicts).Error; err != nil {
+				return err
+			}
+			if len(conflicts) > 0 {
+				ids := make([]uint, 0, len(conflicts))
+				for _, conflict := range conflicts {
+					unlockedAt := conflict.CurrentUnlockedAt
+					if unlockedAt == nil {
+						unlockedAt = conflict.LegacyUnlockedAt
+					}
+					unlockAtXP := conflict.CurrentUnlockAtXP
+					if conflict.LegacyUnlockAtXP < unlockAtXP {
+						unlockAtXP = conflict.LegacyUnlockAtXP
+					}
+					if err := tx.Model(&models.CompanionMemoryNode{}).
+						Where("id = ?", conflict.CurrentID).
+						Updates(map[string]interface{}{
+							"visible":      conflict.CurrentVisible || conflict.LegacyVisible,
+							"unlocked":     conflict.CurrentUnlocked || conflict.LegacyUnlocked,
+							"unlocked_at":  unlockedAt,
+							"unlock_at_xp": unlockAtXP,
+						}).Error; err != nil {
+						return err
+					}
+					ids = append(ids, conflict.LegacyID)
+				}
+				if err := tx.Where("id IN ?", ids).Delete(&models.CompanionMemoryNode{}).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Model(&models.CompanionMemoryNode{}).
+				Where("node_id = ?", replacement.from).
+				Updates(map[string]interface{}{
+					"node_id": replacement.to,
+					"title":   replacement.title,
+					"kind":    "memory",
+				}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.GrowthEvent{}).
+				Where("node_id = ?", replacement.from).
+				Update("node_id", replacement.to).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// migrate0029 removes the retired three-species database allowlist. The
+// content registry is the authoritative and extensible species validator.
+func migrate0029(db *gorm.DB) error {
+	migrator := db.Migrator()
+	if !migrator.HasConstraint(&models.Animal{}, "chk_animals_species") {
+		return nil
+	}
+	return migrator.DropConstraint(&models.Animal{}, "chk_animals_species")
+}
+
+// migrate0030 persists the concrete Simplified Chinese species label selected
+// by the trusted detection/correction lineage. This keeps broad fallback
+// animals distinct instead of collapsing every one into other_animal.
+func migrate0030(db *gorm.DB) error {
+	return db.AutoMigrate(&models.Animal{}, &models.SocialShare{})
 }

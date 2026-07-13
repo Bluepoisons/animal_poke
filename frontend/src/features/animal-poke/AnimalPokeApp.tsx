@@ -11,8 +11,7 @@ import PokedexScreen from './screens/PokedexScreen'
 import BattleArenaScreen from './screens/BattleArenaScreen'
 import StoreScreen from './screens/StoreScreen'
 import SettingsScreen from '../../settings/SettingsScreen'
-import JournalScreen from './screens/JournalScreen'
-import PrologueScreen from './screens/PrologueScreen'
+import AdventureScreen from './screens/AdventureScreen'
 import AccountSettingsPanel from './screens/AccountSettingsPanel'
 import { useStamina } from '../../stamina/useStamina'
 import { FEATURE_FLAGS } from './featureFlags'
@@ -30,7 +29,7 @@ import { RouteAnnouncerElement, useRouteAnnouncer } from '../../a11y'
 import OnboardingOverlay from './components/OnboardingOverlay'
 import { setCaptureActive } from '../../pwa/updateGate'
 
-const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'journal', 'battle', 'store', 'settings']
+const TAB_SCREENS: ScreenId[] = ['discover', 'map', 'pokedex', 'adventure', 'battle', 'store', 'settings']
 
 const SCREEN_FEATURES: Partial<Record<ScreenId, FeatureId>> = {
   discover: 'discover',
@@ -48,13 +47,13 @@ const ROUTE_TITLES: Record<ScreenId, string> = {
   battle: '对战竞技场',
   store: '商店',
   settings: '设置',
-  journal: '城市手账',
-  prologue: '序章',
+  adventure: '伙伴远征',
 }
 
 function parseHashScreen(): ScreenId {
-  const h = (typeof location !== 'undefined' ? location.hash.replace('#', '') : '') as ScreenId
-  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'journal', 'prologue', 'battle', 'store', 'settings']
+  const raw = typeof location !== 'undefined' ? location.hash.replace('#', '') : ''
+  const h = (raw === 'journal' || raw === 'prologue' ? 'adventure' : raw) as ScreenId
+  const allowed: ScreenId[] = ['discover', 'map', 'capture', 'pokedex', 'adventure', 'battle', 'store', 'settings']
   return allowed.includes(h) ? h : 'discover'
 }
 
@@ -364,13 +363,11 @@ export default function AnimalPokeApp() {
       }
       case 'pokedex':
         return <PokedexScreen onToast={showToast} />
-      case 'journal':
-        return <JournalScreen onToast={showToast} onOpenPrologue={() => navigate('prologue')} />
-      case 'prologue':
+      case 'adventure':
         return (
-          <PrologueScreen
+          <AdventureScreen
             onToast={showToast}
-            onFinished={() => navigate('journal')}
+            onOpenCollection={() => navigate('pokedex')}
           />
         )
       case 'battle':

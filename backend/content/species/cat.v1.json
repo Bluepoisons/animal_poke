@@ -10,8 +10,8 @@
   "names": {
     "common": { "zh-CN": "猫", "en": "Cat" },
     "scientific": "Felis catus",
-    "aliases": ["kitten", "feline"],
-    "contains": ["猫", "cat"],
+    "aliases": ["kitten", "feline", "小猫", "猫咪", "英短猫"],
+    "contains": ["小猫", "猫咪", "英短猫", "猫", "cat"],
     "contains_exclude": ["cattle", "caterpillar"]
   },
   "habitat": {

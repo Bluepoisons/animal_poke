@@ -112,6 +112,9 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 	var auditRepo *repo.AuditLogRepo
 	var inferenceRepo *repo.InferenceRepo
 	var accountRepo *repo.AccountRepo
+	var growthRepo *repo.GrowthRepo
+	var adventureRepo *repo.AdventureRepo
+	var idempotencyRepo *repo.IdempotencyRepo
 	if appDB != nil {
 		deviceRepo = repo.NewDeviceRepo(appDB)
 		animalRepo = repo.NewAnimalRepo(appDB)
@@ -119,6 +122,9 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 		auditService = services.NewAuditService(animalRepo, auditRepo)
 		inferenceRepo = repo.NewInferenceRepo(appDB)
 		accountRepo = repo.NewAccountRepoWithPeppers(appDB, cfg.AccountTokenPepper, cfg.AccountTokenPepperPrevious)
+		growthRepo = repo.NewGrowthRepo(appDB)
+		adventureRepo = repo.NewAdventureRepo(appDB)
+		idempotencyRepo = repo.NewIdempotencyRepo(appDB)
 	}
 
 	// 限流 / 配额 / nonce：REDIS_URL 存在则用 Redis 共享，否则内存实现。
@@ -135,7 +141,7 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 	}
 	// AI：device 维度 100/min burst 10；附带 digest 维度防同图刷
 	rateLimiter := middleware.NewRateLimiter(100.0/60.0, 10).WithShared(sharedCounter)
-	// 每日配额（detect/analyze/value）跨 Pod 一致
+	// 每日配额（detect/analyze/value/adventure）跨 Pod 一致
 	costCounter := middleware.NewDailyCallCounter(middleware.DefaultDailyLimits).WithShared(sharedCounter)
 	// 鉴权：IP 维度 20/min burst 5
 	ipLimiter := middleware.NewRateLimiter(20.0/60.0, 5).WithShared(sharedCounter)
@@ -387,6 +393,7 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 			auth.PUT("/ops/game-config", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigPut)
 			auth.POST("/ops/game-config/rollback", middleware.BodyLimit(middleware.MaxBodyDefault), product.GameConfigRollback)
 
+			adventureHandler := handlers.NewAdventureHandlerWithRepos(aiService, animalRepo, growthRepo, adventureRepo)
 			ai := auth.Group("")
 			// device + digest 多维限流（account 维度在有 account_id 时由 RateLimitByAccount 扩展）
 			ai.Use(middleware.RateLimitByDevice(rateLimiter))
@@ -402,15 +409,31 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 					ProviderNoTrainPolicy: cfg.ProviderNoTrainPolicy,
 					AllowSafetyFixture:    cfg.IsDevelopment() || cfg.MockAllowed(),
 				})
-				valueHandler := handlers.NewValueHandlerWithRepo(aiService, inferenceRepo)
+				valueHandler := handlers.NewValueHandlerWithPersistence(aiService, inferenceRepo, animalRepo)
 				ai.POST("/vision/detect", middleware.CostLimitByType(costCounter, "detect"), visionHandler.Detect)
+				ai.POST("/vision/detect/corrections",
+					middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.RequireIdempotencyKey(),
+					middleware.Idempotency(idempotencyRepo, "vision.detect.correct"),
+					visionHandler.CorrectDetect,
+				)
 				ai.POST("/vision/analyze", middleware.CostLimitByType(costCounter, "analyze"), visionHandler.Analyze)
 				ai.POST("/value/generate",
 					middleware.BodyLimit(middleware.MaxBodyDefault),
 					middleware.CostLimitByType(costCounter, "value"),
 					valueHandler.Generate,
 				)
+				ai.POST("/adventures",
+					middleware.BodyLimit(middleware.MaxBodyDefault),
+					middleware.RequireIdempotencyKey(),
+					middleware.Idempotency(idempotencyRepo, "adventure.generate"),
+					middleware.CostLimitByType(costCounter, "adventure"),
+					adventureHandler.Generate,
+				)
 			}
+			auth.GET("/adventures", adventureHandler.List)
+			auth.GET("/adventures/:run_id", adventureHandler.Get)
+			auth.POST("/adventures/:run_id/choices", middleware.BodyLimit(middleware.MaxBodyDefault), adventureHandler.CompleteChoice)
 
 			// 同步：始终注册
 			if animalRepo != nil && auditService != nil {
@@ -483,7 +506,6 @@ func NewRouterWithSchemaStatus(cfg *config.Config, db *gorm.DB, schemaOK *bool) 
 				auth.POST("/quests/:quest_id/claim", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Claim)
 				auth.POST("/quests/compensate", middleware.BodyLimit(middleware.MaxBodyDefault), questH.Compensate)
 				// AP-099 研究员成长 / 虚拟伙伴
-				growthRepo := repo.NewGrowthRepo(appDB)
 				growthH := handlers.NewGrowthHandler(growthRepo)
 				narrRepo := repo.NewNarrativeRepo(appDB)
 				_ = narrRepo.SeedContent()

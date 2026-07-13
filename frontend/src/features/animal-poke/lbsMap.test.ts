@@ -26,5 +26,7 @@ describe('lbsMap projection', () => {
     expect(t.species).toBe('cat')
     expect(t.rarity).toBe('rare')
     expect(t.id).toBe('p1')
+    expect(t.label).toBe('猫 · 等待探索')
+    expect(t.label).not.toContain('cat')
   })
 })

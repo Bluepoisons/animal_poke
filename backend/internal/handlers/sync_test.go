@@ -408,9 +408,40 @@ func TestValidateSyncFields_Unit(t *testing.T) {
 
 func TestSyncAnimal_UnsupportedSpeciesReason(t *testing.T) {
 	r, _ := setupSyncTest(t)
-	w := postJSON(r, "/api/v1/sync/animal", validSyncBody(map[string]interface{}{"species": "duck"}))
+	w := postJSON(r, "/api/v1/sync/animal", validSyncBody(map[string]interface{}{"species": "human"}))
 	assert.Equal(t, 400, w.Code)
 	assert.Contains(t, w.Body.String(), "species_unsupported")
+}
+
+func TestSyncAnimal_BroadSpeciesAccepted(t *testing.T) {
+	r, _ := setupSyncTest(t)
+	w := postJSON(r, "/api/v1/sync/animal", validSyncBody(map[string]interface{}{"species": "duck"}))
+	assert.Equal(t, 201, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "synced")
+}
+
+func TestSyncAnimal_ConcreteOtherAnimalLabelValidation(t *testing.T) {
+	r, _ := setupSyncTest(t)
+	for _, label := range []string{"蚯蚓", "海绵", "蚊子", "石斑鱼", "木虱", "宽吻海豚", "白头海雕"} {
+		t.Run("accept_"+label, func(t *testing.T) {
+			w := postJSON(r, "/api/v1/sync/animal", validSyncBody(map[string]interface{}{
+				"species":          "other_animal",
+				"species_label_zh": label,
+			}))
+			assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+		})
+	}
+
+	for _, label := range []string{"桌子", "石头", "蘑菇", "赤狐玩具", "桌子猫", "机器人狗", "木马", "木鱼"} {
+		t.Run("reject_"+label, func(t *testing.T) {
+			w := postJSON(r, "/api/v1/sync/animal", validSyncBody(map[string]interface{}{
+				"species":          "other_animal",
+				"species_label_zh": label,
+			}))
+			assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+			assert.Contains(t, w.Body.String(), "invalid_species_label")
+		})
+	}
 }
 
 func TestSyncAnimalsBatch_DoesNotUseContextItem(t *testing.T) {

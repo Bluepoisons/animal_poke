@@ -263,6 +263,7 @@ func animalDetailJSON(a *models.Animal) gin.H {
 		"device_id":            a.DeviceID,
 		"account_id":           a.AccountID,
 		"species":              a.Species,
+		"species_label_zh":     a.SpeciesLabelZH,
 		"breed":                a.Breed,
 		"rarity":               a.Rarity,
 		"hp":                   a.HP,

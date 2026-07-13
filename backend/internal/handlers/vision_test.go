@@ -34,6 +34,7 @@ func setupVisionTest() (*gin.Engine, *VisionHandler) {
 	handler := NewVisionHandler(svc)
 	r := gin.New()
 	r.POST("/api/v1/vision/detect", handler.Detect)
+	r.POST("/api/v1/vision/detect/corrections", handler.CorrectDetect)
 	r.POST("/api/v1/vision/analyze", handler.Analyze)
 	return r, handler
 }
@@ -66,6 +67,7 @@ func setupVisionWithRepo(t *testing.T) (*gin.Engine, *VisionHandler, *repo.Infer
 	handler := NewVisionHandlerWithOptions(svc, VisionHandlerOptions{InferenceRepo: inf})
 	r := gin.New()
 	r.POST("/api/v1/vision/detect", handler.Detect)
+	r.POST("/api/v1/vision/detect/corrections", handler.CorrectDetect)
 	r.POST("/api/v1/vision/analyze", handler.Analyze)
 	return r, handler, inf
 }
@@ -76,8 +78,144 @@ func seedDetectInference(t *testing.T, inf *repo.InferenceRepo, id, device strin
 	exp := time.Now().UTC().Add(time.Hour)
 	require.NoError(t, inf.Create(&models.Inference{
 		InferenceID: id, DeviceID: device, Kind: "detect", Status: "success",
-		ResultJSON: string(payload), Species: targets[0]["species"].(string), ExpiresAt: &exp,
+		ResultJSON: string(payload), Species: targets[0]["species"].(string), InputDigest: "image-digest", ExpiresAt: &exp,
 	}))
+}
+
+func performVisionCorrection(t *testing.T, r http.Handler, body map[string]interface{}) *httptest.ResponseRecorder {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vision/detect/corrections", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestVisionCorrectionCreatesDerivedCredentialAndAnalyzeAcceptsIt(t *testing.T) {
+	r, _, inf := setupVisionWithRepo(t)
+	seedDetectInference(t, inf, "det-correction", "", []map[string]interface{}{
+		{"species": "cat", "label": "猫", "target_id": "cat-0", "confidence": 0.93},
+	})
+	parent, err := inf.Find("det-correction")
+	require.NoError(t, err)
+
+	w := performVisionCorrection(t, r, map[string]interface{}{
+		"detect_inference_id": "det-correction",
+		"target_id":           "cat-0",
+		"species":             "dog",
+		"species_label_zh":    "狗",
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var corrected visionCorrectionResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &corrected))
+	assert.Equal(t, "dog", corrected.Species)
+	assert.Equal(t, "狗", corrected.Label)
+	assert.Equal(t, "cat", corrected.OriginalSpecies)
+	assert.Equal(t, "cat-0", corrected.TargetID)
+
+	derived, err := inf.Find(corrected.InferenceID)
+	require.NoError(t, err)
+	assert.Equal(t, "detect", derived.Kind)
+	assert.Equal(t, "user_confirmation", derived.Provider)
+	assert.Equal(t, parent.InferenceID, derived.ParentInferenceID)
+	assert.Equal(t, parent.InputDigest, derived.InputDigest)
+	assert.Equal(t, visionCorrectionVersion, derived.ConfigVersion)
+	require.NotNil(t, derived.ExpiresAt)
+	require.NotNil(t, parent.ExpiresAt)
+	assert.False(t, derived.ExpiresAt.After(*parent.ExpiresAt))
+	assert.Contains(t, derived.ResultJSON, `"original_species":"cat"`)
+	assert.Contains(t, derived.ResultJSON, `"corrected_species":"dog"`)
+
+	unchanged, err := inf.Find(parent.InferenceID)
+	require.NoError(t, err)
+	assert.Equal(t, "cat", unchanged.Species)
+	assert.Empty(t, unchanged.ParentInferenceID)
+
+	png := tinyPNG()
+	contentType, body := createMultipartBodyFields("image", "dog.png", png, map[string]string{
+		"detect_inference_id": corrected.InferenceID,
+		"target_id":           corrected.TargetID,
+		"species":             corrected.Species,
+	})
+	analyze := httptest.NewRecorder()
+	analyzeReq := httptest.NewRequest(http.MethodPost, "/api/v1/vision/analyze", body)
+	analyzeReq.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(analyze, analyzeReq)
+	require.Equal(t, http.StatusOK, analyze.Code, analyze.Body.String())
+	var result services.AnalysisResult
+	require.NoError(t, json.Unmarshal(analyze.Body.Bytes(), &result))
+	assert.Equal(t, "dog", result.Species)
+	assert.Equal(t, "狗", result.SpeciesLabelZH)
+}
+
+func TestVisionCorrectionSupportsConcreteOtherAnimal(t *testing.T) {
+	r, _, inf := setupVisionWithRepo(t)
+	seedDetectInference(t, inf, "det-broad-animal", "", []map[string]interface{}{
+		{"species": "cat", "label": "猫", "target_id": "0", "confidence": 0.9},
+	})
+	for _, label := range []string{"蚯蚓", "海绵", "蚊子", "石斑鱼", "木虱"} {
+		t.Run(label, func(t *testing.T) {
+			w := performVisionCorrection(t, r, map[string]interface{}{
+				"detect_inference_id": "det-broad-animal",
+				"target_id":           "0",
+				"species":             "other_animal",
+				"species_label_zh":    label,
+			})
+			require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+			var corrected visionCorrectionResponse
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &corrected))
+			assert.Equal(t, "det-broad-animal", corrected.ParentInferenceID)
+			assert.Equal(t, "other_animal", corrected.Species)
+			assert.Equal(t, label, corrected.Label)
+
+			derived, err := inf.Find(corrected.InferenceID)
+			require.NoError(t, err)
+			assert.Equal(t, "det-broad-animal", derived.ParentInferenceID)
+			assert.Contains(t, derived.ResultJSON, `"corrected_label_zh":"`+label+`"`)
+		})
+	}
+}
+
+func TestVisionCorrectionRejectsInvalidLineageAndLabels(t *testing.T) {
+	r, _, inf := setupVisionWithRepo(t)
+	seedDetectInference(t, inf, "det-invalid-correction", "", []map[string]interface{}{
+		{"species": "cat", "label": "猫", "target_id": "0", "confidence": 0.9},
+	})
+	tests := []struct {
+		name string
+		body map[string]interface{}
+		code int
+	}{
+		{"unknown target", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "missing", "species": "dog", "species_label_zh": "狗"}, http.StatusConflict},
+		{"unsupported species", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "unknown", "species_label_zh": "狗"}, http.StatusBadRequest},
+		{"non animal label", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "桌子"}, http.StatusBadRequest},
+		{"generic label", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "其他动物"}, http.StatusBadRequest},
+		{"toy suffix bypass", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "赤狐玩具"}, http.StatusBadRequest},
+		{"object prefix bypass", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "桌子猫"}, http.StatusBadRequest},
+		{"robot prefix bypass", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "机器人狗"}, http.StatusBadRequest},
+		{"wooden horse", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "木马"}, http.StatusBadRequest},
+		{"wooden fish", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "other_animal", "species_label_zh": "木鱼"}, http.StatusBadRequest},
+		{"mismatched label", map[string]interface{}{"detect_inference_id": "det-invalid-correction", "target_id": "0", "species": "dog", "species_label_zh": "猫"}, http.StatusBadRequest},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := performVisionCorrection(t, r, test.body)
+			assert.Equal(t, test.code, w.Code, w.Body.String())
+		})
+	}
+
+	expired := time.Now().UTC().Add(-time.Minute)
+	require.NoError(t, inf.Create(&models.Inference{
+		InferenceID: "det-expired-correction", DeviceID: "", Kind: "detect", Status: "success",
+		ResultJSON: `{"targets":[{"species":"cat","label":"猫","target_id":"0","confidence":0.9}]}`,
+		Species:    "cat", ExpiresAt: &expired,
+	}))
+	w := performVisionCorrection(t, r, map[string]interface{}{
+		"detect_inference_id": "det-expired-correction", "target_id": "0", "species": "dog", "species_label_zh": "狗",
+	})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 }
 
 func TestVisionDetect_MissingFile(t *testing.T) {
@@ -130,7 +268,7 @@ func TestVisionAnalyze_Success(t *testing.T) {
 
 	var result services.AnalysisResult
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
-	assert.Equal(t, "British Shorthair", result.Breed)
+	assert.Equal(t, "英国短毛猫", result.Breed)
 }
 
 func TestVisionAnalyze_RealProviderReceivesMinimizedJPEG(t *testing.T) {
@@ -145,7 +283,7 @@ func TestVisionAnalyze_RealProviderReceivesMinimizedJPEG(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&requestBody))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"output_text":"{\"breed\":\"Tabby\",\"color\":\"orange\",\"body_type\":\"medium\",\"quality_score\":8,\"subject_completeness\":8,\"clarity\":8,\"lighting\":8,\"composition\":8,\"pose\":8,\"angle\":8}"}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"breed\":\"虎斑猫\",\"color\":\"橘色\",\"body_type\":\"匀称\",\"quality_score\":8,\"subject_completeness\":8,\"clarity\":8,\"lighting\":8,\"composition\":8,\"pose\":8,\"angle\":8}"}`))
 	}))
 	defer server.Close()
 
@@ -239,7 +377,7 @@ func TestVisionAnalyze_WithCrop(t *testing.T) {
 
 	var result services.AnalysisResult
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &result))
-	assert.Equal(t, "British Shorthair", result.Breed)
+	assert.Equal(t, "英国短毛猫", result.Breed)
 }
 
 func TestVisionAnalyze_InvalidCrop(t *testing.T) {
@@ -333,6 +471,46 @@ func TestVisionAnalyze_TargetMismatch(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 409, w.Code)
 	assert.Contains(t, w.Body.String(), "target_mismatch")
+}
+
+func TestVisionAnalyze_ValidatesStoredAnimalIdentity(t *testing.T) {
+	t.Run("accept broad animal", func(t *testing.T) {
+		r, _, inf := setupVisionWithRepo(t)
+		seedDetectInference(t, inf, "det-valid-broad", "", []map[string]interface{}{
+			{"species": "other_animal", "label": "石斑鱼", "target_id": "0", "confidence": 0.9},
+		})
+		png := tinyPNG()
+		ct, buf := createMultipartBodyFields("image", "fish.png", png, map[string]string{
+			"detect_inference_id": "det-valid-broad",
+			"species":             "other_animal",
+		})
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/vision/analyze", buf)
+		req.Header.Set("Content-Type", ct)
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var result services.AnalysisResult
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+		assert.Equal(t, "other_animal", result.Species)
+		assert.Equal(t, "石斑鱼", result.SpeciesLabelZH)
+	})
+
+	t.Run("reject object compound", func(t *testing.T) {
+		r, _, inf := setupVisionWithRepo(t)
+		seedDetectInference(t, inf, "det-invalid-label", "", []map[string]interface{}{
+			{"species": "other_animal", "label": "桌子猫", "target_id": "0", "confidence": 0.9},
+		})
+		png := tinyPNG()
+		ct, buf := createMultipartBodyFields("image", "object.png", png, map[string]string{
+			"detect_inference_id": "det-invalid-label",
+		})
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/vision/analyze", buf)
+		req.Header.Set("Content-Type", ct)
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), "detect_inference_invalid")
+	})
 }
 
 func TestVisionAnalyze_MultiTargetSelection(t *testing.T) {

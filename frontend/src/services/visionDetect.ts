@@ -1,5 +1,10 @@
 import type { SpeciesType } from '../types'
-import { capturableSpeciesIds, getDetectThreshold } from '../species'
+import {
+  capturableSpeciesIds,
+  findSpeciesIdByLabel,
+  getDetectThreshold,
+  isCapturableSpecies as isRegisteredCapturableSpecies,
+} from '../species'
 import { authedRequest } from '../auth/deviceAuth'
 
 // ===== 检测结果类型 =====
@@ -13,6 +18,8 @@ export interface DetectionResult {
   inferenceId?: string
   /** 原始 label */
   label?: string
+  /** 服务端检测凭证中的稳定目标 ID。 */
+  targetId?: string
 }
 
 /** 多目标检测响应 */
@@ -46,7 +53,8 @@ export function getSpeciesThreshold(species: SpeciesType): number {
 
 const MOCK_LATENCY: [number, number] = [300, 1200]
 const MOCK_CONFIDENCE: [number, number] = [0.7, 0.98]
-const SPECIES_POOL: SpeciesType[] = capturableSpeciesIds()
+// other_animal 必须携带一个经服务端确认的具体中文动物名，不能随机裸生成。
+const SPECIES_POOL: SpeciesType[] = capturableSpeciesIds().filter((id) => id !== 'other_animal')
 
 /** Mock 视觉检测器 —— 仅测试/显式开发开关 */
 export const mockVisionDetector: VisionDetector = {
@@ -94,11 +102,13 @@ type BackendDetectResponse = {
   animals?: Array<{
     species?: string
     label?: string
+    target_id?: string
     confidence?: number
   }>
   targets?: Array<{
     species?: string
     label?: string
+    target_id?: string
     confidence?: number
   }>
   inference_id?: string
@@ -108,48 +118,39 @@ type BackendDetectResponse = {
   source?: string
 }
 
-/** 权威可捕获物种；未知不默认为鹅 */
+/** 权威可捕获物种；未知不默认为任意动物 */
 export type TaxonomySpecies = SpeciesType | 'unknown' | 'unsupported'
 
-const CAPTURABLE: SpeciesType[] = ['cat', 'dog', 'goose']
+const REJECTED_ENGLISH_TOKENS = new Set([
+  'human', 'person', 'people', 'man', 'woman', 'child', 'baby',
+  'toy', 'doll', 'plush', 'statue', 'screen', 'phone', 'smartphone',
+])
+const REJECTED_CHINESE_LABELS = ['人类', '人物', '行人', '男人', '女人', '儿童', '婴儿', '玩偶', '玩具', '毛绒', '雕像', '屏幕', '手机']
+
+function isRejectedNonAnimalLabel(raw: string): boolean {
+  const lower = raw.toLowerCase().replace(/[_-]+/g, ' ')
+  const tokens = lower.match(/[a-z]+/g) ?? []
+  if (tokens.some((token) => REJECTED_ENGLISH_TOKENS.has(token))) return true
+  return REJECTED_CHINESE_LABELS.some((label) => raw.includes(label)) || raw.trim() === '人'
+}
 
 /**
  * 将后端/模型原始标签映射为权威物种。
- * 有限别名表；鸭/天鹅/鸟/人/玩偶/空标签 → null（不进入捕获），禁止默认 goose。
+ * 物种别名与 contains 规则来自 species registry；只显式拒绝人、玩具、屏幕和空标签。
  */
 export function mapSpecies(raw?: string): SpeciesType | null {
   const original = (raw || '').trim()
-  const s = original.toLowerCase().replace(/_/g, ' ')
-  if (!s) return null
-
-  const unsupportedExact = new Set([
-    'bird', 'duck', 'swan', 'chicken', 'rooster', 'hen', 'pigeon', 'dove', 'parrot',
-    'human', 'person', 'people', 'man', 'woman', 'child', 'baby',
-    'toy', 'doll', 'plush', 'statue', 'screen', 'phone',
-    '鸟', '鸭', '鸭子', '天鹅', '鸡', '人', '人类', '玩偶', '玩具', '屏幕',
-  ])
-  if (unsupportedExact.has(s)) return null
-  if (['duck', 'swan', 'bird', 'chicken', 'human', 'person', 'toy', 'doll', 'screen', '鸭', '天鹅', '鸟', '人', '玩偶', '屏幕'].some((k) => s.includes(k))) {
-    return null
-  }
-
-  if (s === 'cat' || s === 'kitten' || s === 'feline' || s.includes('猫')) return 'cat'
-  if (s.includes('cat') && !s.includes('cattle') && !s.includes('caterpillar')) return 'cat'
-
-  if (s === 'dog' || s === 'puppy' || s === 'canine' || s.includes('狗') || s.includes('犬')) return 'dog'
-  if (s.includes('dog')) return 'dog'
-
-  if (s === 'goose' || s === 'geese' || s === 'gander' || s === 'gosling') return 'goose'
-  if ((s.includes('goose') || s.includes('geese') || s.includes('鹅')) && !s.includes('mongoose')) return 'goose'
-
-  return null
+  if (!original || isRejectedNonAnimalLabel(original)) return null
+  if (original.toLowerCase() === 'other_animal') return 'other_animal'
+  const mapped = findSpeciesIdByLabel(original)
+  return mapped === 'other_animal' ? null : mapped
 }
 
 export function isCapturableSpecies(s: string | null | undefined): s is SpeciesType {
-  return !!s && (CAPTURABLE as string[]).includes(s)
+  return typeof s === 'string' && isRegisteredCapturableSpecies(s)
 }
 
-function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
+export function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
   const inferenceId =
     data.inference_id ||
     data.inferenceId ||
@@ -169,6 +170,7 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
       species: mapped,
       confidence: Math.round((a.confidence || 0) * 1000) / 1000,
       label: a.label || a.species,
+      targetId: a.target_id,
       inferenceId,
     })
   }
@@ -182,6 +184,44 @@ function mapBackendAnimals(data: BackendDetectResponse): MultiDetectionResult {
     degraded: data.degraded || data.source === 'mock',
     source: data.source,
   }
+}
+
+type SpeciesCorrectionResponse = {
+  inference_id: string
+  parent_inference_id: string
+  target_id: string
+  original_species: string
+  species: string
+  label: string
+  confidence?: number
+  source: 'user_confirmation'
+  expires_at?: string
+}
+
+/**
+ * 将用户纠错写成一个可审计的派生 detect 凭证。
+ * 成功前不得替换本地 detectInferenceId，否则 Analyze 会拒绝物种不一致。
+ */
+export async function confirmSpeciesCorrection(input: {
+  detectInferenceId: string
+  targetId?: string
+  species: string
+  speciesLabelZh?: string
+}): Promise<SpeciesCorrectionResponse> {
+  const label = input.speciesLabelZh?.trim()
+  return authedRequest<SpeciesCorrectionResponse>({
+    method: 'POST',
+    path: '/api/v1/vision/detect/corrections',
+    body: JSON.stringify({
+      detect_inference_id: input.detectInferenceId,
+      target_id: input.targetId,
+      species: input.species,
+      species_label_zh: label || undefined,
+    }),
+    idempotencyKey: `vision-correction:${input.detectInferenceId}:${input.targetId || 'primary'}:${input.species}:${label || ''}`,
+    allowRetry: true,
+    timeoutMs: 20_000,
+  })
 }
 
 /** 真实 /api/v1/vision/detect（multipart field: image） */

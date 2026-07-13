@@ -2,7 +2,7 @@
   "generated_by": "scripts/api-test-matrix-gate.mjs",
   "openapi": "docs/openapi.yaml",
   "router": "backend/internal/routes/router.go",
-  "count": 163,
+  "count": 168,
   "operations": [
     {
       "method": "DELETE",
@@ -57,6 +57,18 @@
       "path": "/api/v1/admin/security/reports/{id}",
       "operationId": "adminGetSecurityReport",
       "key": "GET /api/v1/admin/security/reports/{id}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adventures",
+      "operationId": "adventureList",
+      "key": "GET /api/v1/adventures"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adventures/{run_id}",
+      "operationId": "adventureGet",
+      "key": "GET /api/v1/adventures/{run_id}"
     },
     {
       "method": "GET",
@@ -465,6 +477,18 @@
       "path": "/api/v1/admin/sessions/revoke",
       "operationId": "adminRevokeSession",
       "key": "POST /api/v1/admin/sessions/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adventures",
+      "operationId": "adventureCreate",
+      "key": "POST /api/v1/adventures"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adventures/{run_id}/choices",
+      "operationId": "adventureChoose",
+      "key": "POST /api/v1/adventures/{run_id}/choices"
     },
     {
       "method": "POST",
@@ -933,6 +957,12 @@
       "path": "/api/v1/vision/detect",
       "operationId": "visionDetect",
       "key": "POST /api/v1/vision/detect"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/vision/detect/corrections",
+      "operationId": "visionDetectCorrection",
+      "key": "POST /api/v1/vision/detect/corrections"
     },
     {
       "method": "POST",

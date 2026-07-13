@@ -5,13 +5,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"animalpoke/backend/internal/config"
 	"animalpoke/backend/internal/middleware"
+	"animalpoke/backend/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -158,6 +162,62 @@ func TestSyncRoute_DBNil_Returns503(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAdventureIdempotencyReplayDoesNotConsumeDailyQuota(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := testConfig()
+	db := openContractDB(t)
+	require.NoError(t, db.AutoMigrate(
+		&models.AdventureRun{},
+		&models.IdempotencyRecord{},
+		&models.CompanionProfile{},
+	))
+	const deviceID = "adventure-idempotency-device"
+	const animalUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	require.NoError(t, db.Create(&models.Device{DeviceID: deviceID, TokenVersion: 1}).Error)
+	require.NoError(t, db.Create(&models.Animal{
+		UUID: animalUUID, DeviceID: deviceID, Species: "cat", Breed: "British Shorthair",
+		Rarity: 2, HP: 10, ATK: 8, DEF: 9, SPD: 7, Class: "Ranger", Element: "Wind",
+		GeneratedAt: time.Now().UTC(), ServerVersion: 1,
+	}).Error)
+	r := NewRouter(cfg, db)
+	token := mintDeviceJWT(t, cfg, deviceID)
+
+	request := func(operationID string) *httptest.ResponseRecorder {
+		body := `{"animal_uuid":"` + animalUUID + `","theme":"mistwood","operation_id":"` + operationID + `"}`
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/adventures", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(middleware.HeaderIdempotencyKey, operationID)
+		r.ServeHTTP(w, req)
+		return w
+	}
+	missingKey := httptest.NewRecorder()
+	missingKeyRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/adventures",
+		strings.NewReader(`{"animal_uuid":"`+animalUUID+`","theme":"mistwood","operation_id":"missing-header"}`),
+	)
+	missingKeyRequest.Header.Set("Authorization", "Bearer "+token)
+	missingKeyRequest.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(missingKey, missingKeyRequest)
+	require.Equal(t, http.StatusBadRequest, missingKey.Code, missingKey.Body.String())
+	assert.Contains(t, missingKey.Body.String(), "idempotency_key_required")
+
+	first := request("adventure-operation-1")
+	require.Equal(t, http.StatusCreated, first.Code, first.Body.String())
+	assert.Equal(t, "11", first.Header().Get("X-RateLimit-Remaining"))
+
+	replay := request("adventure-operation-1")
+	require.Equal(t, http.StatusCreated, replay.Code, replay.Body.String())
+	assert.Equal(t, "true", replay.Header().Get("X-Idempotency-Replayed"))
+	assert.JSONEq(t, first.Body.String(), replay.Body.String())
+
+	next := request("adventure-operation-2")
+	require.Equal(t, http.StatusCreated, next.Code, next.Body.String())
+	assert.Equal(t, "10", next.Header().Get("X-RateLimit-Remaining"))
 }
 
 func TestGeoCityRoute_RequiresAuth(t *testing.T) {

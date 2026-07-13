@@ -37,6 +37,11 @@ func ValidatePack(p *Pack) error {
 	if strings.TrimSpace(p.Protection.Status) == "" {
 		return fmt.Errorf("protection.status required")
 	}
+	if p.Protection.Status == "protected" || p.Protection.Status == "endangered" {
+		if !strings.Contains(LocalizedOr(p.ObservationTips, "zh-CN"), "远距离") {
+			return fmt.Errorf("protected species observation_tips must require remote observation")
+		}
+	}
 	if strings.TrimSpace(p.Assets.Emoji) == "" {
 		return fmt.Errorf("assets.emoji required")
 	}

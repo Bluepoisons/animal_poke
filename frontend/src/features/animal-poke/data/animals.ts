@@ -1,4 +1,5 @@
 import type { AnimalEntry, PokedexFilter } from './types'
+import { speciesGroupOf } from '../../../species'
 
 export const animals: AnimalEntry[] = [
   {
@@ -54,7 +55,7 @@ export function filterAnimals(
   filter: PokedexFilter,
 ): AnimalEntry[] {
   if (filter === 'all') return entries
-  return entries.filter((entry) => entry.species === filter)
+  return entries.filter((entry) => speciesGroupOf(entry.species) === filter)
 }
 
 export const collectedCount = animals.filter((a) => a.collected).length

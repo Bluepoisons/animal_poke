@@ -58,6 +58,10 @@ type deleteDataRequest struct {
 	Confirm        string `json:"confirm"`      // account 删除需 "DELETE"
 }
 
+type exportDataRequest struct {
+	Scope string `json:"scope"` // device|account
+}
+
 var allowedConsentScopes = map[string]struct{}{
 	"photo": {}, "location": {}, "precise_location": {},
 }
@@ -130,13 +134,24 @@ func (h *PrivacyHandler) PutConsent(c *gin.Context) {
 // 导出始终脱敏精确坐标；安全报告仅元数据（不含 payload 密钥/原文）。
 func (h *PrivacyHandler) ExportData(c *gin.Context) {
 	deviceID := middleware.GetDeviceID(c)
-	reqID := uuid.NewString()
-	dr := models.DataRequest{
-		RequestID: reqID, DeviceID: deviceID, Type: "export", Status: "processing",
-		RequestedAt: time.Now().UTC(),
+	accountID := middleware.GetAccountID(c)
+	scope := "device"
+	if c.Request != nil && c.Request.Body != nil && c.Request.ContentLength != 0 {
+		var req exportDataRequest
+		if err := middleware.BindStrictJSON(c, &req); err != nil {
+			middleware.WriteBindError(c, err)
+			return
+		}
+		if requested := strings.ToLower(strings.TrimSpace(req.Scope)); requested != "" {
+			scope = requested
+		}
 	}
-	if err := h.db.Create(&dr).Error; err != nil {
-		middleware.WriteError(c, http.StatusInternalServerError, "create_request_failed", "create request failed", true, nil)
+	if scope != "device" && scope != "account" {
+		middleware.WriteError(c, http.StatusBadRequest, "bad_request", "invalid scope", false, nil)
+		return
+	}
+	if scope == "account" && accountID == "" {
+		middleware.WriteError(c, http.StatusForbidden, "account_required", "account required", false, nil)
 		return
 	}
 
@@ -152,7 +167,39 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		pageOnly = true
 	}
 
-	animals, nextCursor, err := h.collectExportAnimals(deviceID, afterID, pageOnly)
+	reqID := uuid.NewString()
+	dr := models.DataRequest{
+		RequestID: reqID, DeviceID: deviceID, Type: "export", Status: "processing",
+		RequestedAt: time.Now().UTC(),
+	}
+	if err := h.db.Create(&dr).Error; err != nil {
+		middleware.WriteError(c, http.StatusInternalServerError, "create_request_failed", "create request failed", true, nil)
+		return
+	}
+
+	var activeDevices []models.Device
+	if scope == "account" {
+		var err error
+		activeDevices, err = listActiveAccountDevices(h.db, accountID)
+		if err != nil {
+			h.failExport(c, &dr, "export devices failed", err)
+			return
+		}
+	} else if dev, err := h.deviceRepo.Find(deviceID); err == nil {
+		activeDevices = []models.Device{*dev}
+	}
+	deviceIDs := make([]string, 0, len(activeDevices))
+	for _, device := range activeDevices {
+		deviceIDs = append(deviceIDs, device.DeviceID)
+	}
+
+	animalQuery := h.db.Model(&models.Animal{}).Where("deleted_at IS NULL")
+	if scope == "account" {
+		animalQuery = animalQuery.Where("account_id = ?", accountID)
+	} else {
+		animalQuery = scopeRowsByDeviceAndAccount(animalQuery, deviceID, accountID)
+	}
+	animals, nextCursor, err := collectExportAnimals(animalQuery, afterID, pageOnly)
 	if err != nil {
 		now := time.Now().UTC()
 		_ = h.db.Model(&dr).Updates(map[string]interface{}{
@@ -181,13 +228,17 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 	}
 
 	// 安全报告：仅 count + 元数据，不含 payload
-	var secCount int64
-	_ = h.db.Model(&models.SecurityReport{}).Where("device_id = ?", deviceID).Count(&secCount).Error
 	var secRows []models.SecurityReport
-	_ = h.db.Select("report_id", "risk_score", "created_at").
-		Where("device_id = ?", deviceID).
-		Order("id asc").Limit(500).
-		Find(&secRows).Error
+	securityQuery := h.db.Select("report_id", "risk_score", "created_at")
+	if scope == "account" {
+		securityQuery = whereDeviceIDs(securityQuery, deviceIDs)
+	} else {
+		securityQuery = securityQuery.Where("device_id = ?", deviceID)
+	}
+	if err := securityQuery.Order("id asc").Find(&secRows).Error; err != nil {
+		h.failExport(c, &dr, "export security reports failed", err)
+		return
+	}
 	secMeta := make([]gin.H, 0, len(secRows))
 	for _, s := range secRows {
 		secMeta = append(secMeta, gin.H{
@@ -199,10 +250,16 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 
 	// data_requests 历史：不含 payload，避免循环嵌套与体积膨胀
 	var reqRows []models.DataRequest
-	_ = h.db.Select("request_id", "type", "status", "requested_at", "completed_at", "created_at").
-		Where("device_id = ?", deviceID).
-		Order("id asc").Limit(200).
-		Find(&reqRows).Error
+	requestQuery := h.db.Select("request_id", "type", "status", "requested_at", "completed_at", "created_at")
+	if scope == "account" {
+		requestQuery = whereDeviceIDs(requestQuery, deviceIDs)
+	} else {
+		requestQuery = requestQuery.Where("device_id = ?", deviceID)
+	}
+	if err := requestQuery.Order("id asc").Find(&reqRows).Error; err != nil {
+		h.failExport(c, &dr, "export data requests failed", err)
+		return
+	}
 	reqHist := make([]gin.H, 0, len(reqRows))
 	for _, r := range reqRows {
 		reqHist = append(reqHist, gin.H{
@@ -215,10 +272,94 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		})
 	}
 
-	var orders []models.Order
-	_ = h.db.Where("device_id = ?", deviceID).Order("id asc").Limit(500).Find(&orders).Error
-	var entitlements []models.Entitlement
-	_ = h.db.Where("device_id = ?", deviceID).Order("id asc").Limit(200).Find(&entitlements).Error
+	orderQuery := h.db.Model(&models.Order{})
+	entitlementQuery := h.db.Model(&models.Entitlement{})
+	if scope == "account" {
+		orderQuery = orderQuery.Where("account_id = ?", accountID)
+		entitlementQuery = entitlementQuery.Where("account_id = ?", accountID)
+	} else {
+		orderQuery = scopeRowsByDeviceAndAccount(orderQuery, deviceID, accountID)
+		entitlementQuery = scopeRowsByDeviceAndAccount(entitlementQuery, deviceID, accountID)
+	}
+	orders, err := collectExportRows[models.Order](orderQuery)
+	if err != nil {
+		h.failExport(c, &dr, "export orders failed", err)
+		return
+	}
+	entitlements, err := collectExportRows[models.Entitlement](entitlementQuery)
+	if err != nil {
+		h.failExport(c, &dr, "export entitlements failed", err)
+		return
+	}
+	adventureQuery := h.db.Model(&models.AdventureRun{})
+	if scope == "account" {
+		adventureQuery = adventureQuery.Where("account_id = ? OR owner_key = ?", accountID, repo.OwnerKey(accountID, ""))
+	} else {
+		adventureQuery = scopeRowsByDeviceAndAccount(adventureQuery, deviceID, accountID)
+	}
+	adventureRows, err := collectExportRows[models.AdventureRun](adventureQuery)
+	if err != nil {
+		now := time.Now().UTC()
+		_ = h.db.Model(&dr).Updates(map[string]interface{}{
+			"status": "failed", "error_msg": err.Error(), "completed_at": now,
+		})
+		middleware.WriteError(c, http.StatusInternalServerError, "export_failed", "export adventures failed", true, nil)
+		return
+	}
+	adventures := make([]gin.H, 0, len(adventureRows))
+	for _, run := range adventureRows {
+		adventures = append(adventures, gin.H{
+			"run_id":             run.RunID,
+			"animal_uuid":        run.AnimalUUID,
+			"theme":              run.Theme,
+			"title":              run.Title,
+			"status":             run.Status,
+			"story":              json.RawMessage(run.ResultJSON),
+			"selected_choice_id": run.SelectedChoiceID,
+			"outcome":            run.Outcome,
+			"souvenir_name":      run.SouvenirName,
+			"bond_delta":         run.BondDelta,
+			"created_at":         run.CreatedAt,
+			"completed_at":       run.CompletedAt,
+		})
+	}
+
+	ownerKey := repo.OwnerKey("", deviceID)
+	eventQuery := h.db.Model(&models.GrowthEvent{})
+	auditQuery := h.db.Model(&models.GrowthResetAudit{})
+	if scope == "account" {
+		ownerKey = repo.OwnerKey(accountID, "")
+		eventQuery = eventQuery.Where("account_id = ? OR owner_key = ?", accountID, ownerKey)
+		auditQuery = auditQuery.Where("account_id = ? OR owner_key = ?", accountID, ownerKey)
+	} else {
+		eventQuery = scopeRowsByDeviceAndAccount(eventQuery, deviceID, accountID)
+		auditQuery = scopeRowsByDeviceAndAccount(auditQuery, deviceID, accountID)
+	}
+	growthEvents, err := collectExportRows[models.GrowthEvent](eventQuery)
+	if err != nil {
+		h.failExport(c, &dr, "export growth events failed", err)
+		return
+	}
+	researcherTracks, err := collectExportRows[models.ResearcherTrack](h.db.Model(&models.ResearcherTrack{}).Where("owner_key = ?", ownerKey))
+	if err != nil {
+		h.failExport(c, &dr, "export researcher tracks failed", err)
+		return
+	}
+	companions, err := collectExportRows[models.CompanionProfile](h.db.Model(&models.CompanionProfile{}).Where("owner_key = ?", ownerKey))
+	if err != nil {
+		h.failExport(c, &dr, "export companion profiles failed", err)
+		return
+	}
+	companionNodes, err := collectExportRows[models.CompanionMemoryNode](h.db.Model(&models.CompanionMemoryNode{}).Where("owner_key = ?", ownerKey))
+	if err != nil {
+		h.failExport(c, &dr, "export companion nodes failed", err)
+		return
+	}
+	growthAudits, err := collectExportRows[models.GrowthResetAudit](auditQuery)
+	if err != nil {
+		h.failExport(c, &dr, "export growth reset audits failed", err)
+		return
+	}
 
 	tokenVersion := 0
 	disabled := false
@@ -229,7 +370,24 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		createdAt = dev.CreatedAt
 	}
 
+	deviceItems := make([]gin.H, 0, len(activeDevices))
+	for _, device := range activeDevices {
+		deviceItems = append(deviceItems, gin.H{
+			"device_id":     device.DeviceID,
+			"token_version": device.TokenVersion,
+			"disabled":      device.Disabled,
+			"created_at":    device.CreatedAt,
+			"consent": gin.H{
+				"version":    device.ConsentVersion,
+				"scope":      device.ConsentScope,
+				"consent_at": device.ConsentAt,
+				"revoked_at": device.ConsentRevoked,
+			},
+		})
+	}
+
 	payloadObj := gin.H{
+		"scope": scope,
 		"device": gin.H{
 			"device_id":     deviceID,
 			"token_version": tokenVersion,
@@ -239,12 +397,23 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 		"consent": consent,
 		"animals": animals,
 		"security_reports": gin.H{
-			"count": secCount,
+			"count": len(secRows),
 			"items": secMeta,
 		},
 		"data_requests": reqHist,
 		"orders":        orders,
 		"entitlements":  entitlements,
+		"adventures":    adventures,
+		"growth": gin.H{
+			"events":            growthEvents,
+			"researcher_tracks": researcherTracks,
+			"companions":        companions,
+			"companion_nodes":   companionNodes,
+			"reset_audits":      growthAudits,
+		},
+	}
+	if scope == "account" {
+		payloadObj["devices"] = deviceItems
 	}
 	if pageOnly {
 		payloadObj["next_cursor"] = nextCursor
@@ -260,13 +429,17 @@ func (h *PrivacyHandler) ExportData(c *gin.Context) {
 }
 
 // collectExportAnimals 分页拉取动物；pageOnly 时只取一页并返回 next_cursor（0 表示无更多）。
-func (h *PrivacyHandler) collectExportAnimals(deviceID string, afterID uint, pageOnly bool) ([]models.Animal, uint, error) {
+func collectExportAnimals(query *gorm.DB, afterID uint, pageOnly bool) ([]models.Animal, uint, error) {
 	const pageSize = 200
 	var all []models.Animal
 	cur := afterID
 	for {
-		batch, err := h.animalRepo.ListByDevice(deviceID, cur, pageSize)
-		if err != nil {
+		var batch []models.Animal
+		q := query
+		if cur > 0 {
+			q = q.Where("id > ?", cur)
+		}
+		if err := q.Order("id asc").Limit(pageSize).Find(&batch).Error; err != nil {
 			return nil, 0, err
 		}
 		if len(batch) == 0 {
@@ -285,6 +458,50 @@ func (h *PrivacyHandler) collectExportAnimals(deviceID string, afterID uint, pag
 			return all, 0, nil
 		}
 	}
+}
+
+func scopeRowsByDeviceAndAccount(query *gorm.DB, deviceID, accountID string) *gorm.DB {
+	query = query.Where("device_id = ?", deviceID)
+	if strings.TrimSpace(accountID) == "" {
+		return query.Where("account_id = '' OR account_id IS NULL")
+	}
+	return query.Where("account_id = ? OR account_id = '' OR account_id IS NULL", accountID)
+}
+
+func whereDeviceIDs(query *gorm.DB, deviceIDs []string) *gorm.DB {
+	if len(deviceIDs) == 0 {
+		return query.Where("1 = 0")
+	}
+	return query.Where("device_id IN ?", deviceIDs)
+}
+
+func listActiveAccountDevices(db *gorm.DB, accountID string) ([]models.Device, error) {
+	var devices []models.Device
+	err := db.Model(&models.Device{}).
+		Joins("JOIN device_accounts ON device_accounts.device_id = devices.device_id").
+		Where("device_accounts.account_id = ? AND device_accounts.status = ? AND devices.account_id = ?", accountID, "active", accountID).
+		Order("devices.id asc").
+		Find(&devices).Error
+	return devices, err
+}
+
+func collectExportRows[T any](query *gorm.DB) ([]T, error) {
+	const batchSize = 200
+	all := make([]T, 0)
+	batch := make([]T, 0, batchSize)
+	err := query.Order("id asc").FindInBatches(&batch, batchSize, func(_ *gorm.DB, _ int) error {
+		all = append(all, batch...)
+		return nil
+	}).Error
+	return all, err
+}
+
+func (h *PrivacyHandler) failExport(c *gin.Context, request *models.DataRequest, message string, err error) {
+	now := time.Now().UTC()
+	_ = h.db.Model(request).Updates(map[string]interface{}{
+		"status": "failed", "error_msg": err.Error(), "completed_at": now,
+	})
+	middleware.WriteError(c, http.StatusInternalServerError, "export_failed", message, true, nil)
 }
 
 // DeleteData POST /privacy/delete
@@ -318,7 +535,7 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 	if scope == "account" {
 		err = h.deleteAccountScope(c, deviceID, req)
 	} else {
-		err = h.deleteDeviceScope(deviceID)
+		err = h.deleteDeviceScope(deviceID, middleware.GetAccountID(c))
 	}
 
 	now := time.Now().UTC()
@@ -346,23 +563,24 @@ func (h *PrivacyHandler) DeleteData(c *gin.Context) {
 			reason = "reauth_required"
 			retryable = false
 		}
-		if status == "failed" && code == http.StatusForbidden {
-			middleware.WriteError(c, code, reason, msg, retryable, map[string]any{
-				"status":     status,
-				"request_id": reqID,
-			})
-			return
-		}
+		middleware.WriteError(c, code, reason, msg, retryable, map[string]any{
+			"status":     status,
+			"request_id": reqID,
+		})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"request_id": reqID, "status": status, "scope": scope})
 }
 
-func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
+func (h *PrivacyHandler) deleteDeviceScope(deviceID, accountID string) error {
 	return h.db.Transaction(func(tx *gorm.DB) error {
-		ar := h.animalRepo.WithTx(tx)
-		if err := ar.SoftDeleteByDevice(deviceID); err != nil {
+		if err := deleteGeneratedDataByDevice(tx, deviceID, accountID); err != nil {
 			return err
 		}
+		if err := softDeleteAnimalsByDeviceScope(tx, deviceID, accountID); err != nil {
+			return err
+		}
+		ar := h.animalRepo.WithTx(tx)
 		if err := ar.ClearExpiredPreciseLocation(time.Now().UTC()); err != nil {
 			return err
 		}
@@ -383,9 +601,8 @@ func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
 			Updates(map[string]interface{}{"payload": ""}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Entitlement{}).
-			Where("device_id = ?", deviceID).
-			Update("active", false).Error; err != nil {
+		entitlementQuery := scopeRowsByDeviceAndAccount(tx.Model(&models.Entitlement{}), deviceID, accountID)
+		if err := entitlementQuery.Update("active", false).Error; err != nil {
 			return err
 		}
 		drRepo := h.deviceRepo.WithTx(tx)
@@ -393,16 +610,23 @@ func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
 			return err
 		}
 		// 吊销 refresh family（AP-078）
-		if err := tx.Model(&models.RefreshToken{}).
-			Where("device_id = ? AND status IN ?", deviceID, []string{"active", "rotated"}).
+		refreshQuery := tx.Model(&models.RefreshToken{}).
+			Where("device_id = ? AND status IN ?", deviceID, []string{"active", "rotated"})
+		if accountID != "" {
+			refreshQuery = refreshQuery.Where("account_id = ?", accountID)
+		}
+		if err := refreshQuery.
 			Updates(map[string]interface{}{
 				"status":     "revoked",
 				"revoked_at": time.Now().UTC(),
 			}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.DeviceAccount{}).
-			Where("device_id = ?", deviceID).
+		bindingQuery := tx.Model(&models.DeviceAccount{}).Where("device_id = ?", deviceID)
+		if accountID != "" {
+			bindingQuery = bindingQuery.Where("account_id = ?", accountID)
+		}
+		if err := bindingQuery.
 			Updates(map[string]interface{}{
 				"refresh_token_hash": "",
 				"refresh_expires_at": nil,
@@ -415,6 +639,61 @@ func (h *PrivacyHandler) deleteDeviceScope(deviceID string) error {
 		}
 		return nil
 	})
+}
+
+func deleteGeneratedDataByDevice(tx *gorm.DB, deviceID, accountID string) error {
+	deviceOwner := repo.OwnerKey("", deviceID)
+	if err := tx.Where("owner_key = ?", deviceOwner).Delete(&models.CompanionMemoryNode{}).Error; err != nil {
+		return err
+	}
+	for _, model := range []any{&models.ResearcherTrack{}, &models.CompanionProfile{}} {
+		if err := tx.Where("owner_key = ?", deviceOwner).Delete(model).Error; err != nil {
+			return err
+		}
+	}
+	for _, model := range []any{&models.AdventureRun{}, &models.GrowthEvent{}, &models.GrowthResetAudit{}} {
+		if err := scopeRowsByDeviceAndAccount(tx, deviceID, accountID).Delete(model).Error; err != nil {
+			return err
+		}
+	}
+	if err := tx.Where("device_id = ?", deviceID).Delete(&models.IdempotencyRecord{}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func softDeleteAnimalsByDeviceScope(tx *gorm.DB, deviceID, accountID string) error {
+	now := time.Now().UTC()
+	return scopeRowsByDeviceAndAccount(tx.Model(&models.Animal{}), deviceID, accountID).
+		Where("deleted_at IS NULL").
+		Updates(map[string]interface{}{
+			"deleted_at":         now,
+			"server_version":     gorm.Expr("? + id", now.UnixNano()),
+			"precise_lat":        nil,
+			"precise_lng":        nil,
+			"precise_expires_at": nil,
+		}).Error
+}
+
+func deleteGeneratedDataByAccount(tx *gorm.DB, accountID string) error {
+	ownerKey := repo.OwnerKey(accountID, "")
+	if err := tx.Where("owner_key = ?", ownerKey).Delete(&models.CompanionMemoryNode{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("account_id = ? OR owner_key = ?", accountID, ownerKey).Delete(&models.AdventureRun{}).Error; err != nil {
+		return err
+	}
+	for _, model := range []any{
+		&models.GrowthEvent{},
+		&models.ResearcherTrack{},
+		&models.CompanionProfile{},
+		&models.GrowthResetAudit{},
+	} {
+		if err := tx.Where("account_id = ? OR owner_key = ?", accountID, ownerKey).Delete(model).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *PrivacyHandler) deleteAccountScope(c *gin.Context, deviceID string, req deleteDataRequest) error {
@@ -457,49 +736,56 @@ func (h *PrivacyHandler) deleteAccountScope(c *gin.Context, deviceID string, req
 
 	return h.db.Transaction(func(tx *gorm.DB) error {
 		ar := h.accountRepo.WithTx(tx)
-		// list devices under account
-		devs, err := ar.ListDevices(accountID)
-		if err != nil {
-			return err
-		}
+		// Domain data is account-owned. Never scan it by historical device_id.
 		animalRepo := h.animalRepo.WithTx(tx)
-		for _, d := range devs {
-			if err := animalRepo.SoftDeleteByDevice(d.DeviceID); err != nil {
-				return err
-			}
-			if h.inferenceRepo != nil {
-				if err := h.inferenceRepo.WithTx(tx).SoftDeleteByDevice(d.DeviceID); err != nil {
-					return err
-				}
-			}
-			_ = tx.Where("device_id = ?", d.DeviceID).Delete(&models.SecurityReport{}).Error
-			_ = tx.Where("device_id = ?", d.DeviceID).Delete(&models.ModerationReport{}).Error
-			_ = tx.Model(&models.DataRequest{}).Where("device_id = ? AND type = ?", d.DeviceID, "export").
-				Updates(map[string]interface{}{"payload": ""}).Error
-			_ = tx.Model(&models.Entitlement{}).Where("device_id = ?", d.DeviceID).Update("active", false).Error
-			// also entitlements by account
-			_ = tx.Model(&models.Entitlement{}).Where("account_id = ?", accountID).Update("active", false).Error
-			// revoke device
-			if err := ar.RevokeDevice(accountID, d.DeviceID); err != nil {
-				// continue best-effort for already revoked
-				_ = err
-			}
-			dr := h.deviceRepo.WithTx(tx)
-			_ = dr.UpdateConsent(d.DeviceID, "", "", true)
-			_ = dr.BumpTokenVersion(d.DeviceID)
-			_ = dr.Disable(d.DeviceID)
-		}
 		if err := animalRepo.SoftDeleteByAccount(accountID); err != nil {
 			return err
 		}
+		if err := deleteGeneratedDataByAccount(tx, accountID); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.Entitlement{}).Where("account_id = ?", accountID).Update("active", false).Error; err != nil {
+			return err
+		}
+
+		// Only active devices still owned by this account may have credentials revoked.
+		devs, err := listActiveAccountDevices(tx, accountID)
+		if err != nil {
+			return err
+		}
+		for _, d := range devs {
+			if err := tx.Model(&models.DataRequest{}).Where("device_id = ? AND type = ?", d.DeviceID, "export").
+				Updates(map[string]interface{}{"payload": ""}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("device_id = ?", d.DeviceID).Delete(&models.IdempotencyRecord{}).Error; err != nil {
+				return err
+			}
+			// revoke device
+			if err := ar.RevokeDevice(accountID, d.DeviceID); err != nil {
+				return err
+			}
+			dr := h.deviceRepo.WithTx(tx)
+			if err := dr.UpdateConsent(d.DeviceID, "", "", true); err != nil {
+				return err
+			}
+		}
 		// anonymize orders (legal retain)
 		anon := "anon:" + accountID[:8]
-		_ = tx.Model(&models.Order{}).Where("account_id = ?", accountID).
-			Updates(map[string]interface{}{"account_id": anon, "device_id": anon}).Error
+		if err := tx.Model(&models.Order{}).Where("account_id = ?", accountID).
+			Updates(map[string]interface{}{"account_id": anon, "device_id": anon}).Error; err != nil {
+			return err
+		}
 		// disable account + remove bindings
-		_ = tx.Model(&models.Account{}).Where("account_id = ?", accountID).Update("status", "deleted").Error
-		_ = tx.Where("account_id = ?", accountID).Delete(&models.AccountBinding{}).Error
-		_ = tx.Where("account_id = ?", accountID).Delete(&models.DeviceAccount{}).Error
+		if err := tx.Model(&models.Account{}).Where("account_id = ?", accountID).Update("status", "deleted").Error; err != nil {
+			return err
+		}
+		if err := tx.Where("account_id = ?", accountID).Delete(&models.AccountBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("account_id = ?", accountID).Delete(&models.DeviceAccount{}).Error; err != nil {
+			return err
+		}
 		return nil
 	})
 }

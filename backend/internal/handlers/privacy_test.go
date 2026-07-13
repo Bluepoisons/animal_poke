@@ -36,6 +36,13 @@ func setupPrivacyLifecycle(t *testing.T) (*gin.Engine, *gorm.DB, *repo.AnimalRep
 		&models.AuditLog{},
 		&models.DeviceAccount{},
 		&models.RefreshToken{},
+		&models.AdventureRun{},
+		&models.IdempotencyRecord{},
+		&models.GrowthEvent{},
+		&models.ResearcherTrack{},
+		&models.CompanionProfile{},
+		&models.CompanionMemoryNode{},
+		&models.GrowthResetAudit{},
 	))
 
 	deviceRepo := repo.NewDeviceRepo(db)
@@ -76,6 +83,39 @@ func seedAnimals(t *testing.T, db *gorm.DB, deviceID string, n int) {
 	}
 }
 
+func seedPrivacyGrowthData(t *testing.T, db *gorm.DB, deviceID, animalUUID string) {
+	t.Helper()
+	ownerKey := repo.OwnerKey("", deviceID)
+	require.NoError(t, db.Create(&models.GrowthEvent{
+		EventID: "privacy-growth-event", OwnerKey: ownerKey, DeviceID: deviceID,
+		Kind: models.GrowthEventCompanionMemory, Track: "companion", AnimalUUID: animalUUID,
+		DeltaXP: 6, XPAfter: 6, SourceType: "adventure", SourceID: "adventure-export-1",
+		ConfigVersion: models.GrowthConfigVersion,
+	}).Error)
+	require.NoError(t, db.Create(&models.ResearcherTrack{
+		OwnerKey: ownerKey, Track: models.GrowthTrackEcology, DeviceID: deviceID,
+		XP: 15, Level: 1, ConfigVersion: models.GrowthConfigVersion,
+	}).Error)
+	require.NoError(t, db.Create(&models.CompanionProfile{
+		AnimalUUID: animalUUID, OwnerKey: ownerKey, DeviceID: deviceID,
+		BondXP: 6, BondLevel: 0, ConfigVersion: models.GrowthConfigVersion,
+	}).Error)
+	require.NoError(t, db.Create(&models.CompanionMemoryNode{
+		AnimalUUID: animalUUID, NodeID: "first_expedition", OwnerKey: ownerKey,
+		Title: "第一次远征", Kind: "memory", Visible: true, Unlocked: true,
+	}).Error)
+	require.NoError(t, db.Create(&models.GrowthResetAudit{
+		AuditID: "privacy-growth-audit", OwnerKey: ownerKey, DeviceID: deviceID,
+		Scope: "companion", AnimalUUID: animalUUID, Reason: "test", FromVersion: models.GrowthConfigVersion,
+		ToVersion: models.GrowthConfigVersion, SnapshotJSON: `{"bond_xp":6}`,
+	}).Error)
+	require.NoError(t, db.Create(&models.IdempotencyRecord{
+		DeviceID: deviceID, Route: "adventure.generate", Key: "privacy-idempotency",
+		RequestHash: "request-hash", Status: "completed", HTTPStatus: http.StatusCreated,
+		ResponseBody: `{"title":"应被删除的缓存剧情"}`, ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+	}).Error)
+}
+
 func TestExportData_Complete201Animals(t *testing.T) {
 	r, db, _, deviceRepo := setupPrivacyLifecycle(t)
 	_, err := deviceRepo.FindOrCreate("dev-privacy-1")
@@ -91,6 +131,34 @@ func TestExportData_Complete201Animals(t *testing.T) {
 		OrderID: "o1", DeviceID: "dev-privacy-1", ProductID: "month", Status: "fulfilled",
 		IdempotencyKey: "ik1", ReceiptHash: strPtr("rh1"),
 	}).Error)
+	require.NoError(t, db.Create(&models.AdventureRun{
+		RunID:            "adventure-export-1",
+		OwnerKey:         "device:dev-privacy-1",
+		OperationID:      "privacy-export-operation-1",
+		DeviceID:         "dev-privacy-1",
+		AnimalUUID:       "uuid-0000",
+		Theme:            "mistwood",
+		Title:            "雾灯森径的约定",
+		Status:           "completed",
+		ResultJSON:       `{"intro":"伙伴循着微光走进森林。"}`,
+		SelectedChoiceID: "kindness",
+		Outcome:          "伙伴守护了迷路的小动物。",
+		SouvenirName:     "萤火叶笺",
+		BondDelta:        6,
+		PromptVersion:    "companion-adventure-zh-v2",
+		Source:           "ai",
+	}).Error)
+	additionalRuns := make([]models.AdventureRun, 0, 500)
+	for i := 2; i <= 501; i++ {
+		additionalRuns = append(additionalRuns, models.AdventureRun{
+			RunID: fmt.Sprintf("adventure-export-%d", i), OwnerKey: repo.OwnerKey("", "dev-privacy-1"),
+			OperationID: fmt.Sprintf("privacy-export-operation-%d", i), DeviceID: "dev-privacy-1",
+			AnimalUUID: "uuid-0000", Theme: "mistwood", Title: "雾灯森径的约定", Status: "generated",
+			ResultJSON: `{"title":"雾灯森径的约定"}`, PromptVersion: "companion-adventure-zh-v2", Source: "ai",
+		})
+	}
+	require.NoError(t, db.CreateInBatches(&additionalRuns, 100).Error)
+	seedPrivacyGrowthData(t, db, "dev-privacy-1", "uuid-0000")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/privacy/export", nil)
@@ -118,6 +186,44 @@ func TestExportData_Complete201Animals(t *testing.T) {
 	var sec map[string]interface{}
 	require.NoError(t, json.Unmarshal(data["security_reports"], &sec))
 	assert.EqualValues(t, 1, sec["count"])
+
+	var adventures []map[string]interface{}
+	require.NoError(t, json.Unmarshal(data["adventures"], &adventures))
+	require.Len(t, adventures, 501, "adventure export must not stop at the former 500-row limit")
+	assert.Equal(t, "adventure-export-1", adventures[0]["run_id"])
+	assert.Equal(t, "雾灯森径的约定", adventures[0]["title"])
+	assert.Equal(t, "萤火叶笺", adventures[0]["souvenir_name"])
+	assert.EqualValues(t, 6, adventures[0]["bond_delta"])
+	assert.NotContains(t, adventures[0], "operation_id")
+	assert.NotContains(t, adventures[0], "prompt_version")
+	assert.NotContains(t, adventures[0], "source")
+
+	var growth map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data["growth"], &growth))
+	for _, key := range []string{"events", "researcher_tracks", "companions", "companion_nodes", "reset_audits"} {
+		var rows []map[string]any
+		require.NoError(t, json.Unmarshal(growth[key], &rows), key)
+		require.Len(t, rows, 1, key)
+	}
+}
+
+func TestExportData_AdventureQueryFailureMarksRequestFailed(t *testing.T) {
+	r, db, _, deviceRepo := setupPrivacyLifecycle(t)
+	_, err := deviceRepo.FindOrCreate("dev-privacy-1")
+	require.NoError(t, err)
+	require.NoError(t, db.Migrator().DropTable(&models.AdventureRun{}))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/privacy/export", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "export_failed")
+
+	var request models.DataRequest
+	require.NoError(t, db.Where("device_id = ? AND type = ?", "dev-privacy-1", "export").Order("id desc").First(&request).Error)
+	assert.Equal(t, "failed", request.Status)
+	assert.NotEmpty(t, request.ErrorMsg)
+	assert.NotNil(t, request.CompletedAt)
 }
 
 func TestDeleteData_TombstonePullAndTokenBump(t *testing.T) {
@@ -146,6 +252,18 @@ func TestDeleteData_TombstonePullAndTokenBump(t *testing.T) {
 		OrderID: "keep-order", DeviceID: "dev-privacy-1", ProductID: "month", Status: "fulfilled",
 		IdempotencyKey: "ik-keep", ReceiptHash: strPtr("rh-keep"),
 	}).Error)
+	require.NoError(t, db.Create(&models.AdventureRun{
+		RunID:       "adventure-delete-1",
+		OwnerKey:    "device:dev-privacy-1",
+		OperationID: "privacy-delete-operation-1",
+		DeviceID:    "dev-privacy-1",
+		AnimalUUID:  "uuid-0000",
+		Theme:       "mistwood",
+		Title:       "待删除的探险",
+		Status:      "generated",
+		ResultJSON:  `{"intro":"这段探险应随隐私删除一并清除。"}`,
+	}).Error)
+	seedPrivacyGrowthData(t, db, "dev-privacy-1", "uuid-0000")
 
 	// delete
 	w := httptest.NewRecorder()
@@ -190,6 +308,19 @@ func TestDeleteData_TombstonePullAndTokenBump(t *testing.T) {
 	require.NoError(t, db.Model(&models.Inference{}).Where("device_id = ?", "dev-privacy-1").Count(&infCount).Error)
 	assert.EqualValues(t, 0, infCount)
 
+	// 探险剧情已删
+	var adventureCount int64
+	require.NoError(t, db.Model(&models.AdventureRun{}).Where("device_id = ?", "dev-privacy-1").Count(&adventureCount).Error)
+	assert.EqualValues(t, 0, adventureCount)
+	for _, model := range []any{
+		&models.GrowthEvent{}, &models.ResearcherTrack{}, &models.CompanionProfile{},
+		&models.CompanionMemoryNode{}, &models.GrowthResetAudit{}, &models.IdempotencyRecord{},
+	} {
+		var count int64
+		require.NoError(t, db.Model(model).Count(&count).Error)
+		assert.Zero(t, count)
+	}
+
 	// 权益失效；订单保留
 	var ent models.Entitlement
 	require.NoError(t, db.Where("device_id = ?", "dev-privacy-1").First(&ent).Error)
@@ -210,13 +341,62 @@ func TestDeleteData_TombstonePullAndTokenBump(t *testing.T) {
 	var animals2 []interface{}
 	require.NoError(t, json.Unmarshal(data2["animals"], &animals2))
 	assert.Len(t, animals2, 0)
+	var adventures2 []interface{}
+	require.NoError(t, json.Unmarshal(data2["adventures"], &adventures2))
+	assert.Len(t, adventures2, 0)
+}
+
+func TestDeleteData_AdventureDeleteFailureRollsBack(t *testing.T) {
+	r, db, _, deviceRepo := setupPrivacyLifecycle(t)
+	dev, err := deviceRepo.FindOrCreate("dev-privacy-1")
+	require.NoError(t, err)
+	seedAnimals(t, db, "dev-privacy-1", 1)
+	require.NoError(t, db.Create(&models.AdventureRun{
+		RunID:       "adventure-delete-failure",
+		OwnerKey:    repo.OwnerKey("", "dev-privacy-1"),
+		OperationID: "adventure-delete-failure-operation",
+		DeviceID:    "dev-privacy-1",
+		AnimalUUID:  "uuid-0000",
+		Theme:       "mistwood",
+		Title:       "不可静默失败的探险",
+		Status:      "generated",
+		ResultJSON:  `{"title":"不可静默失败的探险"}`,
+	}).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TRIGGER fail_adventure_delete
+		BEFORE DELETE ON adventure_runs
+		BEGIN
+			SELECT RAISE(ABORT, 'forced adventure delete failure');
+		END;
+	`).Error)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/privacy/delete", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "delete_failed")
+
+	var animal models.Animal
+	require.NoError(t, db.Where("uuid = ?", "uuid-0000").First(&animal).Error)
+	assert.Nil(t, animal.DeletedAt, "the surrounding transaction must roll back")
+	var adventureCount int64
+	require.NoError(t, db.Model(&models.AdventureRun{}).Where("run_id = ?", "adventure-delete-failure").Count(&adventureCount).Error)
+	assert.EqualValues(t, 1, adventureCount)
+	refreshed, err := deviceRepo.Find("dev-privacy-1")
+	require.NoError(t, err)
+	assert.Equal(t, dev.TokenVersion, refreshed.TokenVersion)
 }
 
 func TestPullAnimals_TombstoneOnlyAfterDelete(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open("file:pull_tomb_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.Animal{}, &models.Device{}, &models.DataRequest{}, &models.Inference{}, &models.SecurityReport{}, &models.Entitlement{}, &models.Order{}, &models.AuditLog{}, &models.DeviceAccount{}, &models.RefreshToken{}))
+	require.NoError(t, db.AutoMigrate(
+		&models.Animal{}, &models.Device{}, &models.DataRequest{}, &models.Inference{}, &models.SecurityReport{},
+		&models.Entitlement{}, &models.Order{}, &models.AuditLog{}, &models.DeviceAccount{}, &models.RefreshToken{},
+		&models.AdventureRun{}, &models.IdempotencyRecord{}, &models.GrowthEvent{}, &models.ResearcherTrack{},
+		&models.CompanionProfile{}, &models.CompanionMemoryNode{}, &models.GrowthResetAudit{},
+	))
 
 	deviceRepo := repo.NewDeviceRepo(db)
 	animalRepo := repo.NewAnimalRepo(db)

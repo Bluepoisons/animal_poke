@@ -46,6 +46,7 @@ export function generatedAnimalToPayload(
   return {
     uuid: animal.sessionId,
     species: animal.species,
+    species_label_zh: animal.speciesLabelZh,
     breed: animal.analysis.breed,
     rarity: animal.value.rarity,
     hp: animal.value.hp,

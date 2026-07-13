@@ -55,7 +55,7 @@ export type ResearcherTrackView = {
 export type CompanionNodeView = {
   node_id: string
   title: string
-  kind: 'memory' | 'decor' | 'journal' | string
+  kind: 'memory' | 'decor' | string
   visible: boolean
   unlocked: boolean
   unlock_at_xp: number

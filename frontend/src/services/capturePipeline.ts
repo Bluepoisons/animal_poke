@@ -35,6 +35,8 @@ export type PetClass = (typeof VALID_CLASSES)[number]
 export type PetElement = (typeof VALID_ELEMENTS)[number]
 
 export interface AnalysisResult {
+  /** 检测/纠错凭证确认的具体简体中文物种名。 */
+  species_label_zh?: string
   breed: string
   color: string
   body_type: string
@@ -69,6 +71,8 @@ export interface ValueFactors {
 }
 
 export interface ValueResult {
+  /** 服务端沿可信推理链继承的具体简体中文物种名。 */
+  species_label_zh?: string
   rarity: number // 1-5
   hp: number
   atk: number
@@ -86,6 +90,8 @@ export interface ValueResult {
   seed_id?: string
   /** 服务端 value 阶段 inference_id（同步必须用此 ID） */
   inference_id?: string
+  /** 服务端已创建的动物记录 UUID。 */
+  animal_uuid?: string
   model?: string
   prompt_version?: string
   source?: string
@@ -102,6 +108,8 @@ export interface GeneratedAnimal {
   /** 权威：value 阶段服务端返回的 inference_id */
   valueInferenceId: string
   species: string
+  /** other_animal 等广谱兜底动物的具体简体中文名称。 */
+  speciesLabelZh?: string
   analysis: AnalysisResult
   value: ValueResult
   photoDataUrl?: string
@@ -124,9 +132,13 @@ export interface PipelineProgress {
 export interface RunPipelineOptions {
   sessionId: string
   species: string
+  /** detect 阶段返回的可信简体中文物种标签。 */
+  speciesLabelZh?: string
   photoDataUrl: string
   /** detect 推理 id，用于服务端校验照片识别链路。 */
   detectInferenceId?: string
+  /** detect 凭证中的真实目标 ID。 */
+  targetId?: string
   signal?: AbortSignal
   onProgress?: (p: PipelineProgress) => void
   /** 从 partial 恢复（只跑未完成阶段） */
@@ -146,6 +158,11 @@ function asString(v: unknown, fallback = ''): string {
   return typeof v === 'string' && v.trim() ? v.trim() : fallback
 }
 
+function asChineseString(value: unknown, fallback: string): string {
+  const text = asString(value)
+  return /[\u3400-\u9fff]/.test(text) && !/[A-Za-z]/.test(text) ? text : fallback
+}
+
 function pickInferenceId(o: Record<string, unknown>): string | undefined {
   const v =
     o.inference_id ?? o.inferenceId ?? o.inference_request_id ?? o.request_id
@@ -155,9 +172,10 @@ function pickInferenceId(o: Record<string, unknown>): string | undefined {
 export function validateAnalysis(raw: unknown): AnalysisResult {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
-    breed: asString(o.breed, 'Unknown'),
-    color: asString(o.color, 'unknown'),
-    body_type: asString(o.body_type, 'normal'),
+    species_label_zh: asChineseString(o.species_label_zh ?? o.speciesLabelZh, '') || undefined,
+    breed: asChineseString(o.breed, '品种待确认'),
+    color: asChineseString(o.color, '毛色待确认'),
+    body_type: asChineseString(o.body_type, '体型待确认'),
     quality_score: clampInt(o.quality_score, 1, 10, 5),
     subject_completeness: clampInt(o.subject_completeness, 0, 10, 5),
     clarity: clampInt(o.clarity, 0, 10, 5),
@@ -203,6 +221,7 @@ export function validateValue(raw: unknown): ValueResult {
   let element = asString(o.element, 'Wind')
   if (!(VALID_ELEMENTS as readonly string[]).includes(element)) element = 'Wind'
   return {
+    species_label_zh: asChineseString(o.species_label_zh ?? o.speciesLabelZh, '') || undefined,
     rarity: clampInt(o.rarity, 1, 5, 1),
     hp: clampInt(o.hp, 10, 100, 50),
     atk: clampInt(o.atk, 5, 50, 15),
@@ -210,7 +229,7 @@ export function validateValue(raw: unknown): ValueResult {
     spd: clampInt(o.spd, 5, 50, 15),
     class: petClass,
     element,
-    narrative: asString(o.narrative, 'A mysterious companion found in the wild.'),
+    narrative: asChineseString(o.narrative, '这是一位在幻想世界中等待与你同行的动物伙伴。'),
     fiction: typeof o.fiction === 'boolean' ? o.fiction : undefined,
     disclaimer: asString(o.disclaimer, '') || undefined,
     layer: asString(o.layer, '') || undefined,
@@ -218,6 +237,7 @@ export function validateValue(raw: unknown): ValueResult {
     config_version: asString(o.config_version ?? o.configVersion, '') || undefined,
     seed_id: asString(o.seed_id ?? o.seedId, '') || undefined,
     inference_id: pickInferenceId(o),
+    animal_uuid: asString(o.animal_uuid ?? o.animalUuid, '') || undefined,
     model: asString(o.model, '') || undefined,
     prompt_version: asString(o.prompt_version ?? o.promptVersion, '') || undefined,
     source: asString(o.source, '') || undefined,
@@ -306,7 +326,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 export async function runCaptureGeneration(
   options: RunPipelineOptions,
 ): Promise<GeneratedAnimal> {
-  const { sessionId, species, photoDataUrl, detectInferenceId, signal, onProgress, resumeFrom } = options
+  const { sessionId, species, speciesLabelZh, photoDataUrl, detectInferenceId, targetId, signal, onProgress, resumeFrom } = options
   const analyzeKey = `analyze:${sessionId}`
   const valueKey = `value:${sessionId}`
 
@@ -337,7 +357,9 @@ export async function runCaptureGeneration(
       const form = new FormData()
       form.append('image', blob, 'capture.jpg')
       form.append('species', species)
+      if (speciesLabelZh) form.append('species_label_zh', speciesLabelZh)
       if (detectInferenceId) form.append('detect_inference_id', detectInferenceId)
+      if (targetId) form.append('target_id', targetId)
 
       const raw = await authedRequest<unknown>({
         method: 'POST',
@@ -360,6 +382,7 @@ export async function runCaptureGeneration(
       const parentInference = analyzeInferenceId || analysis?.inference_id
       const payload = {
         species,
+        species_label_zh: analysis!.species_label_zh || speciesLabelZh,
         breed: analysis!.breed,
         color: analysis!.color,
         body_type: analysis!.body_type,
@@ -369,6 +392,7 @@ export async function runCaptureGeneration(
         composition: analysis!.composition,
         pose: analysis!.pose,
         angle: analysis!.angle,
+        capture_id: sessionId,
         ...(parentInference
           ? { parent_inference_id: parentInference, analyze_inference_id: parentInference }
           : {}),
@@ -386,7 +410,7 @@ export async function runCaptureGeneration(
       valueInferenceId = value.inference_id
     }
 
-    // ---- save (local assemble; sync 由 #103) ----
+    // ---- save (服务端已在 value 阶段持久化；这里仅写本地图鉴缓存) ----
     emit('save', { partial: { analysis, value } })
     throwIfAborted(signal)
 
@@ -399,11 +423,12 @@ export async function runCaptureGeneration(
     }
 
     const result: GeneratedAnimal = {
-      sessionId,
+      sessionId: value?.animal_uuid || sessionId,
       inferenceRequestId: authoritativeId,
       analyzeInferenceId: analyzeInferenceId || analysis?.inference_id,
       valueInferenceId: authoritativeId,
       species,
+      speciesLabelZh: value?.species_label_zh || analysis?.species_label_zh || speciesLabelZh,
       analysis: analysis!,
       value: value!,
       photoDataUrl,

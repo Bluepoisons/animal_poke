@@ -21,12 +21,17 @@ func TestLoadDir_DefaultContent(t *testing.T) {
 	assert.Contains(t, ids, "dog")
 	assert.Contains(t, ids, "goose")
 	assert.Contains(t, ids, "rabbit")
+	assert.Contains(t, ids, "bird")
+	assert.Contains(t, ids, "horse")
+	assert.Contains(t, ids, "snake")
+	assert.Contains(t, ids, "fish")
+	assert.Contains(t, ids, "other_animal")
+	assert.Len(t, ids, 36)
 
 	cap := r.CapturableIDs()
-	assert.Equal(t, []string{"cat", "dog", "goose"}, cap)
-	assert.NotContains(t, cap, "rabbit")
-	assert.Equal(t, StatusCatalogOnly, r.EffectiveStatusOf("rabbit"))
-	assert.False(t, r.Capturable("rabbit"))
+	assert.ElementsMatch(t, ids, cap)
+	assert.Equal(t, StatusCapturable, r.EffectiveStatusOf("rabbit"))
+	assert.True(t, r.Capturable("rabbit"))
 }
 
 func TestAliasConflict(t *testing.T) {
@@ -67,12 +72,33 @@ func TestNormalize_FromPacks(t *testing.T) {
 		{"bunny", "rabbit"},
 		{"野兔", "rabbit"},
 		{"rabbit", "rabbit"},
-		{"duck", IDUnsupported},
-		{"bird", IDUnsupported},
+		{"duck", "duck"},
+		{"bird", "bird"},
+		{"swan", "bird"},
+		{"horse", "horse"},
+		{"青蛙", "frog"},
+		{"海马", "fish"},
+		{"一只海马", "fish"},
+		{"牛蛙", "frog"},
+		{"一只牛蛙", "frog"},
+		{"食人鱼", "fish"},
+		{"一条食人鱼", "fish"},
+		{"河马", IDUnknown},
+		{"蜗牛", IDUnknown},
+		{"海牛", IDUnknown},
+		{"木马", IDUnsupported},
+		{"seahorse", "fish"},
+		{"a horse in grass", "horse"},
+		{"workhorse", IDUnknown},
+		{"catfish", IDUnknown},
+		{"caracal", IDUnknown},
+		{"other_animal", "other_animal"},
 		{"human", IDUnsupported},
-		{"mongoose", IDUnsupported},
+		{"kid", IDUnsupported},
+		{"小孩", IDUnsupported},
+		{"mongoose", IDUnknown},
 		{"", IDUnknown},
-		{"horse", IDUnknown},
+		{"unknown animal", IDUnknown},
 	}
 	for _, tc := range cases {
 		got, _ := r.Normalize(tc.raw)
@@ -141,18 +167,54 @@ func TestCapturableMissingGameplay_DegradesToCertified(t *testing.T) {
 	assert.False(t, CanCapture(p, time.Now(), ""))
 }
 
-func TestFourthSpeciesPilot_EncyclopediaOnly(t *testing.T) {
+func TestRabbitContentRefCapturable(t *testing.T) {
 	r := NewRegistry()
 	require.NoError(t, r.RegisterAll(builtinPacks()...))
 	assert.True(t, InEncyclopedia(mustGet(t, r, "rabbit")))
-	assert.False(t, r.Capturable("rabbit"))
-	assert.Equal(t, StatusCatalogOnly, r.EffectiveStatusOf("rabbit"))
+	assert.True(t, r.Capturable("rabbit"))
+	assert.Equal(t, StatusCapturable, r.EffectiveStatusOf("rabbit"))
 	// 交叉引用：内容 ID + 版本
 	p, ok := r.Get("rabbit")
 	require.True(t, ok)
 	assert.Equal(t, "species.rabbit", p.ContentID)
 	assert.Equal(t, "1.0.0", p.Version)
 	assert.Equal(t, Ref{ID: "rabbit", Version: "1.0.0"}, p.Ref())
+}
+
+func TestMatchesAnimalLabel_BroadRegistry(t *testing.T) {
+	r := NewRegistry()
+	require.NoError(t, r.RegisterAll(builtinPacks()...))
+	for _, label := range []string{"horse", "一只鸭子", "green snake", "青蛙", "海马", "牛蛙", "食人鱼", "fish", "octopus", "butterfly", "person with horse"} {
+		assert.True(t, r.MatchesAnimalLabel(label), "label=%q", label)
+	}
+	for _, label := range []string{"human", "kid", "toy", "screen", "plant", "car", "河马", "蜗牛", "海牛", "木马", "workhorse", "catfish", "unknown animal"} {
+		assert.False(t, r.MatchesAnimalLabel(label), "label=%q", label)
+	}
+}
+
+func TestResolveExactAlias_DoesNotUseContains(t *testing.T) {
+	r := NewRegistry()
+	require.NoError(t, r.RegisterAll(builtinPacks()...))
+
+	id, ok := r.ResolveExactAlias("猫")
+	require.True(t, ok)
+	assert.Equal(t, "cat", id)
+
+	for _, label := range []string{"桌子猫", "长颈鹿", "斑马"} {
+		_, ok := r.ResolveExactAlias(label)
+		assert.False(t, ok, "label=%q", label)
+	}
+}
+
+func TestProtectedPackRequiresRemoteObservation(t *testing.T) {
+	p := broadBuiltinPacks()[0]
+	p.ID = "protected-test"
+	p.ContentID = "species.protected-test"
+	p.Protection.Status = "protected"
+	p.ObservationTips = Localized{"zh-CN": "请安静观察"}
+	err := ValidatePack(p)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "remote observation")
 }
 
 func TestSchemaRejectsReservedID(t *testing.T) {

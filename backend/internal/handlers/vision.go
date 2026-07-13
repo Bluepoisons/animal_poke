@@ -272,6 +272,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		}
 		targetID := c.PostForm("target_id")
 		claimedSpecies := strings.TrimSpace(c.PostForm("species"))
+		claimedSpeciesLabel := strings.TrimSpace(c.PostForm("species_label_zh"))
 		box, boxOK, boxErr := parseOptionalBox(c)
 		if boxErr != nil {
 			middleware.WriteError(c, http.StatusBadRequest, "invalid_box", boxErr.Error(), false, nil)
@@ -313,9 +314,25 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				middleware.WriteError(c, http.StatusConflict, "target_mismatch", err.Error(), false, nil)
 				return
 			}
+			lockedSpecies, lockedLabel, identityErr := services.NormalizeAnimalIdentity(locked.Species, locked.Label)
+			if identityErr != nil {
+				middleware.WriteError(c, http.StatusConflict, "detect_inference_invalid", "detect inference has invalid animal identity", false, nil)
+				return
+			}
+			locked.Species = lockedSpecies
+			locked.Label = lockedLabel
 			if claimedSpecies != "" {
 				norm, _ := taxonomy.Normalize(claimedSpecies)
-				if norm != locked.Species {
+				label := ""
+				if claimedSpeciesLabel != "" {
+					var claimErr error
+					norm, label, claimErr = services.NormalizeAnimalIdentity(norm, claimedSpeciesLabel)
+					if claimErr != nil {
+						middleware.WriteError(c, http.StatusBadRequest, "species_label_invalid", claimErr.Error(), false, nil)
+						return
+					}
+				}
+				if norm != locked.Species || claimedSpeciesLabel != "" && label != locked.Label {
 					middleware.WriteError(c, http.StatusConflict, "target_mismatch", "species does not match selected target", false, map[string]any{
 						"expected": locked.Species,
 						"got":      norm,
@@ -330,7 +347,12 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 				middleware.WriteError(c, http.StatusBadRequest, "species_unsupported", "species not capturable", false, nil)
 				return
 			}
-			locked = &services.DetectBox{Species: norm, TargetID: targetID}
+			norm, label, identityErr := services.NormalizeAnimalIdentity(norm, claimedSpeciesLabel)
+			if identityErr != nil {
+				middleware.WriteError(c, http.StatusBadRequest, "species_label_invalid", identityErr.Error(), false, nil)
+				return
+			}
+			locked = &services.DetectBox{Species: norm, Label: label, TargetID: targetID}
 			if boxOK {
 				locked.BoundingBox = box
 			}
@@ -347,7 +369,8 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			// 校验失败与模型失败区分
 			msg := err.Error()
 			if strings.Contains(msg, "out of range") || strings.Contains(msg, "missing") ||
-				strings.Contains(msg, "json") || strings.Contains(msg, "markdown") || strings.Contains(msg, "multiple") {
+				strings.Contains(msg, "json") || strings.Contains(msg, "markdown") || strings.Contains(msg, "multiple") ||
+				strings.Contains(msg, "Simplified Chinese") {
 				middleware.WriteError(c, http.StatusUnprocessableEntity, "analysis_invalid", "invalid analysis output", false, map[string]any{
 					"detail": msg,
 				})
@@ -358,6 +381,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 		}
 		if locked != nil {
 			r.Species = locked.Species
+			r.SpeciesLabelZH = locked.Label
 			r.TargetID = locked.TargetID
 			r.DetectInferenceID = detectInfID
 			bb := locked.BoundingBox
@@ -369,6 +393,7 @@ func (h *VisionHandler) handleVision(c *gin.Context, kind string) {
 			exp := time.Now().UTC().Add(2 * time.Hour)
 			payload, _ := json.Marshal(map[string]interface{}{
 				"species":              r.Species,
+				"species_label_zh":     r.SpeciesLabelZH,
 				"target_id":            r.TargetID,
 				"detect_inference_id":  detectInfID,
 				"breed":                r.Breed,

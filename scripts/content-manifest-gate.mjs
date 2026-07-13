@@ -12,7 +12,7 @@
  *   node scripts/content-manifest-gate.mjs
  */
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,25 +29,38 @@ function ok(msg) { console.log(`[manifest] OK: ${msg}`) }
 // --- 1. Species pack consistency ---
 const frontendPacks = resolve(ROOT, 'frontend/src/species/packs.ts')
 const backendPacks = resolve(ROOT, 'backend/internal/speciespack/builtin.go')
+const backendSpeciesDir = resolve(ROOT, 'backend/content/species')
+
+function loadBackendSpeciesPacks() {
+  if (!existsSync(backendSpeciesDir)) return []
+  const packs = []
+  for (const name of readdirSync(backendSpeciesDir).sort()) {
+    if (!name.endsWith('.json') || name.includes('schema')) continue
+    const parsed = JSON.parse(readFileSync(resolve(backendSpeciesDir, name), 'utf8'))
+    packs.push(...(Array.isArray(parsed) ? parsed : [parsed]))
+  }
+  return packs
+}
 
 if (!existsSync(frontendPacks)) fail('frontend species packs file missing')
 else if (!existsSync(backendPacks)) fail('backend species packs file missing')
 else {
   const fp = readFileSync(frontendPacks, 'utf8')
-  const bp = readFileSync(backendPacks, 'utf8')
+  const backendContentPacks = loadBackendSpeciesPacks()
 
-  // Extract content IDs: frontend uses 'species.cat', backend uses "species.cat"
+  // Frontend is a code mirror; backend authored JSON is authoritative. Reading
+  // JSON also supports content bundles without requiring literal Go fields.
   const front = [...fp.matchAll(/contentId:\s*['"]([^'"]+)['"]/g)].map(m => m[1])
-  const back = [...bp.matchAll(/ContentID:\s*"([^"]+)"/g)].map(m => m[1])
+  const back = backendContentPacks.map(p => p.content_id).filter(Boolean)
   const frontSet = new Set(front), backSet = new Set(back)
 
   for (const id of frontSet) if (!backSet.has(id)) fail(`species "${id}" frontend-only`)
   for (const id of backSet) if (!frontSet.has(id)) fail(`species "${id}" backend-only`)
   ok(`species pack sync: ${frontSet.size} front, ${backSet.size} back`)
 
-  // Capturable count: frontend uses literal, backend uses Go constants
+  // Capturable count: frontend uses literal, backend comes from authored JSON.
   const fCap = (fp.match(/status:\s*['"]capturable['"]/g) || []).length
-  const bCap = (bp.match(/Status:\s*StatusCapturable\b/g) || []).length
+  const bCap = backendContentPacks.filter(p => p.status === 'capturable').length
   if (fCap === bCap) ok(`capturable species: ${bCap}`)
   else fail(`capturable mismatch: front=${fCap} back=${bCap}`)
   ok(`species catalog ready for manifest`)
@@ -62,6 +75,10 @@ for (const src of [frontendPacks, backendPacks]) {
     for (const m of c.matchAll(/(?:contentId|ContentID):\s*['"]([^'"]+)['"]/g)) knownContentIds.add(m[1])
     for (const m of c.matchAll(/\bID:\s*"([^"]+)"/g)) knownShortIds.add(m[1])
   }
+}
+for (const p of loadBackendSpeciesPacks()) {
+  if (p.content_id) knownContentIds.add(p.content_id)
+  if (p.id) knownShortIds.add(p.id)
 }
 
 // --- 2. i18n key coverage ---

@@ -34,11 +34,13 @@ describe('capturePipeline', () => {
     const a = validateAnalysis({ breed: 'Tabby', quality_score: 99, clarity: -1 })
     expect(a.quality_score).toBe(10)
     expect(a.clarity).toBe(0)
+    expect(a.breed).toBe('品种待确认')
     const v = validateValue({ rarity: 9, hp: 1, class: 'Nope', element: 'Nope', narrative: 'x' })
     expect(v.rarity).toBe(5)
     expect(v.hp).toBe(10)
     expect(v.class).toBe('Ranger')
     expect(v.element).toBe('Wind')
+    expect(v.narrative).toContain('幻想世界')
   })
 
   it('runs analyze → value with stable idempotency keys', async () => {
@@ -51,9 +53,10 @@ describe('capturePipeline', () => {
           status: 200,
           headers: new Headers({ 'Content-Type': 'application/json' }),
           json: async () => ({
-            breed: 'British Shorthair',
-            color: 'blue',
-            body_type: 'stocky',
+            species_label_zh: '猫',
+            breed: '英国短毛猫',
+            color: '蓝灰色',
+            body_type: '敦实',
             quality_score: 8,
             inference_id: 'inf-analyze-1',
             subject_completeness: 9,
@@ -71,6 +74,7 @@ describe('capturePipeline', () => {
           status: 200,
           headers: new Headers({ 'Content-Type': 'application/json' }),
           json: async () => ({
+            species_label_zh: '猫',
             rarity: 3,
             hp: 60,
             atk: 20,
@@ -78,7 +82,7 @@ describe('capturePipeline', () => {
             spd: 22,
             class: 'Ranger',
             element: 'Wind',
-            narrative: 'swift and alert',
+            narrative: '它会追着幻想世界里的风铃奔跑。',
             inference_id: 'inf-value-1',
           }),
         }
@@ -96,12 +100,16 @@ describe('capturePipeline', () => {
     const animal = await runCaptureGeneration({
       sessionId,
       species: 'cat',
+      speciesLabelZh: '猫',
       photoDataUrl: tinyPng,
+      detectInferenceId: 'inf-detect-1',
+      targetId: 'cat-7',
       onProgress: (p) => stages.push(p.stage),
     })
 
     expect(animal.species).toBe('cat')
-    expect(animal.analysis.breed).toBe('British Shorthair')
+    expect(animal.speciesLabelZh).toBe('猫')
+    expect(animal.analysis.breed).toBe('英国短毛猫')
     expect(animal.value.rarity).toBe(3)
     expect(stages).toContain('analyze')
     expect(stages).toContain('value')
@@ -112,6 +120,12 @@ describe('capturePipeline', () => {
     expect(analyzeCall?.[1]?.headers?.['Idempotency-Key']).toBe(`analyze:${sessionId}`)
     expect(valueCall?.[1]?.headers?.['Idempotency-Key']).toBe(`value:${sessionId}`)
     expect(analyzeCall?.[1]?.headers?.Authorization).toBe('Bearer tok')
+    const analyzeForm = analyzeCall?.[1]?.body as FormData
+    expect(analyzeForm.get('detect_inference_id')).toBe('inf-detect-1')
+    expect(analyzeForm.get('target_id')).toBe('cat-7')
+    expect(analyzeForm.get('species_label_zh')).toBe('猫')
+    const valuePayload = JSON.parse(String(valueCall?.[1]?.body))
+    expect(valuePayload.species_label_zh).toBe('猫')
   })
 
   it('resumes from analysis and only calls value', async () => {
@@ -129,7 +143,7 @@ describe('capturePipeline', () => {
             spd: 15,
             class: 'Tank',
             element: 'Earth',
-            narrative: 'steady',
+            narrative: '它的步伐像大地一样沉稳。',
             inference_id: 'inf-value-2',
           }),
         }
@@ -143,10 +157,10 @@ describe('capturePipeline', () => {
       species: 'dog',
       photoDataUrl: tinyPng,
       resumeFrom: {
-        analysis: validateAnalysis({ breed: 'Shiba' }),
+        analysis: validateAnalysis({ breed: '柴犬' }),
       },
     })
-    expect(animal.analysis.breed).toBe('Shiba')
+    expect(animal.analysis.breed).toBe('柴犬')
     expect(animal.value.class).toBe('Tank')
     expect(fetchMock.mock.calls.every((c) => String(c[0]).includes('/value/generate'))).toBe(true)
   })

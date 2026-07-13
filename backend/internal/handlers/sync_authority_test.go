@@ -111,6 +111,31 @@ func TestSyncAnimal_ServerAuthorityOverwritesClientRarity(t *testing.T) {
 	assert.Contains(t, w2.Body.String(), "inference_consumed")
 }
 
+func TestSyncAnimal_RejectsInvalidAuthoritativeAnimalIdentity(t *testing.T) {
+	r, inf := setupSyncAuthority(t)
+	exp := time.Now().UTC().Add(time.Hour)
+	require.NoError(t, inf.Create(&models.Inference{
+		InferenceID: "val-invalid-label", DeviceID: "dev-1", Kind: "value", Status: "success",
+		Species: "other_animal", ResultJSON: `{"species":"other_animal","species_label_zh":"桌子猫","rarity":3}`,
+		ExpiresAt: &exp,
+	}))
+	body, _ := json.Marshal(map[string]interface{}{
+		"uuid": uuid.NewString(), "species": "other_animal", "species_label_zh": "石斑鱼", "rarity": 3,
+		"generated_at":         time.Now().Format(time.RFC3339),
+		"inference_request_id": "val-invalid-label",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync/animal", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "inference_tampered")
+
+	stored, err := inf.Find("val-invalid-label")
+	require.NoError(t, err)
+	assert.Equal(t, "success", stored.Status, "failed authoritative validation must roll back inference consumption")
+}
+
 func TestSyncAnimal_BadInference_BatchAndSingleSame(t *testing.T) {
 	// 错 inference：单条与 batch 同一 item 一致 reason_code
 	r, _ := setupSyncAuthority(t)

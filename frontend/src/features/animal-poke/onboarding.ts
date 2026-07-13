@@ -75,7 +75,7 @@ export function resetOnboarding(): OnboardingState {
 export function stepCopy(step: OnboardingStep): { title: string; body: string } {
   switch (step) {
     case 'welcome':
-      return { title: '欢迎来到 AnimalPoke', body: '用相机温柔观察附近的猫狗鹅，生成你的手账图鉴。' }
+      return { title: '欢迎来到 AnimalPoke', body: '用相机温柔观察附近的各种动物，把它们加入动物记录并成为幻想探险伙伴。' }
     case 'permissions':
       return {
         title: '权限说明',

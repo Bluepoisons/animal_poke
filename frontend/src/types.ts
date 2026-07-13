@@ -2,6 +2,7 @@ import {
   buildSpeciesDefs,
   capturableSpeciesIds,
   getRarityWeights,
+  getSpeciesPack,
   getSpeciesDef,
   isCapturableSpecies,
 } from './species'
@@ -13,6 +14,7 @@ export type RarityTier = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 
 /** 物种内容 ID（扩展时追加 pack，无需改业务 switch） */
 export type SpeciesType = string
+export const UNKNOWN_SPECIES: SpeciesType = 'unknown'
 
 /** 物种定义（由内容包投影） */
 export type SpeciesDef = PackSpeciesDef
@@ -52,9 +54,15 @@ export interface CardEntry {
   isNew?: boolean
 }
 
-/** 获取 CardEntry 的物种，未设置的旧数据默认猫 */
+/** 将读取到的物种收敛为注册 ID；缺失或未知 ID 只用于安全展示。 */
+export function normalizeSpeciesId(value: unknown): SpeciesType {
+  const species = typeof value === 'string' ? value.trim() : ''
+  return species && getSpeciesPack(species) ? species : UNKNOWN_SPECIES
+}
+
+/** 获取 CardEntry 的物种，旧数据缺失或未知时不得伪装成某个真实物种。 */
 export function getCardSpecies(entry: CardEntry): SpeciesType {
-  return entry.species ?? 'cat'
+  return normalizeSpeciesId(entry.species)
 }
 
 /** 是否允许捕获/发奖 */
@@ -96,6 +104,6 @@ export const MOCK_ENTRIES: CardEntry[] = [
   { id: 'c007', no: '#000014', rarity: 'legendary', species: 'cat', unlocked: true, captureDate: '2026-07-01', location: '海曙区·月湖', lat: 29.87, lng: 121.55, seed: 7 },
   { id: 'c008', no: '#???', rarity: 'common', species: 'goose', unlocked: false, captureDate: '—', location: '待发现', lat: 0, lng: 0, seed: 8 },
   { id: 'c009', no: '#???', rarity: 'common', species: 'dog', unlocked: false, captureDate: '—', location: '待发现', lat: 0, lng: 0, seed: 9 },
-  // 百科试点（未解锁捕获）
+  // 尚未发现的注册物种示例
   { id: 'c010', no: '#E001', rarity: 'common', species: 'rabbit', unlocked: false, captureDate: '—', location: '百科预告', lat: 0, lng: 0, seed: 10 },
 ]

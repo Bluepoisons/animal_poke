@@ -35,7 +35,7 @@ func setupAccountTest(t *testing.T) (*gin.Engine, *gorm.DB, *repo.DeviceRepo, *r
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
-		&models.RefreshToken{}, &models.AccountSecurityToken{},
+		&models.RefreshToken{}, &models.AccountSecurityToken{}, &models.AdventureRun{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -216,6 +216,17 @@ func TestMerge_NoDoubleEntitlementGrant(t *testing.T) {
 		UUID: "uuid-g1", DeviceID: "device-guest-g",
 		Species: "dog", Rarity: 2, GeneratedAt: now, ServerVersion: 2,
 	}).Error)
+	require.NoError(t, db.Create(&models.AdventureRun{
+		RunID:       "guest-adventure-bind",
+		OwnerKey:    repo.OwnerKey("", "device-guest-g"),
+		OperationID: "guest-adventure-bind-operation",
+		DeviceID:    "device-guest-g",
+		AnimalUUID:  "uuid-g1",
+		Theme:       "mistwood",
+		Title:       "游客伙伴的探险",
+		Status:      "generated",
+		ResultJSON:  `{"title":"游客伙伴的探险"}`,
+	}).Error)
 
 	// 游客绑定同一 mock oauth → 合并
 	w = authedJSON(t, r, "POST", "/api/v1/auth/bind", tokenG, map[string]string{
@@ -244,6 +255,15 @@ func TestMerge_NoDoubleEntitlementGrant(t *testing.T) {
 	var animals []models.Animal
 	require.NoError(t, db.Where("account_id = ?", bindA.AccountID).Find(&animals).Error)
 	assert.GreaterOrEqual(t, len(animals), 2)
+
+	var adventure models.AdventureRun
+	require.NoError(t, db.Where("run_id = ?", "guest-adventure-bind").First(&adventure).Error)
+	assert.Equal(t, bindA.AccountID, adventure.AccountID)
+	assert.Equal(t, repo.OwnerKey(bindA.AccountID, "device-guest-g"), adventure.OwnerKey)
+	remoteRuns, err := repo.NewAdventureRepo(db).ListOwned(bindA.AccountID, "different-device", "", 12)
+	require.NoError(t, err)
+	require.Len(t, remoteRuns, 1)
+	assert.Equal(t, "guest-adventure-bind", remoteRuns[0].RunID)
 }
 
 func TestRevokeDevice_InvalidatesToken(t *testing.T) {
@@ -403,7 +423,7 @@ func setupAccountTestWithMock(t *testing.T, allowMock bool) (*gin.Engine, *gorm.
 		&models.Device{}, &models.Account{}, &models.AccountBinding{}, &models.DeviceAccount{},
 		&models.Animal{}, &models.Entitlement{}, &models.Order{}, &models.Product{},
 		&models.DeviceMigrationTicket{}, &models.AccountMergeOperation{}, &models.AuditLog{},
-		&models.RefreshToken{}, &models.AccountSecurityToken{},
+		&models.RefreshToken{}, &models.AccountSecurityToken{}, &models.AdventureRun{},
 	))
 	deviceRepo := repo.NewDeviceRepo(db)
 	accountRepo := repo.NewAccountRepo(db, "test-pepper-secret")
@@ -605,6 +625,17 @@ func TestLogin_MigrationTicket_ReplayFails(t *testing.T) {
 		UUID: "uuid-ticket-1", DeviceID: "guest-ticket-dev",
 		Species: "dog", Rarity: 2, GeneratedAt: now, ServerVersion: 1,
 	}).Error)
+	require.NoError(t, db.Create(&models.AdventureRun{
+		RunID:       "guest-adventure-login",
+		OwnerKey:    repo.OwnerKey("", "guest-ticket-dev"),
+		OperationID: "guest-adventure-login-operation",
+		DeviceID:    "guest-ticket-dev",
+		AnimalUUID:  "uuid-ticket-1",
+		Theme:       "mistwood",
+		Title:       "迁移票据探险",
+		Status:      "generated",
+		ResultJSON:  `{"title":"迁移票据探险"}`,
+	}).Error)
 
 	plain, _, err := accountRepo.CreateMigrationTicket("guest-ticket-dev", bind.AccountID, time.Hour)
 	require.NoError(t, err)
@@ -616,6 +647,10 @@ func TestLogin_MigrationTicket_ReplayFails(t *testing.T) {
 		"migration_ticket": plain,
 	})
 	require.Equal(t, 200, w1.Code, w1.Body.String())
+	var adventure models.AdventureRun
+	require.NoError(t, db.Where("run_id = ?", "guest-adventure-login").First(&adventure).Error)
+	assert.Equal(t, bind.AccountID, adventure.AccountID)
+	assert.Equal(t, repo.OwnerKey(bind.AccountID, "guest-ticket-dev"), adventure.OwnerKey)
 
 	// 重放
 	w2 := postLogin(t, r, map[string]string{

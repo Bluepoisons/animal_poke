@@ -4,6 +4,7 @@
 import type { DiscoveryPoint, GeoLocation } from '../../lbs/types'
 import type { HuntTarget, Rarity, Species } from './data/types'
 import type { RarityTier } from '../../types'
+import { chineseSpeciesName } from './petLocalization'
 
 const RARITY_MAP: Record<RarityTier, Rarity> = {
   common: 'common',
@@ -11,6 +12,12 @@ const RARITY_MAP: Record<RarityTier, Rarity> = {
   rare: 'rare',
   epic: 'epic',
   legendary: 'legendary',
+}
+
+const STATUS_NAMES: Record<DiscoveryPoint['status'], string> = {
+  available: '等待探索',
+  in_range: '已进入探索范围',
+  expired: '已经离开',
 }
 
 /** 将相对米偏移投影到 0.08~0.92 画布坐标 */
@@ -47,7 +54,7 @@ export function discoveryToHuntTarget(
     species,
     rarity: RARITY_MAP[point.rarity] || 'common',
     distanceMeters: proj.distanceMeters,
-    label: `${species} · ${proj.distanceMeters}m · ${point.status}`,
+    label: `${chineseSpeciesName(species)} · ${STATUS_NAMES[point.status]}`,
     x: proj.x,
     y: proj.y,
   }

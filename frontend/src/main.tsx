@@ -4,7 +4,6 @@ import App from './App'
 import { loadPublicConfig } from './config/publicConfig'
 import { loadGameConfigFromWindow } from './config/gameConfig'
 import { ensureAuth } from './auth/deviceAuth'
-import { flushSyncQueue, installSyncOnlineFlush } from './services/syncQueue'
 import { pullAnimalsFromServer } from './services/syncPull'
 import { GlobalErrorBoundary, setupGlobalErrorHandlers, installOnlineListener } from './errors'
 import { onNeedRefresh, applyPendingUpdate, getUpdateGateState } from './pwa/updateGate'
@@ -61,14 +60,12 @@ async function bootstrap() {
     console.warn('device auth deferred:', err)
   }
 
-  installSyncOnlineFlush()
   void (async () => {
     try {
       await pullAnimalsFromServer()
     } catch (e) {
       console.warn('sync pull deferred', e)
     }
-    await flushSyncQueue()
   })()
 
   ReactDOM.createRoot(document.getElementById('root')!).render(

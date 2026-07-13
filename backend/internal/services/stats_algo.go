@@ -153,24 +153,18 @@ func ComputeDeterministicValue(input ValueInput, seedID, secret, configVersion s
 func narrativeFallback(input ValueInput, v *ValueResult) string {
 	// 确定性虚构花絮模板（非真实传记）
 	sp := strings.TrimSpace(input.Species)
-	if sp == "" {
-		sp = "animal"
+	breed := chineseBreed(input.Breed, sp)
+	if strings.TrimSpace(input.SpeciesLabelZH) != "" && (strings.TrimSpace(input.Breed) == "" || breed == "品种待确认") {
+		breed = ChineseSpeciesLabel(sp, input.SpeciesLabelZH)
 	}
-	breed := strings.TrimSpace(input.Breed)
-	if breed == "" {
-		breed = sp
-	}
-	color := strings.TrimSpace(input.Color)
-	if color == "" {
-		color = "soft-toned"
-	}
-	return "【虚构花絮】手账里的" + color + " " + breed + "只是想象的注脚，不是对真实个体的断言。雨檐与巷口是纸上的布景。"
+	color := chineseColor(input.Color)
+	return "【幻想伙伴档案】这只" + color + "的" + breed + "在纸上世界里追着会发光的风铃奔跑。这只是一段中文虚构故事，并非现实记录。"
 }
 
 func inputDigest(input ValueInput) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|%s|%s|%d|%d|%d|%d|%d|%d",
-		input.Species, input.Breed, input.Color, input.BodyType,
+	fmt.Fprintf(h, "%s|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d",
+		input.Species, input.SpeciesLabelZH, input.Breed, input.Color, input.BodyType,
 		input.SubjectCompleteness, input.Clarity, input.Lighting,
 		input.Composition, input.Pose, input.Angle,
 	)

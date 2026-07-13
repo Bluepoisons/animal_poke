@@ -16,6 +16,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"animalpoke/backend/internal/ai/prompts"
 	"animalpoke/backend/internal/narrativepolicy"
@@ -90,6 +91,7 @@ type SafetySummary struct {
 
 // AnalysisResult 深度分析结果。
 type AnalysisResult struct {
+	SpeciesLabelZH      string `json:"species_label_zh,omitempty"`
 	Breed               string `json:"breed"`
 	Color               string `json:"color"`
 	BodyType            string `json:"body_type"`
@@ -118,32 +120,36 @@ type AnalysisResult struct {
 
 // ValueResult 数值生成结果（稀有度/属性由确定性算法产生；narrative 可来自 LLM）。
 type ValueResult struct {
-	Rarity        int           `json:"rarity"`    // 1-5 星级
-	HP            int           `json:"hp"`        // 10-100
-	ATK           int           `json:"atk"`       // 5-50
-	DEF           int           `json:"def"`       // 5-50
-	SPD           int           `json:"spd"`       // 5-50
-	Class         string        `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
-	Element       string        `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
-	Narrative     string        `json:"narrative"` // 虚构手账花絮（非事实）
-	Fiction       bool          `json:"fiction"`   // 恒为 true：LLM/模板输出均为虚构
-	Disclaimer    string        `json:"disclaimer,omitempty"`
-	Layer         string        `json:"layer,omitempty"` // fictional_vignette | authored_canon
-	PolicyVersion string        `json:"policy_version,omitempty"`
-	Factors       *ValueFactors `json:"factors,omitempty"`
-	ConfigVersion string        `json:"config_version,omitempty"`
-	SeedID        string        `json:"seed_id,omitempty"`
-	Source        string        `json:"source,omitempty"`
-	Degraded      bool          `json:"degraded,omitempty"`
-	ReasonCode    string        `json:"reason_code,omitempty"`
-	InferenceID   string        `json:"inference_id,omitempty"`
-	Model         string        `json:"model,omitempty"`
-	PromptVersion string        `json:"prompt_version,omitempty"`
+	SpeciesLabelZH string        `json:"species_label_zh,omitempty"`
+	Rarity         int           `json:"rarity"`    // 1-5 星级
+	HP             int           `json:"hp"`        // 10-100
+	ATK            int           `json:"atk"`       // 5-50
+	DEF            int           `json:"def"`       // 5-50
+	SPD            int           `json:"spd"`       // 5-50
+	Class          string        `json:"class"`     // Warrior/Mage/Ranger/Tank/Support/Assassin
+	Element        string        `json:"element"`   // Fire/Water/Grass/Electric/Ice/Dark/Light/Earth/Wind
+	Narrative      string        `json:"narrative"` // 虚构伙伴描述（非事实）
+	Fiction        bool          `json:"fiction"`   // 恒为 true：LLM/模板输出均为虚构
+	Disclaimer     string        `json:"disclaimer,omitempty"`
+	Layer          string        `json:"layer,omitempty"` // fictional_vignette | authored_canon
+	PolicyVersion  string        `json:"policy_version,omitempty"`
+	Factors        *ValueFactors `json:"factors,omitempty"`
+	ConfigVersion  string        `json:"config_version,omitempty"`
+	SeedID         string        `json:"seed_id,omitempty"`
+	Source         string        `json:"source,omitempty"`
+	Degraded       bool          `json:"degraded,omitempty"`
+	ReasonCode     string        `json:"reason_code,omitempty"`
+	InferenceID    string        `json:"inference_id,omitempty"`
+	// AnimalUUID 是服务端在 value 完成后直接创建的动物记录标识。
+	AnimalUUID    string `json:"animal_uuid,omitempty"`
+	Model         string `json:"model,omitempty"`
+	PromptVersion string `json:"prompt_version,omitempty"`
 }
 
 // ValueInput 数值生成输入（分析字段 + 稳定 seed）。
 type ValueInput struct {
 	Species             string
+	SpeciesLabelZH      string
 	Breed               string
 	Color               string
 	BodyType            string
@@ -167,6 +173,15 @@ func (in ValueInput) Validate() error {
 		return fmt.Errorf("species not capturable: %s", in.Species)
 	}
 	in.Species = norm // note: caller should re-assign; normalize checked only
+	if strings.TrimSpace(in.SpeciesLabelZH) != "" {
+		label, labelSpecies, err := NormalizeConcreteAnimalLabel(in.SpeciesLabelZH)
+		if err != nil || labelSpecies != norm {
+			return fmt.Errorf("species_label_zh does not match species")
+		}
+		in.SpeciesLabelZH = label
+	} else if norm == "other_animal" {
+		return fmt.Errorf("species_label_zh required for other_animal")
+	}
 	if len(in.Species) > 64 || len(in.Breed) > 64 || len(in.Color) > 64 || len(in.BodyType) > 64 {
 		return fmt.Errorf("string fields exceed max length 64")
 	}
@@ -307,6 +322,9 @@ func (s *AIService) AnalyzeContext(ctx context.Context, imageData []byte, filena
 	if err := parseAnalysisJSON(jsonStr, &result); err != nil {
 		return nil, err
 	}
+	if err := simplifyAnalysisDescriptions(&result); err != nil {
+		return nil, err
+	}
 	if err := validateAnalysisResult(&result); err != nil {
 		return nil, err
 	}
@@ -335,7 +353,7 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 	result := ComputeDeterministicValue(input, input.SeedID, s.statsSecret, StatsConfigVersion)
 	result.PromptVersion = prompts.ValuePromptVersion
 	result.Fiction = true
-	result.Disclaimer = "fictional vignette; not a real animal biography"
+	result.Disclaimer = "人工智能生成的中文幻想描述，不代表真实动物的经历、情绪或需求"
 	result.Layer = "fictional_vignette"
 	result.PolicyVersion = prompts.NarrativePolicyVersion
 
@@ -410,16 +428,29 @@ func (s *AIService) GenerateValueContext(ctx context.Context, input ValueInput) 
 	} else {
 		result.Narrative = llmOut.Narrative
 	}
+	if normalized, err := simplifyGeneratedChinese(result.Narrative); err == nil {
+		result.Narrative = normalized
+	} else {
+		result.Narrative = narrativeFallback(input, result)
+		result.Degraded = true
+		result.ReasonCode = "narrative_conversion_failed"
+	}
 	// 无论 LLM 是否返回 fiction 字段，服务端强制虚构层
 	result.Fiction = true
 	result.Layer = "fictional_vignette"
-	if len(result.Narrative) > 2000 {
-		result.Narrative = result.Narrative[:2000]
-	}
 	if guidance, sensitive := narrativepolicy.SafetyGuidance(result.Narrative); sensitive {
 		result.Narrative = guidance
 		result.Degraded = true
 		result.ReasonCode = "narrative_safety_guidance"
+	}
+	if err := narrativepolicy.ValidateOutput(result.Narrative); err != nil {
+		result.Narrative = narrativeFallback(ValueInput{Species: input.Species}, result)
+		result.Degraded = true
+		result.ReasonCode = "narrative_policy_blocked"
+	} else if utf8.RuneCountInString(result.Narrative) > 180 || !isChineseGeneratedText(result.Narrative) {
+		result.Narrative = narrativeFallback(input, result)
+		result.Degraded = true
+		result.ReasonCode = "narrative_not_chinese"
 	}
 	if err := narrativepolicy.ValidateOutput(result.Narrative); err != nil {
 		result.Narrative = narrativeFallback(ValueInput{Species: input.Species}, result)
@@ -628,6 +659,23 @@ func validateDetectResult(r *DetectResult) error {
 		}
 		// 仅 capturable 进入返回列表；unknown/unsupported 不进入捕获
 		if taxonomy.Capturable(norm) {
+			if norm == "other_animal" {
+				label, species, err := NormalizeConcreteAnimalLabel(a.Label)
+				if err != nil {
+					return fmt.Errorf("animal[%d] invalid other_animal label: %w", i, err)
+				}
+				a.Species = species
+				a.Label = label
+			} else {
+				labelNorm, _ := taxonomy.Normalize(a.Label)
+				if labelNorm == taxonomy.SpeciesUnsupported {
+					return fmt.Errorf("animal[%d] label is unsupported", i)
+				}
+				if labelNorm != taxonomy.SpeciesUnknown && labelNorm != norm {
+					return fmt.Errorf("animal[%d] species and label mismatch", i)
+				}
+				a.Label = chineseSpecies(norm)
+			}
 			normalized = append(normalized, a)
 		} else if orig != "" {
 			safetyLabels = append(safetyLabels, orig, norm)
@@ -681,6 +729,20 @@ func parseAnalysisJSON(jsonStr string, out *AnalysisResult) error {
 	return nil
 }
 
+func simplifyAnalysisDescriptions(result *AnalysisResult) error {
+	if result == nil {
+		return fmt.Errorf("nil analysis result")
+	}
+	for _, field := range []*string{&result.Breed, &result.Color, &result.BodyType} {
+		normalized, err := simplifyGeneratedChinese(*field)
+		if err != nil {
+			return err
+		}
+		*field = normalized
+	}
+	return nil
+}
+
 // validateAnalysisResult 严格校验枚举/长度/1-10 分值，不静默 clamp。
 func validateAnalysisResult(r *AnalysisResult) error {
 	if r == nil {
@@ -694,6 +756,9 @@ func validateAnalysisResult(r *AnalysisResult) error {
 	}
 	if strings.TrimSpace(r.BodyType) == "" || len(r.BodyType) > 64 {
 		return fmt.Errorf("body_type missing or too long")
+	}
+	if !isChineseGeneratedText(r.Breed) || !isChineseGeneratedText(r.Color) || !isChineseGeneratedText(r.BodyType) {
+		return fmt.Errorf("analysis descriptions must be Simplified Chinese")
 	}
 	scores := []struct {
 		name string
@@ -833,9 +898,9 @@ func mockDetect() *DetectResult {
 
 func mockAnalyze() *AnalysisResult {
 	return &AnalysisResult{
-		Breed:               "British Shorthair",
-		Color:               "blue-gray",
-		BodyType:            "sturdy",
+		Breed:               "英国短毛猫",
+		Color:               "蓝灰色",
+		BodyType:            "敦实",
 		QualityScore:        8,
 		SubjectCompleteness: 9,
 		Clarity:             8,

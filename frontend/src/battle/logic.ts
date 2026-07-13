@@ -1,5 +1,5 @@
 import type { RarityTier, SpeciesType, CardEntry } from '../types'
-import { resolveSpeciesDef } from '../types'
+import { getCardSpecies, resolveSpeciesDef } from '../types'
 import type { ElementType, StrategyType, WeatherType, BattleStats, BattlePet, BattleLogEntry, BattleResult, BattleRewards } from './types'
 import {
   RARITY_BASE_STATS,
@@ -365,7 +365,7 @@ export function rollItemDrop(): string | undefined {
 
 /** 将 CardEntry 转换为 BattlePet */
 export function cardEntryToBattlePet(entry: CardEntry, weather: WeatherType): BattlePet {
-  const species = entry.species ?? 'cat'
+  const species = getCardSpecies(entry)
   const element = pickElement(entry.seed)
   const baseStats = computeBattleStats(entry.rarity, species, entry.seed)
   const stats = applyWeatherModifier(baseStats, weather)

@@ -12,6 +12,7 @@ import {
   createPointId,
 } from './logic'
 import { REFRESH_INTERVAL_MS, DISCOVERY_TTL_MS, CAPTURE_RANGE_M } from './constants'
+import { capturableSpeciesIds } from '../species'
 
 // 测试用固定坐标（宁波市海曙区）
 const NINGBO = { lat: 29.87, lng: 121.55 }
@@ -39,16 +40,19 @@ describe('rollRarity', () => {
 })
 
 describe('rollSpecies', () => {
-  it('#6 rand=0.0 → cat', () => {
-    expect(rollSpecies(0.0)).toBe('cat')
+  const species = capturableSpeciesIds()
+
+  it('#6 使用完整注册表物种池', () => {
+    expect(species).toHaveLength(36)
   })
 
-  it('#7 rand=0.4 → dog (中间值；池顺序 cat/dog/goose)', () => {
-    expect(rollSpecies(0.4)).toBe('dog')
+  it('#7 rand=0 → 第一个注册物种', () => {
+    expect(rollSpecies(0)).toBe(species[0])
   })
 
-  it('#8 rand=0.8 → goose', () => {
-    expect(rollSpecies(0.8)).toBe('goose')
+  it('#8 中间值与上边界均落在注册表范围内', () => {
+    expect(rollSpecies(0.5)).toBe(species[Math.floor(species.length * 0.5)])
+    expect(rollSpecies(1)).toBe(species.at(-1))
   })
 })
 

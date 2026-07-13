@@ -10,8 +10,8 @@
   "names": {
     "common": { "zh-CN": "狗", "en": "Dog" },
     "scientific": "Canis familiaris",
-    "aliases": ["puppy", "canine"],
-    "contains": ["狗", "犬", "dog"]
+    "aliases": ["puppy", "canine", "小狗", "狗狗", "犬"],
+    "contains": ["小狗", "狗狗", "狗", "犬", "dog"]
   },
   "habitat": {
     "zh-CN": "社区、公园与人行道",

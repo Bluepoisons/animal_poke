@@ -52,7 +52,7 @@ describe('AP-001 production capture flow', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     await waitFor(() => {
-      expect(screen.queryByText(/CAPTURE/i)).toBeNull()
+      expect(screen.queryByTestId('capture-screen')).toBeNull()
     })
   })
 
@@ -106,8 +106,10 @@ describe('AP-001 production capture flow', () => {
       })
       fireEvent.click(screen.getByRole('button', { name: /进入捕获/ }))
       await waitFor(() => {
-        expect(screen.getByText(/CAPTURE/i)).toBeTruthy()
-        expect(screen.getByText(/cat/i)).toBeTruthy()
+        const captureScreen = screen.getByTestId('capture-screen')
+        expect(captureScreen).toBeTruthy()
+        expect(captureScreen.textContent).toContain('猫')
+        expect(captureScreen.textContent).not.toContain('cat')
       })
     }
   })

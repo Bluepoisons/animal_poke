@@ -46,6 +46,11 @@ export type CaptureFlowEvent =
       detections: DetectedAnimal[]
       detectInferenceId: string
     }
+  | {
+      type: 'CORRECTION_SUCCESS'
+      animal: DetectedAnimal
+      detectInferenceId: string
+    }
   | { type: 'DETECT_FAIL'; code: string; message?: string }
   | { type: 'SELECT_TARGET'; animalId: string }
   | { type: 'CONFIRM_TARGET' }
@@ -186,7 +191,7 @@ export function reduceCaptureFlow(
           detections: eligible,
           detectInferenceId: event.detectInferenceId,
           selectedBox: eligible[0],
-          targetId: eligible[0].id,
+          targetId: eligible[0].targetId || eligible[0].id,
           errorCode: null,
           errorMessage: null,
         })
@@ -202,6 +207,17 @@ export function reduceCaptureFlow(
       })
     }
 
+    case 'CORRECTION_SUCCESS':
+      return touch({
+        phase: 'target_confirmed',
+        detections: [event.animal],
+        detectInferenceId: event.detectInferenceId,
+        selectedBox: event.animal,
+        targetId: event.animal.targetId || event.animal.id,
+        errorCode: null,
+        errorMessage: null,
+      })
+
     case 'DETECT_FAIL':
       return touch({
         phase: 'failed',
@@ -215,7 +231,7 @@ export function reduceCaptureFlow(
       if (!animal) return state
       return touch({
         selectedBox: animal,
-        targetId: animal.id,
+        targetId: animal.targetId || animal.id,
         errorCode: null,
         errorMessage: null,
       })

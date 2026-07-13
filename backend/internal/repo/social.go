@@ -856,16 +856,17 @@ func (r *SocialRepo) CreateShare(ownerKey string, animal *models.Animal, acl str
 	}
 	// 快照：无精确坐标、无 device_id
 	share := &models.SocialShare{
-		ShareToken:   token,
-		OwnerUserKey: ownerKey,
-		AnimalUUID:   animal.UUID,
-		ACL:          acl,
-		Species:      animal.Species,
-		Breed:        animal.Breed,
-		Rarity:       animal.Rarity,
-		Nickname:     animal.Nickname,
-		City:         animal.City, // 粗粒度
-		ExpiresAt:    time.Now().UTC().Add(ttl),
+		ShareToken:     token,
+		OwnerUserKey:   ownerKey,
+		AnimalUUID:     animal.UUID,
+		ACL:            acl,
+		Species:        animal.Species,
+		SpeciesLabelZH: animal.SpeciesLabelZH,
+		Breed:          animal.Breed,
+		Rarity:         animal.Rarity,
+		Nickname:       animal.Nickname,
+		City:           animal.City, // 粗粒度
+		ExpiresAt:      time.Now().UTC().Add(ttl),
 	}
 	if err := r.db.Create(share).Error; err != nil {
 		return nil, "", err
@@ -1016,17 +1017,18 @@ func SharePublicView(s *models.SocialShare) map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	m := map[string]interface{}{
-		"animal_uuid":    s.AnimalUUID,
-		"owner_user_key": s.OwnerUserKey,
-		"acl":            s.ACL,
-		"species":        s.Species,
-		"breed":          s.Breed,
-		"rarity":         s.Rarity,
-		"nickname":       s.Nickname,
-		"city":           s.City,
-		"expires_at":     s.ExpiresAt.UTC().Format(time.RFC3339),
-		"created_at":     s.CreatedAt.UTC().Format(time.RFC3339),
-		"revoked":        s.RevokedAt != nil,
+		"animal_uuid":      s.AnimalUUID,
+		"owner_user_key":   s.OwnerUserKey,
+		"acl":              s.ACL,
+		"species":          s.Species,
+		"species_label_zh": s.SpeciesLabelZH,
+		"breed":            s.Breed,
+		"rarity":           s.Rarity,
+		"nickname":         s.Nickname,
+		"city":             s.City,
+		"expires_at":       s.ExpiresAt.UTC().Format(time.RFC3339),
+		"created_at":       s.CreatedAt.UTC().Format(time.RFC3339),
+		"revoked":          s.RevokedAt != nil,
 	}
 	// 明确不包含：latitude/longitude/device_id/share_token/precise
 	return m

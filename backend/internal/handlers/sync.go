@@ -26,13 +26,14 @@ const maxBatchItems = 100
 
 // 时间窗口：允许有限时钟漂移与离线延迟。
 const (
-	syncFutureSkew    = 2 * time.Minute
-	syncMaxAge        = 30 * 24 * time.Hour
-	maxBreedLen       = 64
-	maxCityLen        = 64
-	maxClassLen       = 32
-	maxElementLen     = 32
-	maxInferenceIDLen = 128
+	syncFutureSkew     = 2 * time.Minute
+	syncMaxAge         = 30 * 24 * time.Hour
+	maxBreedLen        = 64
+	maxSpeciesLabelLen = 64
+	maxCityLen         = 64
+	maxClassLen        = 32
+	maxElementLen      = 32
+	maxInferenceIDLen  = 128
 )
 
 var (
@@ -73,6 +74,7 @@ func NewSyncHandlerFull(animalRepo *repo.AnimalRepo, auditService *services.Audi
 type syncRequest struct {
 	UUID               string  `json:"uuid" binding:"required"`
 	Species            string  `json:"species" binding:"required"`
+	SpeciesLabelZH     string  `json:"species_label_zh"`
 	Breed              string  `json:"breed"`
 	Rarity             int     `json:"rarity" binding:"required"`
 	HP                 int     `json:"hp"`
@@ -281,6 +283,7 @@ func (h *SyncHandler) validateAndSyncOne(deviceID, accountID string, req *syncRe
 		DeviceID:           deviceID,
 		AccountID:          accountID,
 		Species:            req.Species,
+		SpeciesLabelZH:     req.SpeciesLabelZH,
 		Breed:              req.Breed,
 		Rarity:             req.Rarity,
 		HP:                 req.HP,
@@ -319,19 +322,23 @@ func (h *SyncHandler) validateAndSyncOne(deviceID, accountID string, req *syncRe
 			// 从服务端 ResultJSON 构造权威字段，拒绝客户端重抽稀有度
 			if inf.ResultJSON != "" {
 				var auth struct {
-					Species string `json:"species"`
-					Breed   string `json:"breed"`
-					Rarity  int    `json:"rarity"`
-					HP      int    `json:"hp"`
-					ATK     int    `json:"atk"`
-					DEF     int    `json:"def"`
-					SPD     int    `json:"spd"`
-					Class   string `json:"class"`
-					Element string `json:"element"`
+					Species        string `json:"species"`
+					SpeciesLabelZH string `json:"species_label_zh"`
+					Breed          string `json:"breed"`
+					Rarity         int    `json:"rarity"`
+					HP             int    `json:"hp"`
+					ATK            int    `json:"atk"`
+					DEF            int    `json:"def"`
+					SPD            int    `json:"spd"`
+					Class          string `json:"class"`
+					Element        string `json:"element"`
 				}
 				if err := json.Unmarshal([]byte(inf.ResultJSON), &auth); err == nil {
 					if auth.Species != "" {
 						animal.Species = auth.Species
+					}
+					if auth.SpeciesLabelZH != "" {
+						animal.SpeciesLabelZH = auth.SpeciesLabelZH
 					}
 					if auth.Breed != "" {
 						animal.Breed = auth.Breed
@@ -361,6 +368,19 @@ func (h *SyncHandler) validateAndSyncOne(deviceID, accountID string, req *syncRe
 			} else if inf.Species != "" {
 				animal.Species = inf.Species
 			}
+			normalizedSpecies, normalizedLabel, identityErr := services.NormalizeAnimalIdentity(animal.Species, animal.SpeciesLabelZH)
+			if identityErr != nil {
+				return repo.ErrInferenceTampered
+			}
+			if inf.Species != "" {
+				inferenceSpecies, _ := taxonomy.Normalize(inf.Species)
+				if inferenceSpecies != normalizedSpecies {
+					return repo.ErrInferenceTampered
+				}
+			}
+			animal.Species = normalizedSpecies
+			animal.SpeciesLabelZH = normalizedLabel
+
 			// 范围校验（服务端权威后仍保证边界）
 			if animal.Rarity < 1 || animal.Rarity > 5 {
 				return repo.ErrInferenceTampered
@@ -415,6 +435,17 @@ func validateSyncFields(req *syncRequest) *syncOutcome {
 		return &o
 	}
 	req.Species = normSpecies
+	if utf8.RuneCountInString(req.SpeciesLabelZH) > maxSpeciesLabelLen {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "species_label_zh too long", "invalid_string_length")
+		return &o
+	}
+	validatedSpecies, validatedLabel, err := services.NormalizeAnimalIdentity(normSpecies, req.SpeciesLabelZH)
+	if err != nil {
+		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "species_label_zh does not match species", "invalid_species_label")
+		return &o
+	}
+	req.Species = validatedSpecies
+	req.SpeciesLabelZH = validatedLabel
 
 	if req.Rarity < 1 || req.Rarity > 5 {
 		o := failOutcome(uuidStr, "error", http.StatusBadRequest, "rarity must be 1-5", "invalid_rarity")
@@ -587,6 +618,7 @@ func (h *SyncHandler) PullAnimals(c *gin.Context) {
 			"uuid":                 items[i].UUID,
 			"device_id":            items[i].DeviceID,
 			"species":              items[i].Species,
+			"species_label_zh":     items[i].SpeciesLabelZH,
 			"breed":                items[i].Breed,
 			"rarity":               items[i].Rarity,
 			"hp":                   items[i].HP,

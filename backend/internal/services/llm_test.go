@@ -64,7 +64,7 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&requestBody))
 		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"output_text":"{\"rarity\":3,\"hp\":60,\"atk\":20,\"def\":18,\"spd\":22,\"class\":\"Ranger\",\"element\":\"Wind\",\"narrative\":\"swift and alert\",\"fiction\":false,\"disclaimer\":\"real biography\"}"}`))
+		_, _ = w.Write([]byte(`{"output_text":"{\"rarity\":3,\"hp\":60,\"atk\":20,\"def\":18,\"spd\":22,\"class\":\"Ranger\",\"element\":\"Wind\",\"narrative\":\"它会追着幻想世界里的风铃一路前行。每一次回头，都是在确认伙伴仍与它并肩。\",\"fiction\":false,\"disclaimer\":\"中文幻想描述\"}"}`))
 	}))
 	defer server.Close()
 
@@ -93,12 +93,12 @@ func TestLLMService_GenerateValue_UsesConfiguredModel(t *testing.T) {
 	// LLM 返回的 rarity/stats 必须被忽略；服务端算法权威
 	assert.NotEqual(t, 0, result.Rarity)
 	assert.NotEqual(t, 60, result.HP) // LLM 给了 60，算法不应原样采用
-	assert.Equal(t, "swift and alert", result.Narrative)
+	assert.Contains(t, result.Narrative, "幻想世界")
 	assert.Equal(t, "algo", result.Source)
 	assert.NotNil(t, result.Factors)
 	assert.Equal(t, StatsConfigVersion, result.ConfigVersion)
 	assert.True(t, result.Fiction)
-	assert.Equal(t, "fictional vignette; not a real animal biography", result.Disclaimer)
+	assert.Contains(t, result.Disclaimer, "中文幻想描述")
 	// 完整渲染后不应残留模板
 	assert.Len(t, requestBody.Input[0].Content, 1)
 	assert.Equal(t, "input_text", requestBody.Input[0].Content[0].Type)

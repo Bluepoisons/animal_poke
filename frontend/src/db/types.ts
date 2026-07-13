@@ -7,6 +7,10 @@ export interface AnimalRecord extends CardEntry {
   isUnlocked?: number
   /** Capture pipeline fields retained for collection detail and sync recovery. */
   uuid?: string
+  /** 用户设置的昵称；为空时界面使用稳定的英文伙伴名。 */
+  nickname?: string
+  /** 可信检测链保存的具体简体中文物种名。 */
+  speciesLabelZh?: string
   breed?: string
   hp?: number
   atk?: number
@@ -15,6 +19,8 @@ export interface AnimalRecord extends CardEntry {
   className?: string
   element?: string
   narrative?: string
+  /** 用户拍摄或上传的照片，仅保存在本机 IndexedDB，用作图鉴头像。 */
+  photoDataUrl?: string
   fiction?: boolean
   disclaimer?: string
   layer?: string
@@ -43,6 +49,7 @@ export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'failed'
 export interface AnimalSyncPayload {
   uuid: string
   species: string
+  species_label_zh?: string
   breed?: string
   rarity: number
   hp?: number

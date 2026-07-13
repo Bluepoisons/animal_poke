@@ -46,17 +46,17 @@ var companionLevelThresholds = []int64{0, 10, 25, 50, 80, 120, 180, 260, 360, 50
 type CompanionNodeDef struct {
 	NodeID     string `json:"node_id"`
 	Title      string `json:"title"`
-	Kind       string `json:"kind"` // memory|decor|journal
+	Kind       string `json:"kind"` // memory|decor
 	UnlockAtXP int64  `json:"unlock_at_xp"`
 }
 
 // CompanionNodeCatalog 默认 5 个可见节点（验收：≥3）。
 var CompanionNodeCatalog = []CompanionNodeDef{
 	{NodeID: "first_meeting", Title: "初次相遇", Kind: "memory", UnlockAtXP: 0},
-	{NodeID: "shared_journal", Title: "共同观察日记", Kind: "journal", UnlockAtXP: 10},
+	{NodeID: "first_expedition", Title: "共同远征印记", Kind: "memory", UnlockAtXP: 10},
 	{NodeID: "decorative_bond", Title: "装饰羁绊", Kind: "decor", UnlockAtXP: 25},
 	{NodeID: "photo_album", Title: "合影相册", Kind: "memory", UnlockAtXP: 50},
-	{NodeID: "habitat_note", Title: "栖息地札记", Kind: "journal", UnlockAtXP: 80},
+	{NodeID: "habitat_encounter", Title: "栖息地奇遇", Kind: "memory", UnlockAtXP: 80},
 }
 
 // GrowthEventSpec 允许的事件及其效果。
@@ -461,7 +461,9 @@ func listTracksTx(tx *gorm.DB, owner string) ([]models.ResearcherTrack, error) {
 // ensureCompanion 创建伙伴档案并保证 ≥3 可见节点。
 func ensureCompanion(tx *gorm.DB, owner, deviceID, accountID, animalUUID string) (*models.CompanionProfile, []models.CompanionMemoryNode, error) {
 	var comp models.CompanionProfile
-	err := tx.Where("animal_uuid = ?", animalUUID).First(&comp).Error
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("animal_uuid = ?", animalUUID).
+		First(&comp).Error
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, err
@@ -479,7 +481,9 @@ func ensureCompanion(tx *gorm.DB, owner, deviceID, accountID, animalUUID string)
 		}
 		if err := tx.Create(&comp).Error; err != nil {
 			if isUniqueViolation(err) {
-				if ferr := tx.Where("animal_uuid = ?", animalUUID).First(&comp).Error; ferr != nil {
+				if ferr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("animal_uuid = ?", animalUUID).
+					First(&comp).Error; ferr != nil {
 					return nil, nil, ferr
 				}
 			} else {

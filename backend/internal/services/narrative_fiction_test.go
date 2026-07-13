@@ -25,7 +25,7 @@ func TestValueResult_FictionLayerDefaults(t *testing.T) {
 	r.Narrative = narrativeFallback(in, r)
 	r.Fiction = true
 	r.Layer = "fictional_vignette"
-	r.Disclaimer = "fictional vignette; not a real animal biography"
+	r.Disclaimer = "AI 生成的中文幻想描述，不代表真实动物的经历、情绪或需求"
 	assert.True(t, r.Fiction)
 	assert.Equal(t, "fictional_vignette", r.Layer)
 	assert.NotEmpty(t, r.Disclaimer)

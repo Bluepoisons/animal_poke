@@ -100,6 +100,22 @@ func TestEvaluate_LabelHeuristics(t *testing.T) {
 	assert.Contains(t, res.Flags, FlagPlate)
 }
 
+func TestClassifier_BroadSpeciesLabels(t *testing.T) {
+	for _, label := range []string{"horse", "duck", "snake", "frog", "fish", "octopus", "butterfly"} {
+		t.Run(label, func(t *testing.T) {
+			sig := classify(Input{Labels: []string{label}})
+			assert.True(t, sig.animal, "registered species label must be recognized")
+		})
+	}
+	for _, label := range []string{"human", "kid", "小孩", "儿童", "toy", "screen"} {
+		t.Run(label, func(t *testing.T) {
+			sig := classify(Input{Labels: []string{label}})
+			assert.False(t, sig.animal, "non-animal label must not be recognized")
+		})
+	}
+	assert.True(t, classify(Input{Labels: []string{"person with horse"}}).animal)
+}
+
 func TestEvaluate_StableAcrossRuns(t *testing.T) {
 	in := Input{FixtureLabel: "person"}
 	a := Evaluate(in)

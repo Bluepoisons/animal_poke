@@ -67,7 +67,7 @@ export const GOAL_DEFS: GoalDef[] = [
     id: 'd7_three_species',
     horizon: 'D7',
     title: '收集 3 个物种',
-    description: '至少收藏猫 / 狗 / 鹅中的 3 种',
+    description: '至少收藏任意 3 种不同的动物伙伴',
     action: 'collect_species',
     target: 3,
     free: false,

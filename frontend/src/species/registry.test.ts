@@ -8,6 +8,8 @@ import {
   getSpeciesDef,
   getStatModifiers,
   effectiveStatus,
+  findSpeciesIdByLabel,
+  speciesGroupOf,
   validatePackSchema,
   speciesRegistry,
 } from './index'
@@ -32,31 +34,33 @@ describe('species packs (AP-093)', () => {
     }
   })
 
-  it('可捕获列表不含未认证试点', () => {
+  it('36 个内置物种均已认证为可捕获', () => {
     const cap = capturableSpeciesIds()
-    expect(cap).toEqual(['cat', 'dog', 'goose'])
-    expect(isCapturableSpecies('rabbit')).toBe(false)
+    expect(cap).toHaveLength(36)
+    expect(cap.slice(0, 5)).toEqual(['cat', 'dog', 'rabbit', 'horse', 'cow'])
+    expect(cap.at(-1)).toBe('other_animal')
+    expect(isCapturableSpecies('rabbit')).toBe(true)
     expect(encyclopediaSpeciesIds()).toContain('rabbit')
-    expect(getSpeciesDef('rabbit').status).toBe('catalog_only')
+    expect(getSpeciesDef('rabbit').status).toBe('capturable')
   })
 
   it('新增试点无需改业务列表：注册即可进百科', () => {
     const pilot: SpeciesPack = {
-      id: 'squirrel',
+      id: 'wombat',
       version: '0.1.0',
-      contentId: 'species.squirrel',
+      contentId: 'species.wombat',
       status: 'catalog_only',
-      names: { common: { 'zh-CN': '松鼠', en: 'Squirrel' } },
+      names: { common: { 'zh-CN': '袋熊', en: 'Wombat' } },
       welfare: { level: 'wildlife' },
       protection: { status: 'none' },
-      assets: { emoji: '🐿️' },
+      assets: { emoji: '🐾' },
     }
     speciesRegistry.register(pilot)
-    expect(encyclopediaSpeciesIds()).toContain('squirrel')
-    expect(isCapturableSpecies('squirrel')).toBe(false)
-    expect(capturableSpeciesIds()).not.toContain('squirrel')
+    expect(encyclopediaSpeciesIds()).toContain('wombat')
+    expect(isCapturableSpecies('wombat')).toBe(false)
+    expect(capturableSpeciesIds()).not.toContain('wombat')
     // 清理，避免污染后续用例
-    speciesRegistry.unregister('squirrel')
+    speciesRegistry.unregister('wombat')
   })
 
   it('认证过期安全降级为 catalog_only', () => {
@@ -105,9 +109,44 @@ describe('species packs (AP-093)', () => {
     expect(getStatModifiers('not-a-species').hp).toBe(1)
   })
 
-  it('SPECIES_DEFS 视图包含第四物种', () => {
+  it('SPECIES_DEFS 视图包含完整物种表', () => {
     const defs = buildSpeciesDefs()
-    expect(Object.keys(defs).sort()).toEqual(['cat', 'dog', 'goose', 'rabbit'])
+    expect(Object.keys(defs)).toHaveLength(36)
     expect(defs.rabbit.name).toBe('兔')
+    expect(defs.big_cat.name).toBe('大型猫科动物')
+  })
+
+  it('按内容包 aliases/contains 归一化标签', () => {
+    expect(findSpeciesIdByLabel('a mallard duck')).toBe('duck')
+    expect(findSpeciesIdByLabel('large cat in grass')).toBe('big_cat')
+    expect(findSpeciesIdByLabel('generic bird')).toBe('bird')
+    expect(findSpeciesIdByLabel('mongoose')).toBeNull()
+  })
+
+  it('中文单字不做任意子串匹配，精确物种别名优先', () => {
+    expect(findSpeciesIdByLabel('海马')).toBe('fish')
+    expect(findSpeciesIdByLabel('一只海马')).toBe('fish')
+    expect(findSpeciesIdByLabel('牛蛙')).toBe('frog')
+    expect(findSpeciesIdByLabel('食人鱼')).toBe('fish')
+    expect(findSpeciesIdByLabel('河马')).toBeNull()
+    expect(findSpeciesIdByLabel('蜗牛')).toBeNull()
+    expect(findSpeciesIdByLabel('海牛')).toBeNull()
+    expect(findSpeciesIdByLabel('木马')).toBeNull()
+  })
+
+  it('英文 contains 只匹配完整词', () => {
+    expect(findSpeciesIdByLabel('seahorse')).toBe('fish')
+    expect(findSpeciesIdByLabel('a horse in grass')).toBe('horse')
+    expect(findSpeciesIdByLabel('workhorse')).toBeNull()
+    expect(findSpeciesIdByLabel('catfish')).toBeNull()
+    expect(findSpeciesIdByLabel('caracal')).toBeNull()
+  })
+
+  it('uses descriptor groups and safely groups unknown IDs as other', () => {
+    expect(speciesGroupOf('cat')).toBe('companion')
+    expect(speciesGroupOf('whale')).toBe('aquatic')
+    expect(speciesGroupOf('crab')).toBe('insect')
+    expect(speciesGroupOf('other_animal')).toBe('other')
+    expect(speciesGroupOf('legacy-unknown')).toBe('other')
   })
 })

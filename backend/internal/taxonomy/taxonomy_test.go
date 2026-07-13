@@ -22,28 +22,42 @@ func TestNormalize_Aliases(t *testing.T) {
 		{"goose", SpeciesGoose},
 		{"大鹅", SpeciesGoose},
 		{"gosling", SpeciesGoose},
-		// 第四物种试点：可识别为内容 ID，但不可捕获
 		{"rabbit", SpeciesRabbit},
 		{"bunny", SpeciesRabbit},
 		{"野兔", SpeciesRabbit},
-		// 禁止默认鹅
-		{"duck", SpeciesUnsupported},
-		{"swan", SpeciesUnsupported},
-		{"bird", SpeciesUnsupported},
-		{"鸟", SpeciesUnsupported},
-		{"鸭子", SpeciesUnsupported},
-		{"天鹅", SpeciesUnsupported},
+		// 广谱鸟类：通用鸟保持 bird，不默认成鹅
+		{"duck", "duck"},
+		{"swan", "bird"},
+		{"bird", "bird"},
+		{"鸟", "bird"},
+		{"鸭子", "duck"},
+		{"天鹅", "bird"},
+		{"horse", "horse"},
+		{"snake", "snake"},
+		{"青蛙", "frog"},
+		{"海马", "fish"},
+		{"牛蛙", "frog"},
+		{"食人鱼", "fish"},
+		{"河马", SpeciesUnknown},
+		{"蜗牛", SpeciesUnknown},
+		{"海牛", SpeciesUnknown},
+		{"木马", SpeciesUnsupported},
+		{"workhorse", SpeciesUnknown},
+		{"caracal", SpeciesUnknown},
+		{"fish", "fish"},
+		{"other_animal", "other_animal"},
 		{"human", SpeciesUnsupported},
 		{"person", SpeciesUnsupported},
 		{"人", SpeciesUnsupported},
+		{"kid", SpeciesUnsupported},
+		{"小孩", SpeciesUnsupported},
 		{"toy", SpeciesUnsupported},
 		{"玩偶", SpeciesUnsupported},
 		{"screen", SpeciesUnsupported},
 		{"", SpeciesUnknown},
 		{"   ", SpeciesUnknown},
-		{"horse", SpeciesUnknown},
-		{"cow", SpeciesUnknown},
-		{"mongoose", SpeciesUnsupported},
+		{"mongoose", SpeciesUnknown},
+		{"unknown animal", SpeciesUnknown},
 	}
 	for _, tc := range cases {
 		got, _ := Normalize(tc.raw)
@@ -55,19 +69,22 @@ func TestCapturable(t *testing.T) {
 	assert.True(t, Capturable(SpeciesCat))
 	assert.True(t, Capturable(SpeciesDog))
 	assert.True(t, Capturable(SpeciesGoose))
-	assert.False(t, Capturable(SpeciesRabbit), "uncertified pilot must not be capturable")
+	assert.True(t, Capturable(SpeciesRabbit))
+	assert.True(t, Capturable("bird"))
+	assert.True(t, Capturable("other_animal"))
 	assert.False(t, Capturable(SpeciesUnknown))
 	assert.False(t, Capturable(SpeciesUnsupported))
-	assert.False(t, Capturable("bird"))
 }
 
 func TestCapturableSpecies_NoHardcodedSwitch(t *testing.T) {
-	// 新增试点不应出现在可捕获列表，且列表来自内容包
 	got := CapturableSpecies()
-	assert.Equal(t, []string{"cat", "dog", "goose"}, got)
+	assert.Len(t, got, 36)
+	assert.Contains(t, got, "bird")
+	assert.Contains(t, got, "rabbit")
+	assert.Contains(t, got, "other_animal")
 	enc := EncyclopediaSpecies()
-	assert.Contains(t, enc, "rabbit")
-	assert.Equal(t, "catalog_only", EffectiveStatus(SpeciesRabbit))
+	assert.ElementsMatch(t, got, enc)
+	assert.Equal(t, "capturable", EffectiveStatus(SpeciesRabbit))
 }
 
 func TestContentRef(t *testing.T) {
@@ -84,19 +101,15 @@ func TestPartition_StableSortAndFilter(t *testing.T) {
 		{Species: "duck", Confidence: 0.95, Index: 3},
 		{Species: "goose", Confidence: 0.8, Index: 4},
 		{Species: "rabbit", Confidence: 0.99, Index: 5},
+		{Species: "human", Confidence: 1, Index: 6},
+		{Species: "mongoose", Confidence: 0.7, Index: 7},
 	}
 	cap, audit := Partition(items)
-	assert.Len(t, cap, 3)
-	assert.Equal(t, SpeciesCat, cap[0].Species)
-	assert.Equal(t, 0.9, cap[0].Confidence)
-	// rabbit 进入 audit（百科/审计），不可捕获
-	require.NotEmpty(t, audit)
-	foundRabbit := false
+	assert.Len(t, cap, 6)
+	assert.Equal(t, "bird", cap[0].Species)
+	assert.Equal(t, SpeciesRabbit, cap[1].Species)
+	require.Len(t, audit, 2)
 	for _, a := range audit {
 		assert.False(t, Capturable(a.Species))
-		if a.Species == SpeciesRabbit {
-			foundRabbit = true
-		}
 	}
-	assert.True(t, foundRabbit)
 }

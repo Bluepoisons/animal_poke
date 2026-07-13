@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PokedexFilter, AnimalEntry, Rarity, Species } from '../data/types'
 import PageTitle from '../components/PageTitle'
 import RarityCard from '../components/RarityCard'
+import AnimalIcon from '../components/AnimalIcon'
 import { filterAnimals } from '../data/animals'
 import { AnimalRepository } from '../../../db/repositories/animal-repository'
 import { rarityValueToTier } from '../../../db/animal-record-mapper'
@@ -9,18 +10,43 @@ import type { AnimalRecord } from '../../../db/types'
 import AccessibleDialog from '../../../a11y/AccessibleDialog'
 import { useI18n } from '../../../i18n'
 import { LoadingState, EmptyState, ErrorState } from '../../../components/states'
+import {
+  chinesePetDescription,
+  chinesePetSubtitle,
+  chineseRarityName,
+  chineseDetectedSpeciesName,
+  chineseSpeciesGroupName,
+  displayPetName,
+} from '../petLocalization'
+import { speciesGroupOf, type SpeciesGroup } from '../../../species'
+import { getCardSpecies } from '../../../types'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
 }
 
-const filters: PokedexFilter[] = ['all', 'cat', 'goose', 'dog']
+type PokedexEntry = AnimalEntry & {
+  record: AnimalRecord
+  nickname: string
+  subtitle: string
+}
 
-function mapRecord(r: AnimalRecord): AnimalEntry {
+const GROUP_ORDER: SpeciesGroup[] = [
+  'companion',
+  'farm',
+  'wildlife',
+  'bird',
+  'reptile',
+  'amphibian',
+  'aquatic',
+  'insect',
+  'other',
+]
+
+function mapRecord(r: AnimalRecord): PokedexEntry {
   const rarity = rarityValueToTier(r.rarity) as Rarity
-  const species = (r.species || 'cat') as Species
-  const speciesLabel = r.species ? String(r.species) : r.no || r.id
-  const name = r.breed ? `${speciesLabel} · ${r.breed}` : speciesLabel
+  const species = getCardSpecies(r) as Species
+  const name = chineseDetectedSpeciesName(species, r.speciesLabelZh)
   return {
     id: r.id,
     name,
@@ -30,16 +56,19 @@ function mapRecord(r: AnimalRecord): AnimalEntry {
     region: r.location,
     location: r.location,
     captureRate: undefined,
+    record: r,
+    nickname: displayPetName(r),
+    subtitle: chinesePetSubtitle(r),
   }
 }
 
 // AP-054: useVirtualList / pickThumbnailSrc available for large collections
 export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
-  const [entries, setEntries] = useState<AnimalEntry[]>([])
+  const [entries, setEntries] = useState<PokedexEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [selected, setSelected] = useState<AnimalEntry | null>(null)
+  const [selected, setSelected] = useState<PokedexEntry | null>(null)
   const loadGeneration = useRef(0)
   const { t } = useI18n()
 
@@ -67,12 +96,16 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
   }, [loadEntries])
 
   const filtered = useMemo(
-    () => filterAnimals(entries as Parameters<typeof filterAnimals>[0], filter),
+    () => filterAnimals(entries, filter) as PokedexEntry[],
     [entries, filter],
   )
+  const filters = useMemo<PokedexFilter[]>(() => {
+    const present = new Set(entries.map((entry) => speciesGroupOf(entry.species)))
+    return ['all', ...GROUP_ORDER.filter((group) => present.has(group))]
+  }, [entries])
   const collectedCount = entries.filter((e) => e.collected).length
 
-  const handleCardClick = (entry: AnimalEntry) => {
+  const handleCardClick = (entry: PokedexEntry) => {
     if (!entry.collected) {
       onToast(t('pokedex.none'))
       return
@@ -113,14 +146,22 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
                 onClick={() => setFilter(item)}
                 type="button"
               >
-                {item === 'all' ? t('collection.filter.all') : t(`species.${item}`)}
+                {item === 'all' ? t('collection.filter.all') : chineseSpeciesGroupName(item)}
               </button>
             ))}
           </nav>
 
           <div className="ap-pokedex-grid">
             {filtered.map((entry) => (
-              <RarityCard key={entry.id} entry={entry} onClick={() => handleCardClick(entry)} />
+              <RarityCard
+                key={entry.id}
+                entry={entry}
+                nickname={entry.nickname}
+                subtitle={entry.subtitle}
+                photoDataUrl={entry.record.photoDataUrl}
+                stats={entry.record}
+                onClick={() => handleCardClick(entry)}
+              />
             ))}
           </div>
 
@@ -130,10 +171,32 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
               onClose={() => setSelected(null)}
               title={t('pokedex.detail_label')}
             >
-              <h2 style={{ margin: '0 0 8px' }}>{selected.name}</h2>
-              <p style={{ margin: 0, fontSize: 13 }}>
-                {selected.species} · {selected.rarity}
-                {selected.region ? ` · ${selected.region}` : ''}
+              <div className="ap-pet-profile">
+                <div className="ap-pet-profile__avatar">
+                  {selected.record.photoDataUrl ? (
+                    <img src={selected.record.photoDataUrl} alt={`${selected.nickname} 的照片`} />
+                  ) : (
+                    <AnimalIcon species={selected.species} size={76} tone="light" />
+                  )}
+                </div>
+                <div>
+                  <h2 style={{ margin: '0 0 4px' }}>{selected.nickname}</h2>
+                  <p className="ap-pet-profile__meta">{chineseDetectedSpeciesName(selected.species, selected.record.speciesLabelZh)} · {chineseRarityName(selected.rarity)}</p>
+                  <p className="ap-pet-profile__subtitle">{selected.subtitle}</p>
+                </div>
+              </div>
+              <div className="ap-pet-profile__stats" aria-label="宠物属性">
+                {[
+                  ['生命', selected.record.hp],
+                  ['攻击', selected.record.atk],
+                  ['防御', selected.record.def],
+                  ['速度', selected.record.spd],
+                ].map(([label, value]) => (
+                  <div key={label} className="ap-pet-profile__stat"><b>{label}</b><span>{value ?? '-'}</span></div>
+                ))}
+              </div>
+              <p className="ap-pet-profile__narrative">
+                {chinesePetDescription(selected.record, selected.nickname)}
               </p>
               <button
                 type="button"

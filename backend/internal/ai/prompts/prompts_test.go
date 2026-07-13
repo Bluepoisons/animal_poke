@@ -16,6 +16,13 @@ func TestDetectPrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, DetectPrompt, "JSON")
 	assert.Contains(t, DetectPrompt, `"animals"`)
 	assert.NotContains(t, DetectPrompt, "Return ONLY a JSON array")
+	for _, species := range []string{"horse", "bird", "duck", "snake", "frog", "fish", "octopus", "butterfly", "other_animal"} {
+		assert.Contains(t, DetectPrompt, `"`+species+`"`)
+	}
+	assert.Contains(t, DetectPrompt, "fox")
+	assert.Contains(t, DetectPrompt, "hamster")
+	assert.Contains(t, DetectPrompt, "Never map generic birds to goose")
+	assert.Contains(t, DetectPrompt, "humans, toys, or screens")
 }
 
 func TestAnalyzePrompt_NotEmpty(t *testing.T) {
@@ -28,6 +35,7 @@ func TestAnalyzePrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, AnalyzePrompt, "composition")
 	assert.Contains(t, AnalyzePrompt, "pose")
 	assert.Contains(t, AnalyzePrompt, "angle")
+	assert.Contains(t, AnalyzePrompt, "Simplified Chinese")
 }
 
 func TestValuePrompt_NotEmpty(t *testing.T) {
@@ -39,6 +47,7 @@ func TestValuePrompt_NotEmpty(t *testing.T) {
 	assert.Contains(t, ValuePrompt, "narrative")
 	assert.NotContains(t, ValuePrompt, `"rarity"`)
 	assert.Contains(t, ValuePrompt, "Do NOT invent")
+	assert.Contains(t, ValuePrompt, "Simplified Chinese")
 }
 
 func TestValuePrompt_Render(t *testing.T) {
@@ -63,7 +72,7 @@ func TestValuePrompt_Render(t *testing.T) {
 	assert.Contains(t, p, "British Shorthair")
 	assert.Contains(t, p, "blue-gray")
 	assert.Contains(t, p, "sturdy")
-	assert.Contains(t, p, "fictional")
+	assert.Contains(t, strings.ToLower(p), "fictional")
 	assert.Contains(t, p, "cat")
 	assert.NotContains(t, p, "{{.")
 }

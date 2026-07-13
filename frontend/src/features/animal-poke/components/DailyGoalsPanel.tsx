@@ -73,7 +73,7 @@ export default function DailyGoalsPanel({
       )}
 
       <div className="ap-goals__header">
-        <span className="ap-goals__eyebrow">DAILY GOALS</span>
+        <span className="ap-goals__eyebrow">每日目标</span>
         <h2 className="ap-goals__title">今日目标</h2>
         {staminaEmpty && (
           <p className="ap-goals__hint">体力已耗尽 · 仍可做免费活动</p>

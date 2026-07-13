@@ -1,5 +1,5 @@
 import type { GeneratedAnimal } from '../services/capturePipeline'
-import type { RarityTier, SpeciesType } from '../types'
+import { normalizeSpeciesId, type RarityTier } from '../types'
 import type { AnimalRecord } from './types'
 
 const RARITY_TIERS: readonly RarityTier[] = [
@@ -60,7 +60,8 @@ export function generatedAnimalToRecord(
     id,
     uuid: id,
     no: id.slice(0, 8),
-    species: animal.species as SpeciesType,
+    species: normalizeSpeciesId(animal.species),
+    speciesLabelZh: animal.speciesLabelZh,
     rarity: rarityValueToTier(animal.value.rarity),
     unlocked: true,
     isUnlocked: 1,
@@ -70,6 +71,7 @@ export function generatedAnimalToRecord(
     lng: longitude,
     seed: Math.round(finiteNumber(options.seed, capturedAt)) % 100000,
     isNew: true,
+    nickname: undefined,
     breed: animal.analysis.breed,
     hp: animal.value.hp,
     atk: animal.value.atk,
@@ -78,6 +80,7 @@ export function generatedAnimalToRecord(
     className: animal.value.class,
     element: animal.value.element,
     narrative: animal.value.narrative,
+    photoDataUrl: animal.photoDataUrl,
     fiction: animal.value.fiction ?? true,
     disclaimer: animal.value.disclaimer ?? '虚构花絮，非真实个体传记',
     layer: animal.value.layer ?? 'fictional_vignette',
@@ -98,7 +101,8 @@ export function serverAnimalToRecord(raw: Record<string, unknown>): AnimalRecord
     uuid: String(raw.uuid || id),
     no: String(raw.uuid || id).slice(0, 8),
     rarity: rarityValueToTier(raw.rarity),
-    species: String(raw.species || 'cat') as SpeciesType,
+    species: normalizeSpeciesId(raw.species),
+    speciesLabelZh: String(raw.species_label_zh || raw.speciesLabelZh || '').trim() || undefined,
     unlocked,
     isUnlocked: unlocked ? 1 : 0,
     captureDate: generatedAt.slice(0, 10),
@@ -106,5 +110,16 @@ export function serverAnimalToRecord(raw: Record<string, unknown>): AnimalRecord
     lat: finiteNumber(raw.latitude, 0),
     lng: finiteNumber(raw.longitude, 0),
     seed: Math.round(finiteNumber(raw.server_version, Date.now())) % 100000,
+    nickname: String(raw.nickname || '').trim() || undefined,
+    breed: String(raw.breed || '').trim() || undefined,
+    hp: finiteNumber(raw.hp, 0) || undefined,
+    atk: finiteNumber(raw.atk, 0) || undefined,
+    def: finiteNumber(raw.def, 0) || undefined,
+    spd: finiteNumber(raw.spd, 0) || undefined,
+    className: String(raw.class || '').trim() || undefined,
+    element: String(raw.element || '').trim() || undefined,
+    capturedAt: Date.parse(generatedAt) || undefined,
+    inferenceRequestId: String(raw.inference_request_id || '').trim() || undefined,
+    synced: true,
   }
 }

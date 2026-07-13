@@ -9,9 +9,10 @@ import (
 
 func TestDailyCallCounter_Allow(t *testing.T) {
 	limits := DailyLimitConfig{
-		DetectLimit:  3,
-		AnalyzeLimit: 2,
-		ValueLimit:   1,
+		DetectLimit:    3,
+		AnalyzeLimit:   2,
+		ValueLimit:     1,
+		AdventureLimit: 1,
 	}
 	dc := NewDailyCallCounter(limits)
 
@@ -32,6 +33,11 @@ func TestDailyCallCounter_Allow(t *testing.T) {
 	ok, _, _ = dc.allow("device-1", "value")
 	assert.True(t, ok)
 	ok, _, _ = dc.allow("device-1", "value")
+	assert.False(t, ok)
+
+	ok, _, _ = dc.allow("device-1", "adventure")
+	assert.True(t, ok)
+	ok, _, _ = dc.allow("device-1", "adventure")
 	assert.False(t, ok)
 }
 

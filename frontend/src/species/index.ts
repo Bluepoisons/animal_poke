@@ -1,5 +1,6 @@
 export type {
   RecognitionStatus,
+  SpeciesGroup,
   Localized,
   SpeciesPack,
   SpeciesDef,
@@ -15,6 +16,8 @@ export {
   capturableSpeciesIds,
   encyclopediaSpeciesIds,
   isCapturableSpecies,
+  findSpeciesIdByLabel,
+  speciesGroupOf,
   speciesContentRef,
   toSpeciesDef,
   buildSpeciesDefs,

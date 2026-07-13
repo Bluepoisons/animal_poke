@@ -11,10 +11,9 @@ import { announceRareReveal } from '../feedbackPrefs'
 import { registerCapture } from '../collectionValue'
 import { isForceCaptureSuccess } from '../../../e2eFlags'
 import { runCaptureGeneration, type GeneratedAnimal } from '../../../services/capturePipeline'
-import { enqueueGeneratedAnimal, flushSyncQueue } from '../../../services/syncQueue'
 import { AnimalRepository } from '../../../db/repositories/animal-repository'
-import { SyncQueueRepository } from '../../../db/repositories/sync-queue-repository'
 import { generatedAnimalToRecord } from '../../../db/animal-record-mapper'
+import { chineseDetectedSpeciesName } from '../petLocalization'
 import {
   createPostHitTask,
   isRevealAllowed,
@@ -124,22 +123,6 @@ export default function CaptureScreen({
     [power, profile.bestMin, profile.bestMax],
   )
 
-  const syncGeneratedAnimal = useCallback(
-    async (generated: GeneratedAnimal) => {
-      const position = lbs.state.playerLocation
-      const queued = await enqueueGeneratedAnimal(generated, {
-        lat: position?.lat,
-        lng: position?.lng,
-      })
-      await flushSyncQueue()
-      const persisted = await SyncQueueRepository.getById(queued.id)
-      if (persisted?.status !== 'synced') {
-        throw new Error(persisted?.lastError || 'sync_pending')
-      }
-    },
-    [lbs.state.playerLocation],
-  )
-
   const runPipeline = useCallback(
     async (task: PostHitTask) => {
       if (pipelineRunning.current) return
@@ -168,8 +151,10 @@ export default function CaptureScreen({
           generated = await runCaptureGeneration({
             sessionId: captureAttemptId,
             species,
+            speciesLabelZh: detection.label,
             photoDataUrl,
             detectInferenceId,
+            targetId: detection.targetId || targetId || undefined,
           })
           generatedCache.current = generated
           working = savePostHitTask({
@@ -195,52 +180,30 @@ export default function CaptureScreen({
               }),
             )
           }
-          working = savePostHitTask({ ...working, stage: 'syncing', saved: true })
+          working = savePostHitTask({ ...working, stage: 'saving', saved: true })
           setPostHit(working)
           // collection value toast only once after save
-          const value = registerCapture(species)
+          const value = registerCapture(species, generated.speciesLabelZh)
           onToast(value.message)
           const rare = announceRareReveal(value.isFirst ? 'legendary' : 'common')
           if (rare) onToast(rare)
         }
 
-        // sync — failure leaves local save intact
+        // value 阶段已原子写入服务端；本地保存成功后即可完成捕获。
         if (working.saved && !working.synced && generated) {
-          patchPostHit({ stage: 'syncing' })
-          try {
-            await syncGeneratedAnimal(generated)
-            working = savePostHitTask({
-              ...working,
-              stage: 'completed',
-              synced: true,
-            })
-            setPostHit(working)
-            onToast('捕获成功')
-            onSettled?.(true)
-          } catch (syncErr) {
-            working = savePostHitTask({
-              ...working,
-              stage: 'saved_pending_sync',
-              synced: false,
-              errorCode: 'sync_failed',
-              errorMessage: syncErr instanceof Error ? syncErr.message : 'sync_failed',
-            })
-            setPostHit(working)
-            onToast('已本地保存、待同步')
-            onSettled?.(true)
-          }
+          working = savePostHitTask({ ...working, stage: 'completed', synced: true })
+          setPostHit(working)
+          onToast('捕获成功')
+          onSettled?.(true)
           return
         }
 
-        if (working.stage === 'saved_pending_sync' && generated && !working.synced) {
-          try {
-            await syncGeneratedAnimal(generated)
-            working = savePostHitTask({ ...working, stage: 'completed', synced: true, errorCode: null })
-            setPostHit(working)
-            onToast('同步完成')
-          } catch {
-            /* stay pending */
-          }
+        // 兼容旧版本留下的待同步任务：服务端已改为 value 阶段直接落库。
+        if (working.stage === 'saved_pending_sync') {
+          working = savePostHitTask({ ...working, stage: 'completed', synced: true, errorCode: null })
+          setPostHit(working)
+          onToast('捕获成功')
+          onSettled?.(true)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'pipeline_failed'
@@ -260,7 +223,7 @@ export default function CaptureScreen({
     [
       captureAttemptId,
       detectInferenceId,
-      detection,
+      detection.label,
       lbs.state.cityName,
       lbs.state.playerLocation,
       onSettled,
@@ -268,7 +231,6 @@ export default function CaptureScreen({
       patchPostHit,
       photoBlob,
       species,
-      syncGeneratedAnimal,
       targetId,
     ],
   )
@@ -442,8 +404,8 @@ export default function CaptureScreen({
   return (
     <div className="ap-screen" data-testid="capture-screen">
       <PageTitle
-        title="CAPTURE"
-        subtitle={`${species} · ${profile.label} · attempt ${(att?.index ?? 0) + 1}/${enc.maxAttempts}`}
+        title="捕获"
+        subtitle={`${chineseDetectedSpeciesName(species, detection.label)} · ${profile.label} · 第 ${(att?.index ?? 0) + 1}/${enc.maxAttempts} 次`}
         rightText={`体力 -20 · 余 ${currentStamina}`}
         rightTone="pink"
       />
@@ -494,7 +456,7 @@ export default function CaptureScreen({
         ) : null}
         {att?.phase === 'settled_fail' && canRetry(enc) && (
           <button type="button" className="ap-map-chip" style={{ marginTop: 12 }} onClick={handleRetry}>
-            再试一次（新 attempt）
+            再试一次（新的捕获机会）
           </button>
         )}
         {(postHit.stage === 'failed' || postHit.stage === 'saved_pending_sync') && (

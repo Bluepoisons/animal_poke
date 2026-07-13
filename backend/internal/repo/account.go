@@ -357,6 +357,9 @@ func (r *AccountRepo) MergeGuestIntoAccount(guestDeviceID, accountID string) (*M
 			return res.Error
 		}
 		stats.OrdersMoved = int(res.RowsAffected)
+		if err := migrateAdventureRunsToAccountTx(tx, guestDeviceID, accountID); err != nil {
+			return err
+		}
 
 		return nil
 	})
@@ -598,6 +601,16 @@ func (r *AccountRepo) mergeGuestIntoAccountTx(tx *gorm.DB, guestDeviceID, accoun
 	return stats, nil
 }
 
+func migrateAdventureRunsToAccountTx(tx *gorm.DB, deviceID, accountID string) error {
+	ownerKey := OwnerKey(accountID, deviceID)
+	return tx.Model(&models.AdventureRun{}).
+		Where("device_id = ? AND (account_id = '' OR account_id IS NULL OR account_id = ?)", deviceID, accountID).
+		Updates(map[string]interface{}{
+			"account_id": accountID,
+			"owner_key":  ownerKey,
+		}).Error
+}
+
 // linkDeviceTx 事务内链接设备（不自动启用已禁用 Device.Disabled——由调用方显式 Enable）。
 // 始终签发新 refresh family（AP-078）；refreshPlain 非空时仅用于兼容测试注入。
 func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlain string, refreshTTL time.Duration) (*models.DeviceAccount, string, error) {
@@ -638,6 +651,9 @@ func (r *AccountRepo) linkDeviceTx(tx *gorm.DB, deviceID, accountID, refreshPlai
 
 	if err := tx.Model(&models.Device{}).Where("device_id = ?", deviceID).
 		Update("account_id", accountID).Error; err != nil {
+		return nil, "", err
+	}
+	if err := migrateAdventureRunsToAccountTx(tx, deviceID, accountID); err != nil {
 		return nil, "", err
 	}
 

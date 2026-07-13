@@ -108,7 +108,7 @@ export default function DetectionOverlay({
       data-testid="detection-overlay"
       data-visual={visualState}
       role="group"
-      aria-label="detection targets"
+      aria-label="检测到的动物"
     >
       {boxes.map(({ d, rect }, index) => {
         const selected = selectedId === d.id

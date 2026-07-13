@@ -29,7 +29,7 @@ export function rollRarity(rand: number = Math.random()): RarityTier {
 
 /** 随机选择物种 */
 export function rollSpecies(rand: number = Math.random()): SpeciesType {
-  const idx = Math.floor(rand * SPECIES_POOL.length)
+  const idx = Math.min(SPECIES_POOL.length - 1, Math.max(0, Math.floor(rand * SPECIES_POOL.length)))
   return SPECIES_POOL[idx]
 }
 

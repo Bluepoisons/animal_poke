@@ -36,6 +36,8 @@ tags:
     description: Image animal detection and analysis
   - name: Value
     description: Pet value generation
+  - name: Adventure
+    description: AI-generated Simplified Chinese companion expeditions and authoritative bond settlement
   - name: Sync
     description: Animal collection sync APIs
   - name: Privacy
@@ -833,6 +835,42 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /api/v1/vision/detect/corrections:
+    post:
+      tags: [Vision]
+      summary: Confirm a corrected species and create a derived detect credential
+      description: |
+        Creates an immutable detect inference derived from the original model result.
+        Analyze remains strict and accepts the corrected species only with the returned credential.
+        A concrete Simplified Chinese species label is always required; unregistered real animals
+        use species=other_animal with labels such as 赤狐 or 仓鼠.
+      operationId: visionDetectCorrection
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisionCorrectionRequest"
+      responses:
+        "201":
+          description: Derived user-confirmed detect credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisionCorrectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /api/v1/vision/analyze:
     post:
       tags: [Vision]
@@ -862,7 +900,10 @@ paths:
                   description: Stable target id from detect.targets
                 species:
                   type: string
-                  description: Claimed species; must match locked detect target
+                  description: Claimed species; must match the original or user-confirmed detect credential
+                species_label_zh:
+                  type: string
+                  description: Concrete Simplified Chinese species name inherited from the detect credential
                 box:
                   type: string
                   description: JSON bounding box {x,y,width,height} fractions 0-1
@@ -905,7 +946,9 @@ paths:
       description: |
         Rarity and battle stats are computed server-side via HMAC-seeded algorithm
         (seed = parent/capture inference id + config_version + server secret).
-        LLM only supplies narrative. Response includes factors for transparency.
+        LLM only supplies narrative. The server persists the animal in the same
+        transaction as its value inference; no client-side animal sync is required.
+        Response includes factors for transparency and the created animal UUID.
       operationId: valueGenerate
       security:
         - bearerAuth: []
@@ -918,6 +961,7 @@ paths:
               required: [species]
               properties:
                 species: { type: string }
+                species_label_zh: { type: string, description: Concrete Simplified Chinese species name from trusted lineage }
                 breed: { type: string }
                 color: { type: string }
                 body_type: { type: string }
@@ -941,6 +985,7 @@ paths:
                 type: object
                 properties:
                   rarity: { type: integer, minimum: 1, maximum: 5 }
+                  species_label_zh: { type: string }
                   hp: { type: integer }
                   atk: { type: integer }
                   def: { type: integer }
@@ -967,11 +1012,133 @@ paths:
                       final_score: { type: number }
                       quality_band: { type: string }
                   inference_id: { type: string }
+                  animal_uuid: { type: string, format: uuid, description: Server-persisted animal record UUID }
                 additionalProperties: true
         "401":
           $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/adventures:
+    get:
+      tags: [Adventure]
+      summary: List recent companion adventures
+      operationId: adventureList
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: animal_uuid
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        "200":
+          description: Recent adventure summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Adventure]
+      summary: Generate one Simplified Chinese AI companion adventure
+      description: |
+        Loads the owned animal and companion bond from server-authoritative data,
+        then asks the configured AI provider for one fully fictional Chinese encounter.
+        Production does not silently replace provider failures with authored stories.
+        Choice outcomes and the souvenir remain hidden until settlement.
+      operationId: adventureCreate
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdventureGenerateRequest"
+      responses:
+        "201":
+          description: Adventure generated and persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureStory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/adventures/{run_id}:
+    get:
+      tags: [Adventure]
+      summary: Restore one generated adventure
+      operationId: adventureGet
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Adventure state without unselected outcome spoilers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/adventures/{run_id}/choices:
+    post:
+      tags: [Adventure]
+      summary: Resolve one adventure choice and grant companion memory XP
+      operationId: adventureChoose
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdventureChoiceRequest"
+      responses:
+        "200":
+          description: Idempotent resolved outcome and authoritative companion bond
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdventureCompletionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
 
   /api/v1/photo/calibration:
@@ -1552,6 +1719,13 @@ paths:
           schema:
             type: string
           description: Optional animal id cursor for page-only export
+      requestBody:
+        required: false
+        description: 可选导出范围；省略请求体或 scope 时默认仅导出当前设备数据
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrivacyExportRequest"
       responses:
         "200":
           description: Export completed (or page)
@@ -4398,6 +4572,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     Conflict:
       description: Conflict
       content:
@@ -4623,6 +4806,13 @@ components:
           type: string
         guest:
           type: boolean
+    PrivacyExportRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum: [device, account]
+          description: device 仅导出当前设备数据（省略时默认）；account 导出当前已绑定账号的数据
     PrivacyDeleteRequest:
       type: object
       properties:
@@ -4872,13 +5062,51 @@ components:
           type: string
     VisionDetectBox:
       type: object
-      required: [species, confidence, target_id, bounding_box]
+      required: [species, confidence, target_id]
       properties:
         species:
           type: string
-          enum: [cat, dog, goose]
+          description: 注册物种 ID；other_animal 表示已确认是真实动物但未落入具体类别
+          enum:
+            - cat
+            - dog
+            - rabbit
+            - horse
+            - cow
+            - sheep
+            - goat
+            - pig
+            - deer
+            - squirrel
+            - monkey
+            - bear
+            - elephant
+            - big_cat
+            - bird
+            - goose
+            - duck
+            - chicken
+            - pigeon
+            - parrot
+            - eagle
+            - turtle
+            - lizard
+            - snake
+            - crocodile
+            - frog
+            - salamander
+            - fish
+            - shark
+            - dolphin
+            - whale
+            - octopus
+            - crab
+            - butterfly
+            - bee
+            - other_animal
         label:
           type: string
+          description: 简体中文物种标签；other_animal 时必须是具体名称，例如“赤狐”
         target_id:
           type: string
         confidence:
@@ -4887,6 +5115,7 @@ components:
           maximum: 1
         bounding_box:
           type: object
+          description: 旧多目标响应的兼容字段；照片级识别可以省略
           required: [x, y, width, height]
           properties:
             x: { type: number, minimum: 0, maximum: 1 }
@@ -4916,6 +5145,27 @@ components:
           type: string
         safety:
           $ref: "#/components/schemas/SafetySummary"
+    VisionCorrectionRequest:
+      type: object
+      required: [detect_inference_id, species, species_label_zh]
+      properties:
+        detect_inference_id: { type: string }
+        target_id: { type: string, description: Stable target_id from the original detect result; defaults to the primary target }
+        species: { type: string, description: Canonical registered species ID or other_animal }
+        species_label_zh: { type: string, maxLength: 64, description: Concrete Simplified Chinese animal name }
+    VisionCorrectionResponse:
+      type: object
+      required: [inference_id, parent_inference_id, target_id, original_species, species, label, confidence, source]
+      properties:
+        inference_id: { type: string }
+        parent_inference_id: { type: string }
+        target_id: { type: string }
+        original_species: { type: string }
+        species: { type: string }
+        label: { type: string, description: Trusted concrete Simplified Chinese species name }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source: { type: string, enum: [user_confirmation] }
+        expires_at: { type: string, format: date-time }
     SafetySummary:
       type: object
       required: [allowed, collectable, decision_code, action]
@@ -5015,6 +5265,7 @@ components:
       additionalProperties: true
       properties:
         species: { type: string }
+        species_label_zh: { type: string }
         breed: { type: string }
         color: { type: string }
         body_type: { type: string }
@@ -5030,6 +5281,7 @@ components:
       properties:
         uuid: { type: string, format: uuid }
         species: { type: string }
+        species_label_zh: { type: string, maxLength: 64, description: Concrete Simplified Chinese species name; required for other_animal }
         breed: { type: string }
         rarity: { type: integer, minimum: 1, maximum: 5 }
         hp: { type: integer }
@@ -5057,6 +5309,7 @@ components:
         device_id: { type: string }
         account_id: { type: string }
         species: { type: string }
+        species_label_zh: { type: string }
         breed: { type: string }
         rarity: { type: integer }
         hp: { type: integer }
@@ -5381,6 +5634,7 @@ components:
           type: string
           enum: [link, friends, public]
         species: { type: string }
+        species_label_zh: { type: string }
         breed: { type: string }
         rarity: { type: integer }
         nickname: { type: string }
@@ -5594,6 +5848,146 @@ components:
           type: object
           additionalProperties: true
         request_id: { type: string }
+    AdventureGenerateRequest:
+      type: object
+      required: [animal_uuid, theme, operation_id]
+      additionalProperties: false
+      properties:
+        animal_uuid: { type: string, format: uuid }
+        theme:
+          type: string
+          enum: [mistwood, sky_ruins, tide_isles]
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Must match the Idempotency-Key request header.
+    AdventureChoice:
+      type: object
+      required: [id, label, description]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          enum: [courage, curiosity, kindness]
+        label: { type: string, maxLength: 10, description: Simplified Chinese }
+        description: { type: string, maxLength: 100, description: Simplified Chinese }
+    AdventureResolvedChoice:
+      allOf:
+        - $ref: "#/components/schemas/AdventureChoice"
+        - type: object
+          required: [outcome, bond_delta]
+          properties:
+            outcome: { type: string, maxLength: 240, description: Simplified Chinese }
+            bond_delta: { type: integer, enum: [6] }
+    AdventureStory:
+      type: object
+      required: [adventure_id, theme, title, location, opening, encounter_title, encounter, companion_line, choices, fiction, disclaimer, source, prompt_version]
+      properties:
+        adventure_id: { type: string, format: uuid }
+        theme:
+          type: string
+          enum: [mistwood, sky_ruins, tide_isles]
+        title: { type: string, maxLength: 18, description: Simplified Chinese }
+        location: { type: string, maxLength: 12, description: Simplified Chinese }
+        opening: { type: string, maxLength: 200, description: Simplified Chinese }
+        encounter_title: { type: string, maxLength: 20, description: Simplified Chinese }
+        encounter: { type: string, maxLength: 260, description: Simplified Chinese }
+        companion_line: { type: string, maxLength: 120, description: Simplified Chinese }
+        choices:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/AdventureChoice"
+        fiction: { type: boolean, const: true }
+        disclaimer: { type: string }
+        source:
+          type: string
+          enum: [ai, mock, template]
+        degraded: { type: boolean }
+        reason_code: { type: string }
+        prompt_version: { type: string }
+    AdventureChoiceRequest:
+      type: object
+      required: [choice_id]
+      additionalProperties: false
+      properties:
+        choice_id:
+          type: string
+          enum: [courage, curiosity, kindness]
+    AdventureSouvenir:
+      type: object
+      required: [name, description]
+      properties:
+        name: { type: string, maxLength: 12, description: Simplified Chinese }
+        description: { type: string, maxLength: 120, description: Simplified Chinese }
+    AdventureCompletionResponse:
+      type: object
+      required: [adventure_id, status, choice, outcome, souvenir, idempotent]
+      properties:
+        adventure_id: { type: string, format: uuid }
+        status: { type: string, const: completed }
+        choice:
+          $ref: "#/components/schemas/AdventureResolvedChoice"
+        outcome: { type: string, maxLength: 240 }
+        souvenir:
+          $ref: "#/components/schemas/AdventureSouvenir"
+        companion:
+          $ref: "#/components/schemas/CompanionProfile"
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanionMemoryNode"
+        unlocked_nodes:
+          type: array
+          items: { type: string }
+        idempotent: { type: boolean }
+        request_id: { type: string }
+    AdventureHistoryItem:
+      type: object
+      required: [adventure_id, animal_uuid, theme, title, status, bond_delta, created_at]
+      properties:
+        adventure_id: { type: string, format: uuid }
+        animal_uuid: { type: string, format: uuid }
+        theme:
+          type: string
+          enum: [mistwood, sky_ruins, tide_isles]
+        title: { type: string }
+        status:
+          type: string
+          enum: [generated, completed]
+        choice_id: { type: string }
+        outcome: { type: string }
+        souvenir: { type: string }
+        bond_delta: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+    AdventureListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdventureHistoryItem"
+        request_id: { type: string }
+    AdventureDetailResponse:
+      type: object
+      required: [story, status]
+      properties:
+        story:
+          $ref: "#/components/schemas/AdventureStory"
+        status:
+          type: string
+          enum: [generated, completed]
+        selected_choice_id: { type: string }
+        outcome: { type: string }
+        souvenir:
+          $ref: "#/components/schemas/AdventureSouvenir"
+        bond_delta: { type: integer, minimum: 0 }
+        completed_at: { type: string, format: date-time }
+        request_id: { type: string }
     ResearcherTrack:
       type: object
       properties:
@@ -5707,7 +6101,7 @@ components:
         title: { type: string }
         kind:
           type: string
-          enum: [memory, decor, journal]
+          enum: [memory, decor]
         visible: { type: boolean }
         unlocked: { type: boolean }
         unlock_at_xp: { type: integer, format: int64 }

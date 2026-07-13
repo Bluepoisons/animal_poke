@@ -82,10 +82,10 @@ func TestGoldenStub_SchemaAndPerfectMetrics(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ValidateMetricsReportStructure(eval.Metrics))
 	assert.Equal(t, len(m.Fixtures), eval.FixtureCount)
-	assert.Equal(t, 1.0, eval.Metrics.MacroPrecision)
-	assert.Equal(t, 1.0, eval.Metrics.MacroRecall)
+	assert.InDelta(t, 1.0, eval.Metrics.MacroPrecision, 1e-9)
+	assert.InDelta(t, 1.0, eval.Metrics.MacroRecall, 1e-9)
 	assert.Equal(t, 1.0, eval.Metrics.UnknownRejection)
-	assert.Equal(t, 1.0, eval.Metrics.MeanIoU)
+	assert.InDelta(t, 1.0, eval.Metrics.MeanIoU, 1e-9)
 	assert.Equal(t, "USD", eval.Metrics.Cost.Currency)
 	assert.Greater(t, eval.Metrics.LatencyMs.Count, 0)
 	assert.Equal(t, "stub-golden-v1", eval.Trace.Model)
@@ -166,12 +166,12 @@ func TestMetricsReportStructure_RejectsIncomplete(t *testing.T) {
 	err := ValidateMetricsReportStructure(MetricsReport{})
 	require.Error(t, err)
 
+	perClass := make(map[string]ClassMetrics, len(CapturableClasses()))
+	for _, species := range CapturableClasses() {
+		perClass[species] = ClassMetrics{Precision: 1, Recall: 1}
+	}
 	err = ValidateMetricsReportStructure(MetricsReport{
-		PerClass: map[string]ClassMetrics{
-			"cat":   {Precision: 1, Recall: 1},
-			"dog":   {Precision: 1, Recall: 1},
-			"goose": {Precision: 1, Recall: 1},
-		},
+		PerClass:         perClass,
 		MacroPrecision:   1,
 		MacroRecall:      1,
 		UnknownRejection: 1,

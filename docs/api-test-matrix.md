@@ -1,6 +1,6 @@
 # Animal Poke · API 测试矩阵
 
-> 覆盖范围：OpenAPI `163` 个 operationId（与 Gin runtime 双向对齐）。
+> 覆盖范围：OpenAPI `168` 个 operationId（与 Gin runtime 双向对齐）。
 > 本文件由 `node scripts/api-test-matrix-gate.mjs --write` 从 inventory/matrix 生成；禁止手工改计数。
 
 ## 门禁
@@ -22,6 +22,8 @@
 | API-getAdminCase | `GET` | `/api/v1/admin/cases/{id}` | `getAdminCase` | TestContractMatrix/getAdminCase/success | TestContractMatrix/getAdminCase/failure |
 | API-listAdminCaseAudits | `GET` | `/api/v1/admin/cases/{id}/audits` | `listAdminCaseAudits` | TestContractMatrix/listAdminCaseAudits/success | TestContractMatrix/listAdminCaseAudits/failure |
 | API-adminGetSecurityReport | `GET` | `/api/v1/admin/security/reports/{id}` | `adminGetSecurityReport` | TestContractMatrix/adminGetSecurityReport/success | TestContractMatrix/adminGetSecurityReport/failure |
+| API-adventureList | `GET` | `/api/v1/adventures` | `adventureList` | TestContractMatrix/adventureList/success | TestContractMatrix/adventureList/failure |
+| API-adventureGet | `GET` | `/api/v1/adventures/{run_id}` | `adventureGet` | TestContractMatrix/adventureGet/success | TestContractMatrix/adventureGet/failure |
 | API-authAccount | `GET` | `/api/v1/auth/account` | `authAccount` | TestContractMatrix/authAccount/success | TestContractMatrix/authAccount/failure |
 | API-authListDevices | `GET` | `/api/v1/auth/devices` | `authListDevices` | TestContractMatrix/authListDevices/success | TestContractMatrix/authListDevices/failure |
 | API-battleCatalog | `GET` | `/api/v1/battle/catalog` | `battleCatalog` | TestContractMatrix/battleCatalog/success | TestContractMatrix/battleCatalog/failure |
@@ -90,6 +92,8 @@
 | API-adminRefundOrder | `POST` | `/api/v1/admin/commerce/orders/refund` | `adminRefundOrder` | TestContractMatrix/adminRefundOrder/success | TestContractMatrix/adminRefundOrder/failure |
 | API-webhookRefundOrder | `POST` | `/api/v1/admin/commerce/webhooks/refund` | `webhookRefundOrder` | TestContractMatrix/webhookRefundOrder/success | TestContractMatrix/webhookRefundOrder/failure |
 | API-adminRevokeSession | `POST` | `/api/v1/admin/sessions/revoke` | `adminRevokeSession` | TestContractMatrix/adminRevokeSession/success | TestContractMatrix/adminRevokeSession/failure |
+| API-adventureCreate | `POST` | `/api/v1/adventures` | `adventureCreate` | TestContractMatrix/adventureCreate/success | TestContractMatrix/adventureCreate/failure |
+| API-adventureChoose | `POST` | `/api/v1/adventures/{run_id}/choices` | `adventureChoose` | TestContractMatrix/adventureChoose/success | TestContractMatrix/adventureChoose/failure |
 | API-analyticsDeleteOwner | `POST` | `/api/v1/analytics/delete` | `analyticsDeleteOwner` | TestContractMatrix/analyticsDeleteOwner/success | TestContractMatrix/analyticsDeleteOwner/failure |
 | API-analyticsIngest | `POST` | `/api/v1/analytics/events` | `analyticsIngest` | TestContractMatrix/analyticsIngest/success | TestContractMatrix/analyticsIngest/failure |
 | API-authBind | `POST` | `/api/v1/auth/bind` | `authBind` | TestContractMatrix/authBind/success | TestContractMatrix/authBind/failure |
@@ -168,6 +172,7 @@
 | API-valueGenerate | `POST` | `/api/v1/value/generate` | `valueGenerate` | TestContractMatrix/valueGenerate/success | TestContractMatrix/valueGenerate/failure |
 | API-visionAnalyze | `POST` | `/api/v1/vision/analyze` | `visionAnalyze` | TestContractMatrix/visionAnalyze/success | TestContractMatrix/visionAnalyze/failure |
 | API-visionDetect | `POST` | `/api/v1/vision/detect` | `visionDetect` | TestContractMatrix/visionDetect/success | TestContractMatrix/visionDetect/failure |
+| API-visionDetectCorrection | `POST` | `/api/v1/vision/detect/corrections` | `visionDetectCorrection` | TestContractMatrix/visionDetectCorrection/success | TestContractMatrix/visionDetectCorrection/failure |
 | API-creditWallet | `POST` | `/api/v1/wallet/credit` | `creditWallet` | TestContractMatrix/creditWallet/success | TestContractMatrix/creditWallet/failure |
 | API-debitWallet | `POST` | `/api/v1/wallet/debit` | `debitWallet` | TestContractMatrix/debitWallet/success | TestContractMatrix/debitWallet/failure |
 | API-reconcileWallet | `POST` | `/api/v1/wallet/reconcile` | `reconcileWallet` | TestContractMatrix/reconcileWallet/success | TestContractMatrix/reconcileWallet/failure |

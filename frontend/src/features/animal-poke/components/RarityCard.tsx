@@ -5,10 +5,14 @@ import { useI18n } from '../../../i18n'
 
 interface RarityCardProps {
   entry: AnimalEntry
+  nickname?: string
+  subtitle?: string
+  photoDataUrl?: string
+  stats?: { hp?: number; atk?: number }
   onClick?: () => void
 }
 
-export default function RarityCard({ entry, onClick }: RarityCardProps) {
+export default function RarityCard({ entry, nickname, subtitle, photoDataUrl, stats, onClick }: RarityCardProps) {
   const { t } = useI18n()
   if (!entry.collected) {
     return (
@@ -30,23 +34,24 @@ export default function RarityCard({ entry, onClick }: RarityCardProps) {
       }}
       role="button"
       tabIndex={0}
-      aria-label={`${entry.name} ${rarityNames[entry.rarity]}`}
+      aria-label={`${nickname || entry.name} ${rarityNames[entry.rarity]}`}
     >
       <div className="ap-rarity-card__icon">
-        <AnimalIcon
-          species={entry.species}
-          size={78}
-          tone={entry.rarity === 'legendary' ? 'dark' : 'light'}
-        />
+        {photoDataUrl ? (
+          <img className="ap-rarity-card__photo" src={photoDataUrl} alt={`${nickname || entry.name} 的照片`} />
+        ) : (
+          <AnimalIcon
+            species={entry.species}
+            size={78}
+            tone={entry.rarity === 'legendary' ? 'dark' : 'light'}
+          />
+        )}
       </div>
       <h2>
-        #{entry.id} · {rarityNames[entry.rarity]}
+        {nickname || entry.name} · {rarityNames[entry.rarity]}
       </h2>
-      {entry.region && entry.location ? (
-        <p>
-          {entry.region} · {entry.location}
-        </p>
-      ) : null}
+      {subtitle && <p>{subtitle}</p>}
+      {stats && <div className="ap-rarity-card__stats">生命 {stats.hp ?? '-'} · 攻击 {stats.atk ?? '-'}</div>}
     </article>
   )
 }

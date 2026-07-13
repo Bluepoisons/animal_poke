@@ -8,6 +8,7 @@ import type {
   SpeciesDef,
   SpeciesPack,
   SpeciesRef,
+  SpeciesGroup,
   SpeciesRarityWeight,
   SpeciesStatModifiers,
 } from './types'
@@ -162,6 +163,72 @@ export function isCapturableSpecies(id: string): boolean {
   return speciesRegistry.canCapture(id)
 }
 
+export function speciesGroupOf(id: string): SpeciesGroup {
+  return speciesRegistry.get(id)?.group ?? 'other'
+}
+
+function normalizeLabel(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizedTerms(pack: SpeciesPack): string[] {
+  return [
+    pack.id,
+    ...Object.values(pack.names.common),
+    pack.names.scientific ?? '',
+    ...(pack.names.aliases ?? []),
+    ...(pack.names.contains ?? []),
+  ]
+    .map(normalizeLabel)
+    .filter(Boolean)
+}
+
+function containsLabelTerm(value: string, term: string): boolean {
+  if (!value || !term) return false
+  const chars = Array.from(term)
+  if (chars.length === 1 && /\p{Script=Han}/u.test(chars[0])) return false
+  if (/\p{Script=Han}/u.test(term)) return value.includes(term)
+  return ` ${value} `.includes(` ${term} `)
+}
+
+/**
+ * 使用内容包中的 ID、各语言名称、aliases 与 contains 解析模型标签。
+ * 精确匹配优先；模糊匹配选择最长命中，避免通用 bird/fish 抢走具体物种。
+ */
+export function findSpeciesIdByLabel(raw?: string, capturableOnly = true): string | null {
+  const value = normalizeLabel(raw ?? '')
+  if (!value) return null
+
+  const packs = speciesRegistry
+    .all()
+    .filter((pack) => !capturableOnly || isCapturable(pack))
+
+  for (const pack of packs) {
+    if (normalizedTerms(pack).includes(value)) return pack.id
+  }
+
+  let best: { id: string; score: number } | null = null
+  for (const pack of packs) {
+    const excludes = (pack.names.containsExclude ?? []).map(normalizeLabel).filter(Boolean)
+    if (excludes.some((term) => containsLabelTerm(value, term))) continue
+
+    for (const rawTerm of pack.names.contains ?? []) {
+      const term = normalizeLabel(rawTerm)
+      if (!containsLabelTerm(value, term)) continue
+      const genericPenalty = pack.id === 'bird' || pack.id === 'fish' ? 1 : 0
+      const score = Array.from(term).length * 10 - genericPenalty
+      if (!best || score > best.score) best = { id: pack.id, score }
+    }
+  }
+  return best?.id ?? null
+}
+
 export function speciesContentRef(id: string): SpeciesRef {
   return speciesRegistry.ref(id)
 }
@@ -201,7 +268,7 @@ export function getSpeciesDef(id: string, locale = 'zh-CN'): SpeciesDef {
   // 安全降级：未知内容 ID
   return {
     species: id || 'unknown',
-    name: id || '未知',
+    name: '动物伙伴',
     emoji: '❓',
     throwItem: '观察道具',
     throwItemEmoji: '✨',

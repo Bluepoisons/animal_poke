@@ -420,6 +420,23 @@ describe('cardEntryToBattlePet', () => {
     expect(pet.currentHp).toBe(pet.stats.hp)
     expect(pet.energy).toBe(0)
   })
+
+  it('does not turn a legacy entry without species into a cat', () => {
+    const entry: CardEntry = {
+      id: 'legacy',
+      no: '#LEGACY',
+      rarity: 'common',
+      unlocked: true,
+      captureDate: '2026-07-08',
+      location: '未知',
+      lat: 0,
+      lng: 0,
+      seed: 1,
+    }
+    const pet = cardEntryToBattlePet(entry, 'sunny')
+    expect(pet.species).toBe('unknown')
+    expect(pet.name).toBe('动物伙伴')
+  })
 })
 
 // ===== applyStrategy 测试 =====

@@ -36,14 +36,17 @@ type Animal struct {
 	DeviceID  string `gorm:"index;size:64;not null" json:"device_id"`
 	AccountID string `gorm:"index;size:36" json:"account_id,omitempty"` // 绑定后归属账号
 	Species   string `gorm:"size:32;not null" json:"species"`
-	Breed     string `gorm:"size:64" json:"breed"`
-	Rarity    int    `gorm:"not null" json:"rarity"` // 1-5 星级
-	HP        int    `json:"hp"`
-	ATK       int    `json:"atk"`
-	DEF       int    `json:"def"`
-	SPD       int    `json:"spd"`
-	Class     string `gorm:"size:32" json:"class"`
-	Element   string `gorm:"size:32" json:"element"`
+	// SpeciesLabelZH 保存检测链路确认的具体简体中文物种名。
+	// 对 other_animal 必填，例如“赤狐”“仓鼠”；注册物种也可保存“猫”“鸭”等展示名。
+	SpeciesLabelZH string `gorm:"column:species_label_zh;size:64" json:"species_label_zh,omitempty"`
+	Breed          string `gorm:"size:64" json:"breed"`
+	Rarity         int    `gorm:"not null" json:"rarity"` // 1-5 星级
+	HP             int    `json:"hp"`
+	ATK            int    `json:"atk"`
+	DEF            int    `json:"def"`
+	SPD            int    `json:"spd"`
+	Class          string `gorm:"size:32" json:"class"`
+	Element        string `gorm:"size:32" json:"element"`
 	// 位置最小化：城市/geohash；精确坐标可选
 	City               string     `gorm:"size:64" json:"city"`
 	GeoHash            string     `gorm:"size:16;index" json:"geohash"`
@@ -89,7 +92,7 @@ type Inference struct {
 	ID                uint   `gorm:"primaryKey" json:"id"`
 	InferenceID       string `gorm:"uniqueIndex;size:64;not null" json:"inference_id"`
 	DeviceID          string `gorm:"index;size:64;not null" json:"device_id"`
-	Kind              string `gorm:"size:32;not null" json:"kind"` // detect|analyze|value
+	Kind              string `gorm:"size:32;not null" json:"kind"` // detect（模型或用户确认派生）|analyze|value
 	ParentInferenceID string `gorm:"index;size:64" json:"parent_inference_id,omitempty"`
 	Provider          string `gorm:"size:64" json:"provider"`
 	Model             string `gorm:"size:128" json:"model"`
@@ -635,20 +638,21 @@ func (SocialUserReport) TableName() string { return "social_user_reports" }
 // SocialShare 安全分享：不可猜 capability token + ACL + 过期 + 撤销。
 // 快照仅含粗粒度字段，禁止精确坐标、设备信息、未授权图片。
 type SocialShare struct {
-	ID           uint       `gorm:"primaryKey" json:"id"`
-	ShareToken   string     `gorm:"uniqueIndex;size:64;not null" json:"-"` // capability token（响应一次性返回）
-	OwnerUserKey string     `gorm:"index;size:68;not null" json:"owner_user_key"`
-	AnimalUUID   string     `gorm:"index;size:36;not null" json:"animal_uuid"`
-	ACL          string     `gorm:"size:16;not null;default:link" json:"acl"` // link|friends|public
-	Species      string     `gorm:"size:32" json:"species"`
-	Breed        string     `gorm:"size:64" json:"breed"`
-	Rarity       int        `json:"rarity"`
-	Nickname     string     `gorm:"size:64" json:"nickname"`
-	City         string     `gorm:"size:64" json:"city"` // 仅粗粒度城市
-	ExpiresAt    time.Time  `gorm:"index;not null" json:"expires_at"`
-	RevokedAt    *time.Time `gorm:"index" json:"revoked_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	ShareToken     string     `gorm:"uniqueIndex;size:64;not null" json:"-"` // capability token（响应一次性返回）
+	OwnerUserKey   string     `gorm:"index;size:68;not null" json:"owner_user_key"`
+	AnimalUUID     string     `gorm:"index;size:36;not null" json:"animal_uuid"`
+	ACL            string     `gorm:"size:16;not null;default:link" json:"acl"` // link|friends|public
+	Species        string     `gorm:"size:32" json:"species"`
+	SpeciesLabelZH string     `gorm:"column:species_label_zh;size:64" json:"species_label_zh,omitempty"`
+	Breed          string     `gorm:"size:64" json:"breed"`
+	Rarity         int        `json:"rarity"`
+	Nickname       string     `gorm:"size:64" json:"nickname"`
+	City           string     `gorm:"size:64" json:"city"` // 仅粗粒度城市
+	ExpiresAt      time.Time  `gorm:"index;not null" json:"expires_at"`
+	RevokedAt      *time.Time `gorm:"index" json:"revoked_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // TableName 明确表名。
@@ -1031,7 +1035,7 @@ type CompanionMemoryNode struct {
 	NodeID     string     `gorm:"uniqueIndex:idx_companion_node,priority:2;size:64;not null" json:"node_id"`
 	OwnerKey   string     `gorm:"index;size:68;not null" json:"owner_key"`
 	Title      string     `gorm:"size:64;not null" json:"title"`
-	Kind       string     `gorm:"size:32;not null" json:"kind"` // memory|decor|journal
+	Kind       string     `gorm:"size:32;not null" json:"kind"` // memory|decor
 	Visible    bool       `gorm:"not null;default:true" json:"visible"`
 	Unlocked   bool       `gorm:"not null;default:false" json:"unlocked"`
 	UnlockAtXP int64      `gorm:"not null;default:0" json:"unlock_at_xp"`
@@ -1041,6 +1045,33 @@ type CompanionMemoryNode struct {
 }
 
 func (CompanionMemoryNode) TableName() string { return "companion_memory_nodes" }
+
+// AdventureRun is one AI-generated fictional expedition bound to an owned animal.
+// The generated branch is persisted before it is returned so completion can be
+// settled idempotently against server-authoritative companion growth.
+type AdventureRun struct {
+	ID               uint       `gorm:"primaryKey" json:"id"`
+	RunID            string     `gorm:"uniqueIndex;size:36;not null" json:"run_id"`
+	OwnerKey         string     `gorm:"index:idx_adventure_owner_time,priority:1;uniqueIndex:idx_adventure_operation,priority:1;size:68;not null" json:"owner_key"`
+	OperationID      string     `gorm:"uniqueIndex:idx_adventure_operation,priority:2;size:128;not null" json:"operation_id"`
+	DeviceID         string     `gorm:"index;size:64;not null" json:"device_id"`
+	AccountID        string     `gorm:"index;size:36" json:"account_id,omitempty"`
+	AnimalUUID       string     `gorm:"index;size:36;not null" json:"animal_uuid"`
+	Theme            string     `gorm:"size:32;not null" json:"theme"`
+	Title            string     `gorm:"size:128;not null" json:"title"`
+	Status           string     `gorm:"size:24;not null;default:generated;index" json:"status"`
+	ResultJSON       string     `gorm:"type:longtext;not null" json:"-"`
+	SelectedChoiceID string     `gorm:"size:32" json:"selected_choice_id,omitempty"`
+	Outcome          string     `gorm:"type:text" json:"outcome,omitempty"`
+	SouvenirName     string     `gorm:"size:64" json:"souvenir_name,omitempty"`
+	BondDelta        int        `gorm:"not null;default:0" json:"bond_delta"`
+	PromptVersion    string     `gorm:"size:64" json:"prompt_version"`
+	Source           string     `gorm:"size:24" json:"source"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	CreatedAt        time.Time  `gorm:"index:idx_adventure_owner_time,priority:2" json:"created_at"`
+}
+
+func (AdventureRun) TableName() string { return "adventure_runs" }
 
 // GrowthResetAudit 成长重置/迁移审计（可审计、可回放）。
 type GrowthResetAudit struct {

@@ -6,7 +6,7 @@ import { useCamera } from '../../../camera/useCamera'
 import { guidanceForStatus } from '../../../camera/cameraStatus'
 import { usePerfMode } from '../../../performance'
 import { compressImageForUpload } from '../../../performance'
-import { detectAnimals } from '../../../services/visionDetect'
+import { confirmSpeciesCorrection, detectAnimals } from '../../../services/visionDetect'
 import type { CaptureFlowState, DetectedAnimal } from '../captureFlow'
 import type { CaptureFlowEvent } from '../captureFlow'
 import WelfareNotice from '../components/WelfareNotice'
@@ -17,6 +17,8 @@ import {
 } from '../recognition/qualityGuidance'
 import { useI18n } from '../../../i18n'
 import { useSettings } from '../../../settings'
+import { capturableSpeciesIds } from '../../../species'
+import { chineseDetectedSpeciesName, chineseSpeciesName } from '../petLocalization'
 
 interface DiscoverScreenProps {
   energy: number
@@ -28,6 +30,12 @@ interface DiscoverScreenProps {
   onOpenAccount?: () => void
   city?: string
   weather?: string
+}
+
+const CORRECTABLE_SPECIES = capturableSpeciesIds().filter((species) => species !== 'other_animal')
+
+function isConcreteChineseCorrection(value: string): boolean {
+  return /^[\u3400-\u9fff]{1,12}$/.test(value)
 }
 
 function DoodleStar() {
@@ -102,10 +110,12 @@ export default function DiscoverScreen({
   const { decision: perf, shouldPauseCamera } = usePerfMode()
   const { t } = useI18n()
   const { settings } = useSettings()
-  const speciesLabel = (species: string) =>
-    species === 'cat' ? t('species.cat') : species === 'dog' ? t('species.dog') : species === 'goose' ? t('species.goose') : species
+  const speciesLabel = chineseSpeciesName
   const [busy, setBusy] = useState(false)
   const [capturedPhotoUrl, setCapturedPhotoUrl] = useState<string | null>(null)
+  const [correctionQuery, setCorrectionQuery] = useState('')
+  const [correcting, setCorrecting] = useState(false)
+  const [correctionError, setCorrectionError] = useState('')
   const scanInFlightRef = useRef(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -165,7 +175,7 @@ export default function DiscoverScreen({
     }
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
       const s = flow.selectedBox
-      return `${t('recognition.state.ready')} · ${speciesLabel(s.species)} ${Math.round(s.confidence * 100)}%`
+      return `${t('recognition.state.ready')} · ${chineseDetectedSpeciesName(s.species, s.label)} ${Math.round(s.confidence * 100)}%`
     }
     if (recognitionVisual === 'error' || recognitionVisual === 'low_confidence') {
       if (qualityTip) {
@@ -214,7 +224,9 @@ export default function DiscoverScreen({
       const result = await detectAnimals(blob)
       const detections: DetectedAnimal[] = result.animals.map((a, i) => ({
         ...a,
-        id: `det-${i}-${a.species}`,
+        // Server target_id is the authoritative correction/capture identity.
+        // Keep a local fallback only for legacy/mock responses that predate it.
+        id: a.targetId || `det-${i}-${a.species}`,
       }))
       dispatch({
         type: 'DETECT_SUCCESS',
@@ -295,11 +307,67 @@ export default function DiscoverScreen({
 
   const handleRetake = () => {
     scanInFlightRef.current = false
+    setCorrectionQuery('')
+    setCorrectionError('')
     dispatch({ type: 'RESET' })
     void camera.start()
   }
 
+  const handleCorrection = async () => {
+    const selected = flow.selectedBox
+    const detectInferenceId = flow.detectInferenceId
+    const requestedLabel = correctionQuery.trim()
+    if (!selected || !detectInferenceId || !isConcreteChineseCorrection(requestedLabel) || correcting) return
+    const registeredSpecies = CORRECTABLE_SPECIES.find(
+      (candidate) => speciesLabel(candidate) === requestedLabel,
+    )
+    if (registeredSpecies === selected.species || requestedLabel === chineseDetectedSpeciesName(selected.species, selected.label)) return
+
+    setCorrecting(true)
+    setCorrectionError('')
+    try {
+      const corrected = await confirmSpeciesCorrection({
+        detectInferenceId,
+        targetId: selected.targetId,
+        species: registeredSpecies || 'other_animal',
+        speciesLabelZh: requestedLabel,
+      })
+      if (
+        !corrected?.inference_id ||
+        !corrected.target_id ||
+        !corrected.species ||
+        !corrected.label
+      ) {
+        throw new Error('invalid_species_correction_response')
+      }
+      dispatch({
+        type: 'CORRECTION_SUCCESS',
+        detectInferenceId: corrected.inference_id,
+        animal: {
+          ...selected,
+          species: corrected.species,
+          label: corrected.label,
+          targetId: corrected.target_id,
+          confidence: corrected.confidence ?? selected.confidence,
+        },
+      })
+      setCorrectionQuery('')
+    } catch {
+      setCorrectionError('纠错未通过，请输入具体的简体中文动物名称')
+    } finally {
+      setCorrecting(false)
+    }
+  }
+
+  const handleCorrectionClick = () => {
+    void handleCorrection().catch(() => {
+      setCorrectionError('纠错未通过，请输入具体的简体中文动物名称')
+      setCorrecting(false)
+    })
+  }
+
   const handleEnterCapture = () => {
+    if (correcting) return
     if (flow.phase === 'target_confirmed' && flow.selectedBox) {
       onEnterCapture()
       return
@@ -348,7 +416,7 @@ export default function DiscoverScreen({
 
       <div className="ap-discover__hero">
         <div className="ap-discover__eyebrow-row">
-          <div className="ap-discover__eyebrow">DISCOVER MODE</div>
+          <div className="ap-discover__eyebrow">发现模式</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
@@ -559,28 +627,36 @@ export default function DiscoverScreen({
           >
             {t('discover.retry_scan')}
           </button>
-          {(['cat', 'dog', 'goose'] as const)
-            .filter((s) => s !== flow.selectedBox?.species)
-            .map((s) => (
-              <button
-                key={s}
-                type="button"
-                className="ap-map-chip"
-                onClick={() => {
-                  // 纠正：用玩家声明物种覆盖 selectedBox
-                  const corrected = {
-                    ...flow.selectedBox!,
-                    species: s,
-                    id: `correct-${s}`,
-                    confidence: Math.min(flow.selectedBox!.confidence, 0.84),
-                    label: `user_correct:${s}`,
-                  }
-                  dispatch({ type: 'DETECT_SUCCESS', detectInferenceId: flow.detectInferenceId || 'user-correct', detections: [corrected] })
-                }}
-              >
-                {t('discover.correct_to', { species: speciesLabel(s) })}
-              </button>
-            ))}
+          <input
+            className="ap-map-chip"
+            list="animal-poke-species-corrections"
+            value={correctionQuery}
+            onChange={(event) => {
+              setCorrectionQuery(event.target.value)
+              setCorrectionError('')
+            }}
+            aria-label={t('discover.correct_search')}
+            placeholder={t('discover.correct_search')}
+            style={{ minWidth: 180 }}
+          />
+          <datalist id="animal-poke-species-corrections">
+            {CORRECTABLE_SPECIES
+              .filter((species) => species !== flow.selectedBox?.species)
+              .map((species) => <option key={species} value={speciesLabel(species)} />)}
+          </datalist>
+          <button
+            type="button"
+            className="ap-map-chip"
+            disabled={
+              correcting ||
+              !isConcreteChineseCorrection(correctionQuery.trim()) ||
+              correctionQuery.trim() === chineseDetectedSpeciesName(flow.selectedBox.species, flow.selectedBox.label)
+            }
+            onClick={handleCorrectionClick}
+          >
+            {correcting ? '正在确认…' : t('discover.correct_confirm')}
+          </button>
+          {correctionError && <span role="alert">{correctionError}</span>}
         </div>
       )}
 
@@ -607,9 +683,9 @@ export default function DiscoverScreen({
               : 'start-detect'
         }
         disabled={
-          // Never block Enter Capture once a target is confirmed (E2E hard gate).
+          // Enter Capture stays available except while a correction credential is pending.
           flow.phase === 'target_confirmed'
-            ? false
+            ? correcting
             : busy || !canScan
         }
       >
