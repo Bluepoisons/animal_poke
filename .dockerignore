@@ -1,0 +1,23 @@
+# Repository-root build context used by deploy/Dockerfile.frontend.
+.git
+.github
+.workbuddy
+.playwright-cli
+conversations
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+**/.env
+**/.env.*
+!**/.env.example
+**/*.local
+**/.DS_Store
+**/coverage
+**/*.tsbuildinfo
+backend/bin
+backend/coverage.out
+docs
+*.md
+!README.md
