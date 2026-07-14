@@ -84,6 +84,7 @@ export default function AnimalPokeApp() {
     return isScreenUnlocked(h, progression.isFeatureUnlocked) ? h : 'discover'
   })
   const [selectedTargetId, setSelectedTargetId] = useState('target-uncommon-50')
+  const [selectedAdventureAnimalId, setSelectedAdventureAnimalId] = useState<string | null>(null)
   const { state: staminaState, addGold } = useStamina()
   const level = staminaState.level
   const exp = staminaState.exp
@@ -362,12 +363,21 @@ export default function AnimalPokeApp() {
         )
       }
       case 'pokedex':
-        return <PokedexScreen onToast={showToast} />
+        return (
+          <PokedexScreen
+            onToast={showToast}
+            onStartAdventure={(animalId) => {
+              setSelectedAdventureAnimalId(animalId)
+              navigate('adventure')
+            }}
+          />
+        )
       case 'adventure':
         return (
           <AdventureScreen
             onToast={showToast}
             onOpenCollection={() => navigate('pokedex')}
+            initialAnimalId={selectedAdventureAnimalId}
           />
         )
       case 'battle':

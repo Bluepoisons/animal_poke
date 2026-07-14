@@ -80,10 +80,11 @@ describe('PokedexScreen', () => {
 
   it('shows a pet profile with the local capture photo and value stats', async () => {
     vi.mocked(AnimalRepository.getAll).mockResolvedValueOnce([record])
+    const onStartAdventure = vi.fn()
 
     render(
       <I18nProvider>
-        <PokedexScreen onToast={vi.fn()} />
+        <PokedexScreen onToast={vi.fn()} onStartAdventure={onStartAdventure} />
       </I18nProvider>,
     )
 
@@ -97,6 +98,9 @@ describe('PokedexScreen', () => {
 		expect(screen.getByText(/Sunny 是一位风属性的游侠猫伙伴/)).toBeTruthy()
 		expect(screen.getAllByText(/英国短毛猫/).length).toBeGreaterThan(0)
 		expect(screen.queryByText(/Ranger|Wind|British Shorthair/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '带它去探险' }))
+    expect(onStartAdventure).toHaveBeenCalledWith(record.id)
   })
 
   it('shows the concrete Chinese name for a broad fallback animal', async () => {

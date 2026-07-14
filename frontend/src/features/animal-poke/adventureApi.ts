@@ -1,6 +1,12 @@
 import { authedRequest } from '../../auth/deviceAuth'
 
-export type AdventureThemeId = 'mistwood' | 'sky_ruins' | 'tide_isles'
+export type AdventureThemeId =
+  | 'mistwood'
+  | 'sky_ruins'
+  | 'tide_isles'
+  | 'starlight_city'
+  | 'crystal_caves'
+  | 'dream_garden'
 
 export type AdventureChoice = {
   id: 'courage' | 'curiosity' | 'kindness'

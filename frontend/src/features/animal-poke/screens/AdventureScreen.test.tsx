@@ -103,7 +103,7 @@ describe('AdventureScreen', () => {
     })
   })
 
-  it('uses Chinese pet metadata and completes a controllable RPG encounter', async () => {
+  it('uses Chinese pet metadata, finds an encounter by flipping tiles, and completes continuous dialogue', async () => {
     render(<AdventureScreen onToast={vi.fn()} onOpenCollection={vi.fn()} />)
 
     expect(await screen.findByTestId('adventure-screen')).toBeTruthy()
@@ -113,16 +113,18 @@ describe('AdventureScreen', () => {
     fireEvent.click(screen.getByTestId('adventure-start'))
     expect(await screen.findByTestId('adventure-run')).toBeTruthy()
 
-    const right = screen.getByRole('button', { name: '向右移动' })
-    const up = screen.getByRole('button', { name: '向上移动' })
-    fireEvent.click(right)
-    fireEvent.click(right)
-    fireEvent.click(right)
-    fireEvent.click(up)
-    fireEvent.click(up)
+    for (let index = 0; index < 9; index += 1) {
+      fireEvent.click(screen.getByTestId(`adventure-tile-${index}`))
+    }
 
     expect(await screen.findByTestId('adventure-encounter')).toBeTruthy()
     expect(screen.queryByText(/共同找到的旋律/)).toBeNull()
+    expect(screen.queryByTestId('adventure-choice-curiosity')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('adventure-dialogue-next'))
+    expect(screen.getByText(story.companion_line)).toBeTruthy()
+    fireEvent.click(screen.getByTestId('adventure-dialogue-next'))
+    expect(await screen.findByTestId('adventure-choice-curiosity')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('adventure-choice-curiosity'))
     expect(await screen.findByTestId('adventure-result')).toBeTruthy()

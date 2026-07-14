@@ -66,7 +66,7 @@ test.describe('AP-075 map dead-end and empty states', () => {
     await page.goto('/#map')
     // Map screen or discover fallback should render without crash
     await expect(
-      page.getByText(/地图|定位|位置|权限|Map|location|permission|DISCOVER MODE/i).first(),
+      page.getByText(/地图|定位|位置|权限|发现模式|Map|location|permission|DISCOVER MODE/i).first(),
     ).toBeVisible({ timeout: 20_000 })
 
     const axeResult = await scanA11y(page)
@@ -108,6 +108,6 @@ test.describe('AP-075 map dead-end and empty states', () => {
 
     await page.getByRole('button', { name: /返回发现页|Back/i }).click()
     await expect(page).toHaveURL(/#discover$/)
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 15_000 })
   })
 })

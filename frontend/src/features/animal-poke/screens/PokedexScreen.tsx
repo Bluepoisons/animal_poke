@@ -20,9 +20,11 @@ import {
 } from '../petLocalization'
 import { speciesGroupOf, type SpeciesGroup } from '../../../species'
 import { getCardSpecies } from '../../../types'
+import { Compass, X } from 'lucide-react'
 
 interface PokedexScreenProps {
   onToast: (message: string) => void
+  onStartAdventure?: (animalId: string) => void
 }
 
 type PokedexEntry = AnimalEntry & {
@@ -63,7 +65,7 @@ function mapRecord(r: AnimalRecord): PokedexEntry {
 }
 
 // AP-054: useVirtualList / pickThumbnailSrc available for large collections
-export default function PokedexScreen({ onToast }: PokedexScreenProps) {
+export default function PokedexScreen({ onToast, onStartAdventure }: PokedexScreenProps) {
   const [filter, setFilter] = useState<PokedexFilter>('all')
   const [entries, setEntries] = useState<PokedexEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,14 +200,26 @@ export default function PokedexScreen({ onToast }: PokedexScreenProps) {
               <p className="ap-pet-profile__narrative">
                 {chinesePetDescription(selected.record, selected.nickname)}
               </p>
-              <button
-                type="button"
-                className="ap-map-chip"
-                style={{ marginTop: 12 }}
-                onClick={() => setSelected(null)}
-              >
-                {t('pokedex.close_detail')}
-              </button>
+              <div className="ap-pet-profile__actions">
+                {onStartAdventure && (
+                  <button
+                    type="button"
+                    className="ap-pet-profile__adventure"
+                    onClick={() => onStartAdventure(selected.record.id)}
+                  >
+                    <Compass aria-hidden="true" />
+                    带它去探险
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="ap-pet-profile__close"
+                  onClick={() => setSelected(null)}
+                  aria-label={t('pokedex.close_detail')}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
             </AccessibleDialog>
           )}
         </>

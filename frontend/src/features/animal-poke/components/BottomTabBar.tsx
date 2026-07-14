@@ -2,6 +2,16 @@ import type { ScreenId } from '../data/types'
 import { FEATURE_FLAGS } from '../featureFlags'
 import type { FeatureId } from '../../../progression'
 import { useI18n } from '../../../i18n'
+import {
+  BookOpen,
+  Camera,
+  Compass,
+  Settings,
+  ShoppingBag,
+  Swords,
+  Trophy,
+  type LucideIcon,
+} from 'lucide-react'
 
 interface BottomTabBarProps {
   active: ScreenId
@@ -11,15 +21,15 @@ interface BottomTabBarProps {
   unlockedFeatures?: Set<FeatureId>
 }
 
-const tabs: { id: ScreenId | 'achievement'; feature: FeatureId | 'settings'; labelKey: string; icon: string; always?: boolean }[] = [
-  { id: 'discover', feature: 'discover', labelKey: 'tab.camera', icon: '◎' },
-  { id: 'pokedex', feature: 'pokedex', labelKey: 'tab.collection', icon: '▣' },
-  { id: 'adventure', feature: 'pokedex', labelKey: 'tab.adventure', icon: '✦', always: true },
-  { id: 'battle', feature: 'battle', labelKey: 'tab.fight', icon: '✦' },
-  { id: 'store', feature: 'store', labelKey: 'tab.store', icon: '◇' },
-  { id: 'achievement', feature: 'achievement', labelKey: 'tab.achievement', icon: '☆' },
+const tabs: { id: ScreenId | 'achievement'; feature: FeatureId | 'settings'; labelKey: string; icon: LucideIcon; always?: boolean }[] = [
+  { id: 'discover', feature: 'discover', labelKey: 'tab.camera', icon: Camera },
+  { id: 'pokedex', feature: 'pokedex', labelKey: 'tab.collection', icon: BookOpen },
+  { id: 'adventure', feature: 'pokedex', labelKey: 'tab.adventure', icon: Compass, always: true },
+  { id: 'battle', feature: 'battle', labelKey: 'tab.fight', icon: Swords },
+  { id: 'store', feature: 'store', labelKey: 'tab.store', icon: ShoppingBag },
+  { id: 'achievement', feature: 'achievement', labelKey: 'tab.achievement', icon: Trophy },
   // AP-061: settings always reachable from any core surface (≤2 taps)
-  { id: 'settings', feature: 'settings', labelKey: 'tab.settings', icon: '⚙', always: true },
+  { id: 'settings', feature: 'settings', labelKey: 'tab.settings', icon: Settings, always: true },
 ]
 
 export default function BottomTabBar({
@@ -39,14 +49,15 @@ export default function BottomTabBar({
   return (
     <nav className="ap-bottom-tabs" aria-label="底部导航" data-testid="bottom-tab-bar">
       {visible.map((tab) => {
+        const Icon = tab.icon
         if (tab.id === 'achievement') {
           if (!onAchievement) return null
           return (
             <button key={tab.id} onClick={onAchievement} type="button" data-testid="tab-achievement">
               <span className="ap-tab-icon" aria-hidden="true">
-                {tab.icon}
+                <Icon strokeWidth={2.1} />
               </span>
-              {t(tab.labelKey)}
+              <span className="ap-tab-label">{t(tab.labelKey)}</span>
             </button>
           )
         }
@@ -61,9 +72,9 @@ export default function BottomTabBar({
             data-testid={`tab-${tab.id}`}
           >
             <span className="ap-tab-icon" aria-hidden="true">
-              {tab.icon}
+              <Icon strokeWidth={active === tab.id ? 2.5 : 2.1} />
             </span>
-            {t(tab.labelKey)}
+            <span className="ap-tab-label">{t(tab.labelKey)}</span>
           </button>
         )
       })}

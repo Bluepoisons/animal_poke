@@ -348,6 +348,7 @@ export const zh = {
   'rarity.locked': '未解锁',
   // 发现页
   'discover.city_loading': '定位中',
+  'discover.mode': '发现模式',
   'discover.settings': '设置',
   'discover.account': '账号',
   'discover.title_line_one': '真实识别',

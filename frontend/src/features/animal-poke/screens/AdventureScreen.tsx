@@ -25,14 +25,26 @@ import {
   chinesePetSubtitle,
   displayPetName,
 } from '../petLocalization'
+import {
+  Cloud,
+  Flower2,
+  Gem,
+  Leaf,
+  MessageCircle,
+  Moon,
+  Music2,
+  Sparkles,
+  Star,
+  Wind,
+  type LucideIcon,
+} from 'lucide-react'
 
 type Stage = 'camp' | 'generating' | 'exploring' | 'encounter' | 'settling' | 'result'
-
-type Point = { x: number; y: number }
 
 type AdventureScreenProps = {
   onToast: (message: string) => void
   onOpenCollection: () => void
+  initialAnimalId?: string | null
 }
 
 const themes: Array<{
@@ -40,32 +52,49 @@ const themes: Array<{
   name: string
   kicker: string
   description: string
-  icon: string
-  target: Point
+  icon: LucideIcon
 }> = [
   {
     id: 'mistwood',
-    name: '雾灯森径',
-    kicker: '森林 · 奇幻',
-    description: '沿着萤光苔藓寻找会回应脚步的古老铃声。',
-    icon: '✦',
-    target: { x: 3, y: 1 },
+    name: '森林秘境',
+    kicker: '自然 · 精灵',
+    description: '林地、花谷或会说话的古树。',
+    icon: Leaf,
   },
   {
     id: 'sky_ruins',
-    name: '浮空遗迹',
+    name: '天空遗迹',
     kicker: '云海 · 谜题',
-    description: '登上漂浮石阶，唤醒沉睡在云层之上的星图机关。',
-    icon: '◇',
-    target: { x: 2, y: 0 },
+    description: '浮岛、星桥或沉睡的机关。',
+    icon: Cloud,
   },
   {
     id: 'tide_isles',
-    name: '潮汐群岛',
+    name: '潮汐海域',
     kicker: '海岛 · 精灵',
-    description: '跟随月光贝壳铺成的小路，拜访短暂出现的岛屿。',
-    icon: '◌',
-    target: { x: 3, y: 2 },
+    description: '月湾、珊瑚城或短暂出现的岛。',
+    icon: Moon,
+  },
+  {
+    id: 'starlight_city',
+    name: '星光城镇',
+    kicker: '街巷 · 相遇',
+    description: '夜市、钟楼或只在梦里营业的店。',
+    icon: Star,
+  },
+  {
+    id: 'crystal_caves',
+    name: '水晶洞窟',
+    kicker: '洞穴 · 寻宝',
+    description: '晶簇、地下河或会唱歌的矿石。',
+    icon: Gem,
+  },
+  {
+    id: 'dream_garden',
+    name: '梦境花园',
+    kicker: '花园 · 对话',
+    description: '漂浮花圃、风铃草与记忆小径。',
+    icon: Flower2,
   },
 ]
 
@@ -81,7 +110,20 @@ const choiceTags: Record<AdventureChoice['id'], string> = {
   kindness: '温柔',
 }
 
-const startPoint: Point = { x: 0, y: 3 }
+const tileIcons: LucideIcon[] = [Leaf, Wind, Music2, Moon, Gem, Cloud, Flower2, Star, Sparkles]
+
+const trailMessages = [
+  '这里留下了一点发亮的足迹。',
+  '风里传来很轻的旋律，奇遇似乎更近了。',
+  '你们找到一枚小小路标，它指向相邻的暗格。',
+  '这格没有奇遇，但伙伴发现了一条新的线索。',
+]
+
+function adventureTileIndex(adventureId: string): number {
+  let hash = 0
+  for (const char of adventureId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return hash % 9
+}
 
 function animalUUID(record: AnimalRecord): string {
   return record.uuid || record.id
@@ -104,7 +146,7 @@ function bondProgress(snapshot?: CompanionSnapshot): { percent: number; current:
   return { percent, current: xp, next }
 }
 
-export default function AdventureScreen({ onToast, onOpenCollection }: AdventureScreenProps) {
+export default function AdventureScreen({ onToast, onOpenCollection, initialAnimalId }: AdventureScreenProps) {
   const [pets, setPets] = useState<AnimalRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -113,11 +155,13 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
   const [stage, setStage] = useState<Stage>('camp')
   const [story, setStory] = useState<AdventureStory | null>(null)
   const [completion, setCompletion] = useState<AdventureCompletion | null>(null)
-  const [position, setPosition] = useState<Point>(startPoint)
+  const [revealedTiles, setRevealedTiles] = useState<number[]>([])
+  const [dialogueStep, setDialogueStep] = useState(0)
   const [companion, setCompanion] = useState<CompanionSnapshot | undefined>()
   const [history, setHistory] = useState<AdventureHistoryItem[]>([])
   const [generationError, setGenerationError] = useState<string | null>(null)
   const requestAbort = useRef<AbortController | null>(null)
+  const encounterTimer = useRef<number | null>(null)
 
   const loadPets = useCallback(async () => {
     setLoading(true)
@@ -125,17 +169,23 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
     try {
       const rows = await AnimalRepository.getUnlocked()
       setPets(rows)
-      setSelectedId((current) => current && rows.some((row) => row.id === current) ? current : rows[0]?.id ?? null)
+      setSelectedId((current) => {
+        if (initialAnimalId && rows.some((row) => row.id === initialAnimalId)) return initialAnimalId
+        return current && rows.some((row) => row.id === current) ? current : rows[0]?.id ?? null
+      })
     } catch {
       setLoadError(true)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [initialAnimalId])
 
   useEffect(() => {
     void loadPets()
-    return () => requestAbort.current?.abort()
+    return () => {
+      requestAbort.current?.abort()
+      if (encounterTimer.current) window.clearTimeout(encounterTimer.current)
+    }
   }, [loadPets])
 
   const selectedPet = useMemo(
@@ -147,6 +197,23 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
   const selectedSpecies = selectedPet ? getCardSpecies(selectedPet) : UNKNOWN_SPECIES
   const canSelectedPetAdventure = selectedPet !== null && canCaptureSpecies(selectedSpecies)
   const bond = bondProgress(companion)
+  const encounterTile = story ? adventureTileIndex(story.adventure_id) : -1
+  const dialogueLines = useMemo(() => {
+    if (!story) return []
+    const encounterParts = story.encounter
+      .split(/(?<=[。！？])/u)
+      .map((part) => part.trim())
+      .filter(Boolean)
+    return [
+      { speaker: '旁白', text: encounterParts[0] || story.encounter, tone: 'is-narrator' },
+      { speaker: selectedName, text: story.companion_line, tone: 'is-companion' },
+      {
+        speaker: story.encounter_title,
+        text: encounterParts.slice(1).join('') || story.encounter,
+        tone: 'is-encounter',
+      },
+    ]
+  }, [selectedName, story])
 
   useEffect(() => {
     if (!selectedPet) {
@@ -180,7 +247,8 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
     setStory(null)
     setCompletion(null)
     setGenerationError(null)
-    setPosition(startPoint)
+    setRevealedTiles([])
+    setDialogueStep(0)
     try {
       const nextStory = await generateAdventure(
         animalUUID(selectedPet),
@@ -198,42 +266,18 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
     }
   }
 
-  const move = useCallback((dx: number, dy: number) => {
+  const revealTile = useCallback((index: number) => {
     if (stage !== 'exploring') return
-    setPosition((current) => ({
-      x: Math.max(0, Math.min(3, current.x + dx)),
-      y: Math.max(0, Math.min(3, current.y + dy)),
-    }))
-  }, [stage])
-
-  useEffect(() => {
-    if (stage !== 'exploring') return
-    const onKeyDown = (event: KeyboardEvent) => {
-      const directions: Record<string, Point> = {
-        ArrowUp: { x: 0, y: -1 },
-        ArrowDown: { x: 0, y: 1 },
-        ArrowLeft: { x: -1, y: 0 },
-        ArrowRight: { x: 1, y: 0 },
-      }
-      const direction = directions[event.key]
-      if (!direction) return
-      event.preventDefault()
-      move(direction.x, direction.y)
+    setRevealedTiles((current) => current.includes(index) ? current : [...current, index])
+    if (index === encounterTile) {
+      setDialogueStep(0)
+      if (encounterTimer.current) window.clearTimeout(encounterTimer.current)
+      encounterTimer.current = window.setTimeout(() => {
+        setStage('encounter')
+        encounterTimer.current = null
+      }, 260)
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [move, stage])
-
-  useEffect(() => {
-    if (
-      stage === 'exploring' &&
-      position.x === selectedTheme.target.x &&
-      position.y === selectedTheme.target.y
-    ) {
-      const timer = window.setTimeout(() => setStage('encounter'), 280)
-      return () => window.clearTimeout(timer)
-    }
-  }, [position, selectedTheme.target.x, selectedTheme.target.y, stage])
+  }, [encounterTile, stage])
 
   const choose = async (choice: AdventureChoice) => {
     if (!story || stage !== 'encounter') return
@@ -253,9 +297,12 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
   }
 
   const returnToCamp = () => {
+    if (encounterTimer.current) window.clearTimeout(encounterTimer.current)
+    encounterTimer.current = null
     setStory(null)
     setCompletion(null)
-    setPosition(startPoint)
+    setRevealedTiles([])
+    setDialogueStep(0)
     setGenerationError(null)
     setStage('camp')
   }
@@ -302,34 +349,31 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
             <span>{story.location}</span>
             <h1>{story.title}</h1>
           </div>
-          <span className="ap-adventure-run__chapter">奇遇 01</span>
+          <span className="ap-adventure-run__chapter">
+            {stage === 'exploring' ? `${revealedTiles.length}/9` : '连续对话'}
+          </span>
         </header>
 
         {stage === 'exploring' && (
           <>
-            <section className="ap-adventure-map" aria-label="幻想探险地图">
-              {Array.from({ length: 16 }, (_, index) => {
-                const x = index % 4
-                const y = Math.floor(index / 4)
-                const isPlayer = x === position.x && y === position.y
-                const isTarget = x === selectedTheme.target.x && y === selectedTheme.target.y
+            <section className="ap-adventure-flip-board" aria-label="九宫格奇遇探索">
+              {Array.from({ length: 9 }, (_, index) => {
+                const revealed = revealedTiles.includes(index)
+                const isTarget = index === encounterTile
+                const TileIcon = isTarget ? Sparkles : tileIcons[index]
                 return (
-                  <div
-                    className={`ap-adventure-tile ${isTarget ? 'is-target' : ''}`}
-                    key={`${x}-${y}`}
-                    aria-label={isTarget ? '奇遇地点' : undefined}
+                  <button
+                    type="button"
+                    className={`ap-adventure-flip-tile ${revealed ? 'is-revealed' : ''} ${revealed && isTarget ? 'is-target' : ''}`}
+                    key={index}
+                    onClick={() => revealTile(index)}
+                    disabled={revealed}
+                    aria-label={revealed ? `第 ${index + 1} 格已翻开` : `翻开第 ${index + 1} 格`}
+                    data-testid={`adventure-tile-${index}`}
                   >
-                    {isTarget && !isPlayer && <span className="ap-adventure-event-marker">!</span>}
-                    {isPlayer && (
-                      <span className="ap-adventure-map-pet" aria-label={`${selectedName} 当前所在位置`}>
-                        {selectedPet.photoDataUrl ? (
-                          <img src={selectedPet.photoDataUrl} alt="" />
-                        ) : (
-                          <AnimalIcon species={selectedSpecies} size={32} tone="light" />
-                        )}
-                      </span>
-                    )}
-                  </div>
+                    <span className="ap-adventure-flip-tile__front" aria-hidden="true">?</span>
+                    <span className="ap-adventure-flip-tile__back" aria-hidden="true"><TileIcon /></span>
+                  </button>
                 )
               })}
             </section>
@@ -337,27 +381,41 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
             <section className="ap-rpg-dialogue" aria-live="polite">
               <div className="ap-rpg-dialogue__speaker">旁白</div>
               <p>{story.opening}</p>
-              <small>操纵 {selectedName} 前往闪光的「！」位置，触发本次奇遇。</small>
+              <small>
+                {revealedTiles.length === 0
+                  ? `和 ${selectedName} 一起翻开暗格，找到藏在其中的奇遇点。`
+                  : revealedTiles.at(-1) === encounterTile
+                    ? '找到了！一段新的对话正在展开。'
+                    : trailMessages[(revealedTiles.length - 1) % trailMessages.length]}
+              </small>
             </section>
-
-            <div className="ap-adventure-controls" aria-label="移动方向键">
-              <button type="button" onClick={() => move(0, -1)} aria-label="向上移动">↑</button>
-              <button type="button" onClick={() => move(-1, 0)} aria-label="向左移动">←</button>
-              <span aria-hidden="true">✦</span>
-              <button type="button" onClick={() => move(1, 0)} aria-label="向右移动">→</button>
-              <button type="button" onClick={() => move(0, 1)} aria-label="向下移动">↓</button>
-            </div>
           </>
         )}
 
         {(stage === 'encounter' || stage === 'settling') && (
           <section className="ap-adventure-encounter" data-testid="adventure-encounter">
-            <div className="ap-adventure-encounter__sigil" aria-hidden="true">!</div>
+            <div className="ap-adventure-encounter__sigil" aria-hidden="true"><MessageCircle /></div>
             <span className="ap-adventure-encounter__eyebrow">奇遇触发</span>
             <h2>{story.encounter_title}</h2>
-            <p>{story.encounter}</p>
-            <blockquote>{story.companion_line}</blockquote>
-            <div className="ap-adventure-choices" aria-label="奇遇选择">
+            <div className="ap-adventure-dialogue" aria-live="polite">
+              {dialogueLines.slice(0, dialogueStep + 1).map((line, index) => (
+                <div className={`ap-adventure-dialogue__line ${line.tone}`} key={`${line.speaker}-${index}`}>
+                  <b>{line.speaker}</b>
+                  <p>{line.text}</p>
+                </div>
+              ))}
+            </div>
+            {dialogueStep < 2 && stage === 'encounter' && (
+              <button
+                type="button"
+                className="ap-adventure-continue"
+                onClick={() => setDialogueStep((current) => current + 1)}
+                data-testid="adventure-dialogue-next"
+              >
+                继续对话
+              </button>
+            )}
+            {dialogueStep >= 2 && <div className="ap-adventure-choices" aria-label="奇遇选择">
               {story.choices.map((choice) => (
                 <button
                   type="button"
@@ -374,7 +432,7 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
                   </span>
                 </button>
               ))}
-            </div>
+            </div>}
             {stage === 'settling' && <div className="ap-adventure-settling">正在让这段回忆落进你们的羁绊里…</div>}
           </section>
         )}
@@ -412,7 +470,7 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
       <div className="ap-adventure-heading">
         <span className="ap-adventure-heading__eyebrow">中文幻想奇遇</span>
         <h1>伙伴远征</h1>
-        <p>操纵你的动物伙伴探索幻想地图，每次奇遇都由人工智能依据它的档案生成中文剧情。</p>
+        <p>选择一种探险类型，人工智能会为你和伙伴生成不同地点，再用九宫格寻找本次奇遇。</p>
       </div>
 
       <section className="ap-adventure-section" aria-labelledby="adventure-companion-title">
@@ -480,8 +538,8 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
 
       <section className="ap-adventure-section" aria-labelledby="adventure-destination-title">
         <div className="ap-adventure-section__title">
-          <div><span>02</span><h2 id="adventure-destination-title">决定幻想目的地</h2></div>
-          <small>每次剧情不同</small>
+          <div><span>02</span><h2 id="adventure-destination-title">选择探险类型</h2></div>
+          <small>地点由 AI 生成</small>
         </div>
         <div className="ap-adventure-theme-list">
           {themes.map((theme) => (
@@ -492,9 +550,8 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
               aria-pressed={theme.id === themeId}
               onClick={() => setThemeId(theme.id)}
             >
-              <span className="ap-adventure-theme-list__icon" aria-hidden="true">{theme.icon}</span>
+              <span className="ap-adventure-theme-list__icon" aria-hidden="true"><theme.icon /></span>
               <span><small>{theme.kicker}</small><b>{theme.name}</b><em>{theme.description}</em></span>
-              <i aria-hidden="true">›</i>
             </button>
           ))}
         </div>
@@ -514,8 +571,8 @@ export default function AdventureScreen({ onToast, onOpenCollection }: Adventure
         data-testid="adventure-start"
       >
         <span aria-hidden="true">✦</span>
-        开始生成这次远征
-        <small>{selectedName} · {selectedTheme.name}</small>
+        生成全新地点
+        <small>{selectedName} · {selectedTheme.name} · 每次不同</small>
       </button>
 
       {stage === 'generating' && (

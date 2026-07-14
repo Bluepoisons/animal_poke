@@ -1,7 +1,7 @@
 package prompts
 
 // AdventurePromptVersion tracks the structured companion-adventure prompt.
-const AdventurePromptVersion = "companion-adventure-zh-v3"
+const AdventurePromptVersion = "companion-adventure-zh-v4"
 
 // AdventurePrompt asks the model for one short, fully fictional RPG encounter.
 // Animal fields are whitelisted by AdventureInput before this template is rendered.
@@ -17,10 +17,13 @@ Companion profile (trusted fields only):
 - Element: {{.ElementName}}
 - HP / ATK / DEF / SPD: {{.HP}} / {{.ATK}} / {{.DEF}} / {{.SPD}}
 - Current bond level: {{.BondLevel}}
-- Imaginary destination: {{.ThemeName}}
+- Adventure category: {{.ThemeName}}
 
 Create a compact encounter that makes the player and companion feel closer.
 Use the companion's species, class, element, and strongest stat as story inspiration.
+Invent a fresh, specific location inside the selected category for every generation. The location
+must not simply repeat the category name, and the opening should immediately establish what makes
+this particular place different from previous trips.
 
 Hard rules:
 1. Output simplified Chinese only, as valid JSON with exactly the schema below. The supplied

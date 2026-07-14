@@ -71,6 +71,21 @@ func TestGenerateAdventureMockIsChineseAndEqualBond(t *testing.T) {
 	assert.Contains(t, result.Disclaimer, "中文")
 }
 
+func TestAdventureSupportsGeneratedLocationCategories(t *testing.T) {
+	for _, theme := range []string{"mistwood", "sky_ruins", "tide_isles", "starlight_city", "crystal_caves", "dream_garden"} {
+		t.Run(theme, func(t *testing.T) {
+			input := adventureInputFixture()
+			input.Theme = theme
+			require.NoError(t, input.Validate())
+
+			result, err := NewAIService(&config.ThirdPartyConfig{}).GenerateAdventureContext(context.Background(), input)
+			require.NoError(t, err)
+			assert.NotEmpty(t, result.Location)
+			assert.Equal(t, theme, result.Theme)
+		})
+	}
+}
+
 func TestGenerateAdventureUsesConcreteBroadAnimalLabel(t *testing.T) {
 	input := adventureInputFixture()
 	input.Nickname = ""

@@ -98,7 +98,7 @@ test.describe('AP-075 settings and account', () => {
     })
 
     await page.goto('/#discover')
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 15_000 })
     await page.getByTestId('open-account').click()
     await expect(page.getByTestId('account-settings')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(/游客模式|Guest mode/i)).toBeVisible()

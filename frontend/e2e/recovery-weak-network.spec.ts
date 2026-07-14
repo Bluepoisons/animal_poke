@@ -34,7 +34,7 @@ test.describe('AP-075 recovery and resilience', () => {
     await page.getByRole('button', { name: /同意并继续/ }).click()
 
     // Should still show discover mode (no crash)
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
 
     // Axe on recovery state
     const axeResult = await scanA11y(page)
@@ -72,7 +72,7 @@ test.describe('AP-075 recovery and resilience', () => {
     await expect(page.getByRole('status').filter({ hasText: /离线|offline|网络不可用/i })).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 15_000 })
 
     // Axe on offline state
     const axeResult = await scanA11y(page)
@@ -105,10 +105,10 @@ test.describe('AP-075 recovery and resilience', () => {
 
     await page.goto('/')
     // Should skip consent gate and go straight to discover
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
 
     // Reload and verify
     await page.reload()
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
   })
 })

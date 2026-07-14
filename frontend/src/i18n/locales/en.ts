@@ -339,6 +339,7 @@ export const en: Record<TranslationKey, string> = {
   'rarity.locked': 'Locked',
   // Discovery screen
   'discover.city_loading': 'Locating',
+  'discover.mode': 'DISCOVER MODE',
   'discover.settings': 'Settings',
   'discover.account': 'Account',
   'discover.title_line_one': 'Identify for real',

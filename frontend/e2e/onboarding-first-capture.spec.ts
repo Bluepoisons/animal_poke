@@ -27,12 +27,16 @@ test.describe('AP-075 onboarding to first capture', () => {
     const discoverAxe = await scanA11y(page, '[data-testid="discover-screen"]')
     expect(discoverAxe.violations, `a11y violations on discover:\n${discoverAxe.details}`).toBe(0)
 
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
 
     // Perform scan
-    const scanBtn = page.getByRole('button', { name: /开始识别/ })
+    const scanBtn = page.getByTestId('start-detect')
     await expect(scanBtn).toBeVisible({ timeout: 10_000 })
     await expect.poll(async () => scanBtn.isDisabled(), { timeout: 15_000 }).toBe(false)
+    expect(await scanBtn.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return rect.top >= 0 && rect.bottom <= window.innerHeight
+    })).toBe(true)
     await scanBtn.click()
 
     // Enter capture
@@ -46,10 +50,12 @@ test.describe('AP-075 onboarding to first capture', () => {
     })
     await expect.poll(async () => page.evaluate(() => location.hash), { timeout: 10_000 }).toBe('#capture')
     await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByText(/cat/i).first()).toBeVisible()
+    await expect(page.getByText(/猫|cat/i).first()).toBeVisible()
 
     // Perform capture
-    await page.getByTestId('capture-stage').click()
+    const chargeButton = page.getByTestId('charge-button')
+    await chargeButton.dispatchEvent('pointerdown', { pointerId: 1 })
+    await chargeButton.dispatchEvent('pointerup', { pointerId: 1 })
     await expect(page.getByText(/捕获成功/).first()).toBeVisible({ timeout: 30_000 })
 
     // Navigate to pokedex

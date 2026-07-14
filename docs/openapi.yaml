@@ -5856,7 +5856,7 @@ components:
         animal_uuid: { type: string, format: uuid }
         theme:
           type: string
-          enum: [mistwood, sky_ruins, tide_isles]
+          enum: [mistwood, sky_ruins, tide_isles, starlight_city, crystal_caves, dream_garden]
         operation_id:
           type: string
           minLength: 1
@@ -5887,7 +5887,7 @@ components:
         adventure_id: { type: string, format: uuid }
         theme:
           type: string
-          enum: [mistwood, sky_ruins, tide_isles]
+          enum: [mistwood, sky_ruins, tide_isles, starlight_city, crystal_caves, dream_garden]
         title: { type: string, maxLength: 18, description: Simplified Chinese }
         location: { type: string, maxLength: 12, description: Simplified Chinese }
         opening: { type: string, maxLength: 200, description: Simplified Chinese }
@@ -5952,7 +5952,7 @@ components:
         animal_uuid: { type: string, format: uuid }
         theme:
           type: string
-          enum: [mistwood, sky_ruins, tide_isles]
+          enum: [mistwood, sky_ruins, tide_isles, starlight_city, crystal_caves, dream_garden]
         title: { type: string }
         status:
           type: string

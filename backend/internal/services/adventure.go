@@ -25,9 +25,12 @@ const (
 )
 
 var adventureThemeNames = map[string]string{
-	"mistwood":   "雾灯森径",
-	"sky_ruins":  "浮空遗迹",
-	"tide_isles": "潮汐群岛",
+	"mistwood":       "森林秘境",
+	"sky_ruins":      "天空遗迹",
+	"tide_isles":     "潮汐海域",
+	"starlight_city": "星光城镇",
+	"crystal_caves":  "水晶洞窟",
+	"dream_garden":   "梦境花园",
 }
 
 // AdventureInput is a whitelisted companion profile used to generate fiction.
@@ -380,6 +383,24 @@ func adventureFallback(input AdventureInput) *AdventureResult {
 			opening:        fmt.Sprintf("%s（%s）沿着会随歌声浮起的贝壳路前进，%s属性化成细小光浪陪在身边。海面中央升起一座只存在片刻的小岛。", name, profileName, input.ElementName),
 			encounterTitle: "不会开口的月贝", encounter: "巨大的月贝紧闭着，周围三只泡泡精灵正焦急地比划。它似乎在等待一段只属于伙伴之间的暗号。",
 			souvenir: "月潮贝片", souvenirDescription: "贝片映着两道并排的影子，像一枚安静的约定。",
+		},
+		"starlight_city": {
+			title: "星灯城的夜班车", location: "倒影钟楼",
+			opening:        fmt.Sprintf("%s（%s）走进一座只在星光下醒来的小城，%s属性让街灯依次亮起。远处传来末班车清脆的铃声。", name, profileName, input.ElementName),
+			encounterTitle: "忘记站名的车票", encounter: "一张会说话的车票找不到自己的目的地，正沿着钟楼台阶来回飘动。它希望你们从街巷的声音里拼出正确站名。",
+			souvenir: "星灯车票", souvenirDescription: "票面会浮现你们并肩走过的那条街。",
+		},
+		"crystal_caves": {
+			title: "水晶洞的回声河", location: "晶歌河湾",
+			opening:        fmt.Sprintf("%s（%s）沿着地下河走进发光洞窟，%s的力量唤醒了岩壁里的细小音符。每一步都荡起不同颜色的回声。", name, profileName, input.ClassName),
+			encounterTitle: "唱错旋律的晶簇", encounter: "一簇害羞的水晶总在最后一个音符上走调，周围的光也跟着忽明忽暗。它请你们帮忙找到最适合自己的节奏。",
+			souvenir: "回声晶片", souvenirDescription: "贴近耳边时，会响起你们共同找到的节拍。",
+		},
+		"dream_garden": {
+			title: "梦境花园的来信", location: "风铃花径",
+			opening:        fmt.Sprintf("%s（%s）推开一扇画在云上的小门，%s属性让沉睡的花朵慢慢舒展。花园中央有一封没有署名的来信。", name, profileName, input.ElementName),
+			encounterTitle: "找不到收件人的信", encounter: "信封里飞出三只纸蝴蝶，分别停在不同的花朵上。它们似乎想用颜色告诉你们，这封信真正等待的是怎样的回应。",
+			souvenir: "花语信笺", souvenirDescription: "纸面留着你和伙伴一起读懂的花香。",
 		},
 	}
 	s := scenes[input.Theme]

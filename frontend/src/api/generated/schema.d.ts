@@ -3861,7 +3861,7 @@ export interface components {
             /** Format: uuid */
             animal_uuid: string;
             /** @enum {string} */
-            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            theme: "mistwood" | "sky_ruins" | "tide_isles" | "starlight_city" | "crystal_caves" | "dream_garden";
             /** @description Must match the Idempotency-Key request header. */
             operation_id: string;
         };
@@ -3883,7 +3883,7 @@ export interface components {
             /** Format: uuid */
             adventure_id: string;
             /** @enum {string} */
-            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            theme: "mistwood" | "sky_ruins" | "tide_isles" | "starlight_city" | "crystal_caves" | "dream_garden";
             /** @description Simplified Chinese */
             title: string;
             /** @description Simplified Chinese */
@@ -3936,7 +3936,7 @@ export interface components {
             /** Format: uuid */
             animal_uuid: string;
             /** @enum {string} */
-            theme: "mistwood" | "sky_ruins" | "tide_isles";
+            theme: "mistwood" | "sky_ruins" | "tide_isles" | "starlight_city" | "crystal_caves" | "dream_garden";
             title: string;
             /** @enum {string} */
             status: "generated" | "completed";

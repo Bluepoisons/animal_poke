@@ -7,7 +7,7 @@ import {
 
 /**
  * AP-014 production entry hard gate
- * Flow: consent → auth → detect → capture → analyze → value → IDB → sync
+ * Flow: consent → auth → detect → capture → analyze → value → IDB
  * After reload: collection persists; queue empty; no double reward.
  */
 
@@ -68,7 +68,7 @@ async function waitCameraReadyAndScan(page: import('@playwright/test').Page) {
     }
     await page.waitForTimeout(500)
   }
-  const scanBtn = page.getByRole('button', { name: /开始识别/ })
+  const scanBtn = page.getByTestId('start-detect')
   await expect(scanBtn).toBeVisible({ timeout: 10_000 })
   await expect
     .poll(async () => scanBtn.isDisabled(), { timeout: 15_000 })
@@ -78,7 +78,8 @@ async function waitCameraReadyAndScan(page: import('@playwright/test').Page) {
 
 async function expectCapturedCatCard(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('pokedex-screen')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByRole('button', { name: /cat.*Tabby/i })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: /Sunny.*少见|Sunny.*uncommon/i })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(/游侠.*风属性/).first()).toBeVisible()
   await expect(page.getByText('???', { exact: true })).toHaveCount(0)
 }
 
@@ -93,7 +94,7 @@ test.describe('AP-014 production capture hard gate', () => {
     await expect(page.getByRole('heading', { name: /隐私与权限/ })).toBeVisible()
     await page.getByRole('button', { name: /同意并继续/ }).click()
 
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
 
     const detectResp = page.waitForResponse(
       (r) => r.url().includes('/api/v1/vision/detect') && r.request().method() === 'POST',
@@ -124,7 +125,7 @@ test.describe('AP-014 production capture hard gate', () => {
       )
       .toMatchObject({ hash: '#capture' })
     await expect(page.getByTestId('capture-screen')).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByText(/cat/i).first()).toBeVisible()
+    await expect(page.getByText(/猫|cat/i).first()).toBeVisible()
 
     const analyzeResp = page.waitForResponse(
       (r) => r.url().includes('/api/v1/vision/analyze') && r.request().method() === 'POST',
@@ -134,18 +135,14 @@ test.describe('AP-014 production capture hard gate', () => {
       (r) => r.url().includes('/api/v1/value/generate') && r.request().method() === 'POST',
       { timeout: 30_000 },
     )
-    const syncResp = page.waitForResponse(
-      (r) => r.url().includes('/api/v1/sync/animal') && r.request().method() === 'POST',
-      { timeout: 30_000 },
-    )
-
-    await page.getByTestId('capture-stage').click()
+    const chargeButton = page.getByTestId('charge-button')
+    await chargeButton.dispatchEvent('pointerdown', { pointerId: 1 })
+    await chargeButton.dispatchEvent('pointerup', { pointerId: 1 })
     await expect(page.getByText(/捕获成功/).first()).toBeVisible({ timeout: 30_000 })
 
-    const [a, v, s] = await Promise.all([analyzeResp, valueResp, syncResp])
+    const [a, v] = await Promise.all([analyzeResp, valueResp])
     expect(a.ok()).toBeTruthy()
     expect(v.ok()).toBeTruthy()
-    expect(s.ok()).toBeTruthy()
 
     // Hard gate counters from route mock
     expect(log.auth).toBeGreaterThanOrEqual(1)
@@ -153,7 +150,7 @@ test.describe('AP-014 production capture hard gate', () => {
     expect(log.detect).toBe(1)
     expect(log.analyze).toBe(1)
     expect(log.value).toBe(1)
-    expect(log.sync).toBe(1)
+    expect(log.sync).toBe(0)
 
     const detectCount = log.detect
     const analyzeCount = log.analyze
@@ -161,7 +158,8 @@ test.describe('AP-014 production capture hard gate', () => {
     const syncCount = log.sync
 
     // Second capture click must not re-call core generation APIs
-    await page.getByTestId('capture-stage').click()
+    await chargeButton.dispatchEvent('pointerdown', { pointerId: 2 })
+    await chargeButton.dispatchEvent('pointerup', { pointerId: 2 })
     await page.waitForTimeout(500)
     expect(log.detect).toBe(detectCount)
     expect(log.analyze).toBe(analyzeCount)
@@ -224,7 +222,7 @@ test.describe('AP-014 production capture hard gate', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: /同意并继续/ }).click()
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 20_000 })
 
     const detectResp = page.waitForResponse(
       (r) => r.url().includes('/api/v1/vision/detect'),

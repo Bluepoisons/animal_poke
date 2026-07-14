@@ -59,7 +59,7 @@ test.describe('battle smoke loop', () => {
     await page.goto('/#battle')
 
     await expect(page).toHaveURL(/#discover$/)
-    await expect(page.getByText('DISCOVER MODE')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/发现模式|DISCOVER MODE/)).toBeVisible({ timeout: 15_000 })
   })
 
   test('auto battle advances beyond the initial round', async ({ page }) => {

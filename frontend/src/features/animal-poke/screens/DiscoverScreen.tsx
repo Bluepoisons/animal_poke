@@ -19,6 +19,7 @@ import { useI18n } from '../../../i18n'
 import { useSettings } from '../../../settings'
 import { capturableSpeciesIds } from '../../../species'
 import { chineseDetectedSpeciesName, chineseSpeciesName } from '../petLocalization'
+import { Camera, ImagePlus, Map, Settings, SwitchCamera, UserRound } from 'lucide-react'
 
 interface DiscoverScreenProps {
   energy: number
@@ -414,41 +415,41 @@ export default function DiscoverScreen({
         </div>
       )}
 
-      <div className="ap-discover__hero">
-        <div className="ap-discover__eyebrow-row">
-          <div className="ap-discover__eyebrow">发现模式</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              className="ap-account-entry"
-              onClick={() => onNavigate('settings')}
-              data-testid="open-settings"
-            >
-              {t('discover.settings')}
-            </button>
-            {onOpenAccount ? (
-              <button type="button" className="ap-account-entry" onClick={onOpenAccount} data-testid="open-account">
-                {t('discover.account')}
-              </button>
-            ) : null}
-          </div>
+      <div className="ap-discover__command-bar">
+        <div>
+          <div className="ap-discover__eyebrow">{t('discover.mode')}</div>
+          <h1>{t('discover.title_line_two')}</h1>
         </div>
-        <h1 className="ap-discover__title">
-          <span className="ap-highlight ap-highlight--pink">{t('discover.title_line_one')}</span>
-          <br />
-          {t('discover.title_line_two')}
-        </h1>
-      </div>
-
-      <div className="ap-discover__map-row">
+        <div className="ap-discover__quick-actions">
         <button
-          className="ap-map-chip"
+          className="ap-discover__icon-button"
           onClick={() => onNavigate('map')}
           type="button"
           aria-label={t('discover.open_map_label')}
         >
-          {t('discover.open_map')}
+          <Map aria-hidden="true" />
         </button>
+          <button
+            type="button"
+            className="ap-discover__icon-button"
+            onClick={() => onNavigate('settings')}
+            data-testid="open-settings"
+            aria-label={t('discover.settings')}
+          >
+            <Settings aria-hidden="true" />
+          </button>
+          {onOpenAccount ? (
+            <button
+              type="button"
+              className="ap-discover__icon-button"
+              onClick={onOpenAccount}
+              data-testid="open-account"
+              aria-label={t('discover.account')}
+            >
+              <UserRound aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="ap-scan-stage">
@@ -507,6 +508,27 @@ export default function DiscoverScreen({
         </div>
       </div>
 
+      <div className="ap-discover__primary-action">
+        <ActionButton
+          onClick={onPrimary}
+          data-testid={
+            flow.phase === 'target_confirmed'
+              ? 'enter-capture'
+              : busy || flow.phase === 'detecting'
+                ? 'detect-busy'
+                : 'start-detect'
+          }
+          disabled={
+            flow.phase === 'target_confirmed'
+              ? correcting
+              : busy || !canScan
+          }
+        >
+          <Camera aria-hidden="true" />
+          {primaryLabel}
+        </ActionButton>
+      </div>
+
       {!capturedPhotoUrl && <div className="ap-camera-toolbar" data-testid="camera-toolbar">
         <input
           ref={uploadInputRef}
@@ -523,6 +545,7 @@ export default function DiscoverScreen({
           disabled={!canUpload}
           onClick={() => uploadInputRef.current?.click()}
         >
+          <ImagePlus aria-hidden="true" />
           {t('discover.upload_photo')}
         </button>
         <button
@@ -537,6 +560,7 @@ export default function DiscoverScreen({
               : t('camera.action.switch_to_back')
           }
         >
+          <SwitchCamera aria-hidden="true" />
           {camera.status === 'ready'
             ? camera.facing === 'environment'
               ? t('camera.action.switch_to_front')
@@ -606,15 +630,13 @@ export default function DiscoverScreen({
         </div>
       )}
 
-      <p className="ap-photo-skill-hint" role="note">
-        {t('discover.photo_hint')}
-      </p>
-
-      <ul className="ap-observe-tips" data-testid="observe-tips">
-        {OBSERVATION_TIP_KEYS.map((key) => (
-          <li key={key}>{t(key as never)}</li>
-        ))}
-      </ul>
+      {(recognitionVisual === 'error' || recognitionVisual === 'low_confidence') && (
+        <ul className="ap-observe-tips" data-testid="observe-tips">
+          {OBSERVATION_TIP_KEYS.slice(0, 3).map((key) => (
+            <li key={key}>{t(key as never)}</li>
+          ))}
+        </ul>
+      )}
 
       {flow.phase === 'target_confirmed' && flow.selectedBox && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 8px' }}>
@@ -673,24 +695,6 @@ export default function DiscoverScreen({
 
       <WelfareNotice />
 
-      <ActionButton
-        onClick={onPrimary}
-        data-testid={
-          flow.phase === 'target_confirmed'
-            ? 'enter-capture'
-            : busy || flow.phase === 'detecting'
-              ? 'detect-busy'
-              : 'start-detect'
-        }
-        disabled={
-          // Enter Capture stays available except while a correction credential is pending.
-          flow.phase === 'target_confirmed'
-            ? correcting
-            : busy || !canScan
-        }
-      >
-        {primaryLabel}
-      </ActionButton>
     </div>
   )
 }
