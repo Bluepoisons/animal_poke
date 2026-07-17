@@ -218,7 +218,7 @@ jobs:
           docker network rm ap-release || true
       - name: Login registry (optional push)
         if: ${{ github.event.inputs.skip_push != 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: registry.cn-beijing.aliyuncs.com
           username: ${{ secrets.REGISTRY_USERNAME }}
