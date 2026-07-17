@@ -312,7 +312,7 @@ jobs:
             --previous-tag "${PREVIOUS_IMAGE_TAG}" \
             --reason "release-workflow-dry-run"
       - name: Upload rendered manifests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-manifests-${{ needs.resolve.outputs.short_sha }}
           path: |
