@@ -43,7 +43,7 @@ jobs:
       - name: Narrative QA gate (AP-134)
         run: go run ./cmd/narrativeqa -report narrative-qa-report.json
       - name: Upload narrative QA report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: narrative-qa-report
           path: backend/narrative-qa-report.json
@@ -124,7 +124,7 @@ jobs:
       - name: Generate SBOM (CycloneDX)
         run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-sbom
           path: frontend/sbom.cdx.json
@@ -174,7 +174,7 @@ jobs:
           VITE_VISION_MOCK: "0"
       - name: Upload E2E trace (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-traces
           path: |
